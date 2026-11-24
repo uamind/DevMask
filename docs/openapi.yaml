@@ -1,0 +1,2506 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Device Faker HTTP API
+  summary: 模块自带 Web 服务的 /api/v1 契约（第一增量）
+  version: 1.0.0
+  description: |
+    Device Faker 原生服务（device_faker_server）的 HTTP 契约，第一增量冻结版本。
+
+    约定：
+    - 基地址默认 http://127.0.0.1:8686，API 前缀 /api/v1。
+    - 认证 Authorization: Bearer <token>；作用域 read / write / ops / admin。
+    - 配置内容字段一律 snake_case（与 config.toml 同名同义）；API 元数据 lowerCamelCase；查询参数 snake_case。
+    - 所有写操作必须带 If-Match（当前配置 revision）；不匹配返回 412，不自动合并。
+    - 错误统一信封 error.code / error.message / error.details / error.retryable / error.requestId。
+    - 本增量不含 MCP、plan/apply、备份管理、审计查询、Token 管理、应用名与图标。
+  termsOfService: https://github.com/Seyud/device_faker
+  contact:
+    name: Device Faker
+    url: https://github.com/Seyud/device_faker
+  license:
+    name: GPL-3.0-or-later
+    identifier: GPL-3.0-or-later
+servers:
+  - url: http://127.0.0.1:8686
+    description: 设备本机（默认绑定，仅 loopback）
+  - url: http://localhost:8686
+    description: adb forward tcp:8686 tcp:8686 后的桌面调试地址
+security:
+  - bearerAuth: []
+tags:
+  - name: System
+    description: 探活、状态、JSON Schema
+  - name: Config
+    description: 配置读取、revision、整体替换、文本校验
+  - name: Templates
+    description: 机型模板 CRUD 与包名绑定
+  - name: Apps
+    description: 内联应用配置与模板绑定、重启
+  - name: Packages
+    description: 已安装包元数据
+  - name: Device
+    description: 设备信息、getprop 白名单、用户列表
+paths:
+  /api/v1/healthz:
+    get:
+      tags:
+        - System
+      operationId: getHealthz
+      summary: 存活探针
+      description: 无需认证。用于 WebUI 探测原生服务与进程探针。
+      security: []
+      responses:
+        '200':
+          description: 服务存活
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+                version: 1.8.0
+                uptimeSec: 3600
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/status:
+    get:
+      tags:
+        - System
+      operationId: getStatus
+      summary: 模块 / 设备 / 服务 / 配置状态
+      description: |
+        AI 的入口调用。返回模块版本、设备摘要、服务运行时信息与当前配置 revision。
+        capabilities 列出本增量已实现的能力标签；缺失标签代表能力不可用。
+      responses:
+        '200':
+          description: 状态快照
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+                device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
+                server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+                config:
+                  revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                  mtime: '2026-11-24T03:00:00Z'
+                  size: 9361
+                  exists: true
+                  templates: 26
+                  apps: 27
+                  conflicts: 0
+                capabilities: [config, templates, apps, packages, device, validate]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/schema/config:
+    get:
+      tags:
+        - System
+      operationId: getConfigSchema
+      summary: 配置 JSON Schema
+      description: 返回单份 Config 的 JSON Schema（draft-07，schemars 0.8 生成；字段在顶层 properties，被引用类型在 definitions），用于客户端动态生成表单或校验。
+      responses:
+        '200':
+          description: JSON Schema 文档
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigSchema'
+              example:
+                $schema: 'http://json-schema.org/draft-07/schema#'
+                title: DeviceFakerConfig
+                type: object
+                properties:
+                  apps: {default: [], items: {'$ref': '#/definitions/AppConfig'}, type: array}
+                  debug: {default: false, type: boolean}
+                  default_force_denylist_unmount: {default: false, type: boolean}
+                  default_hide_maps: {default: [], items: {type: string}, type: array}
+                  templates: {additionalProperties: {'$ref': '#/definitions/DeviceTemplate'}, default: {}, type: object}
+                definitions:
+                  NumberSetting:
+                    anyOf:
+                      - {type: integer, minimum: 1.0, maximum: 1000.0, description: 整数伪装值（sdk_int）}
+                      - {type: string, const: __DELETE__, description: 删除 ro.build.version.sdk 整族}
+                    description: 整数伪装值，或字符串 __DELETE__
+                    title: NumberSetting
+                  DeviceTemplate: {description: 机型模板, type: object}
+                  AppConfig: {required: [package], type: object}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/config:
+    get:
+      tags:
+        - Config
+      operationId: getConfig
+      summary: 读取配置（JSON 或 TOML）
+      description: |
+        format=json（默认）返回带 revision 包装的 ConfigResponse；format=toml 返回配置文件原文（保留注释与顺序）。
+        配置文件不存在时仍返回 200，exists=false 且 config 为空文档，warnings 含 config_missing。
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: 响应格式。json 返回 ConfigResponse，toml 返回 text/plain 原文。
+          schema:
+            type: string
+            enum: [json, toml]
+            default: json
+            example: json
+      responses:
+        '200':
+          description: 配置内容（媒体类型随 format 变化）
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+              examples:
+                present:
+                  summary: 配置文件存在
+                  value:
+                    revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                    mtime: '2026-11-24T03:00:00Z'
+                    size: 9361
+                    exists: true
+                    warnings: []
+                    config:
+                      debug: false
+                      default_force_denylist_unmount: false
+                      default_hide_maps: []
+                      templates:
+                        pixel_9:
+                          packages: [com.example.app]
+                          manufacturer: Google
+                          brand: google
+                          model: Pixel 9
+                          device: tokay
+                          android_version: '15'
+                          sdk_int: 35
+                          dpi: 420
+                          custom_props: {ro.product.vendor.model: Pixel 9}
+                      apps:
+                        - {package: com.example.two, manufacturer: Xiaomi, model: 2509FPN0BC, dpi: 420}
+                missing:
+                  summary: 配置文件不存在（首次启动 / host 测试）
+                  value:
+                    revision: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+                    mtime: null
+                    size: 0
+                    exists: false
+                    warnings:
+                      - {code: config_missing, message: 配置文件不存在，返回空配置文档, details: {}}
+                    config: {debug: false, default_force_denylist_unmount: false, default_hide_maps: [], templates: {}, apps: []}
+            text/plain:
+              schema:
+                type: string
+                description: config.toml 原文（format=toml）
+                example: |
+                  debug = false
+                  default_force_denylist_unmount = false
+
+                  [templates.pixel_9]
+                  packages = ["com.example.app"]
+                  brand = "google"
+                  model = "Pixel 9"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - Config
+      operationId: putConfig
+      summary: 整体替换配置
+      description: |
+        请求体可以是 ConfigDocument（application/json），也可以是 TOML 原文（application/toml 或 text/plain）。
+        TOML 原文路径按提交内容整体重写（注释与未知字段以提交内容为准）；结构化端点才保证注释不丢。
+        If-Match 必填；dry_run=true 时只校验并返回 diff，不落盘、不备份。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        description: ConfigDocument（JSON）或 TOML 原文。
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigDocument'
+            example:
+              debug: false
+              default_force_denylist_unmount: false
+              default_hide_maps: []
+              templates:
+                pixel_9: {packages: [com.example.app], brand: google, model: Pixel 9, android_version: '15', sdk_int: 35}
+              apps:
+                - {package: com.example.two, manufacturer: Xiaomi, model: 2509FPN0BC}
+          application/toml:
+            schema:
+              type: string
+              description: config.toml 原文
+              example: |
+                debug = false
+                [templates.pixel_9]
+                packages = ["com.example.app"]
+          text/plain:
+            schema:
+              type: string
+              description: config.toml 原文（text/plain 等价于 application/toml）
+      responses:
+        '200':
+          description: 写入结果（或 dry_run 的预演结果）
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '1a7b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diff: "--- a/config.toml\n+++ b/config.toml\n@@ -1,2 +1,3 @@\n debug = false\n+default_hide_maps = []\n"
+                diffTruncated: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/config/revision:
+    get:
+      tags:
+        - Config
+      operationId: getConfigRevision
+      summary: 取配置 revision
+      description: 轻量端点，写入前用它取 If-Match。
+      responses:
+        '200':
+          description: revision 与文件元信息
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigRevisionResponse'
+              examples:
+                present:
+                  summary: 配置文件存在
+                  value:
+                    revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                    mtime: '2026-11-24T03:00:00Z'
+                    size: 9361
+                    exists: true
+                missing:
+                  summary: 配置文件不存在（首次启动 / host 测试）
+                  value:
+                    revision: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+                    mtime: null
+                    size: 0
+                    exists: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/config/validate:
+    post:
+      tags:
+        - Config
+      operationId: validateConfig
+      summary: 校验配置文本
+      description: |
+        校验任意 TOML/JSON 文本，不落盘、不需要 If-Match。校验失败也返回 200，用 valid=false 区分；
+        errors 给出字段级原因，revision 是校验时的当前配置 revision。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateRequest'
+            example:
+              format: toml
+              content: |
+                debug = false
+
+                [templates.pixel_9]
+                packages = ["com.example.app"]
+                dpi = 900
+      responses:
+        '200':
+          description: 校验结果（valid=false 仍为 200）
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateResponse'
+              example:
+                valid: false
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                errors:
+                  - {path: templates.pixel_9.dpi, code: out_of_range, message: 'dpi 必须在 120..=640'}
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/templates:
+    get:
+      tags:
+        - Templates
+      operationId: listTemplates
+      summary: 模板列表（保序）
+      description: 顺序等于 config.toml 中 [templates] 的书写顺序，分页也不打乱。可用 package 过滤只含该包名的模板。
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: package
+          in: query
+          required: false
+          description: 只返回 packages 中含该包名的模板（支持 pkg@userId 精确匹配）。
+          schema:
+            type: string
+            example: com.example.app
+      responses:
+        '200':
+          description: 模板列表
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateListResponse'
+              example:
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                total: 2
+                nextCursor: null
+                items:
+                  - {name: pixel_9, position: 0, packages: [com.example.app], packageCount: 1, fieldsSet: [android_version, brand, dpi, manufacturer, model, sdk_int]}
+                  - {name: samsung_s24_ultra, position: 1, packages: ['com.other.app@999'], packageCount: 1, fieldsSet: [brand, dpi, model]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/templates/{name}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateName'
+    get:
+      tags:
+        - Templates
+      operationId: getTemplate
+      summary: 模板详情
+      description: position 是该模板在配置文件中的 0 基序号；revision 是整份配置的 revision。
+      responses:
+        '200':
+          description: 模板详情
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+              example:
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                position: 0
+                name: pixel_9
+                template:
+                  packages: [com.example.app]
+                  manufacturer: Google
+                  brand: google
+                  model: Pixel 9
+                  device: tokay
+                  android_version: '15'
+                  sdk_int: 35
+                  dpi: 420
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - Templates
+      operationId: putTemplate
+      summary: 新建或整体替换模板
+      description: |
+        整体替换语义：请求体未出现的字段视为删除；packages 未出现等价于空数组（会解绑全部包名并回 empty_packages 警告）。
+        已存在的模板保持原 position，新模板追加到末尾。If-Match 必填。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/AllowDuplicatePackage'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateInput'
+            example:
+              packages: [com.example.app]
+              manufacturer: Samsung
+              brand: samsung
+              model: SM-S9280
+              device: e3q
+              android_version: '15'
+              sdk_int: 35
+              dpi: 420
+              custom_props: {ro.product.vendor.model: SM-S9280}
+      responses:
+        '200':
+          description: 模板已更新
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '201':
+          description: 模板已创建
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: null
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings:
+                  - {code: package_not_installed, message: 'com.example.app 尚未安装，配置仍会保留', details: {package: com.example.app}}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '409':
+          $ref: '#/components/responses/DuplicatePackageConflict'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags:
+        - Templates
+      operationId: patchTemplate
+      summary: 字段级合并模板
+      description: |
+        JSON Merge Patch 风格：缺席的键不改；值为 null 表示删除该字段（回到未设置）；
+        packages / custom_props / hide_maps 整体替换。未知键 422；模板不存在 404（PATCH 不创建）。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/AllowDuplicatePackage'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TemplateInput'
+            example:
+              dpi: 440
+              model: SM-S9280
+              custom_props: null
+              force_denylist_unmount: true
+      responses:
+        '200':
+          description: 合并结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DuplicatePackageConflict'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Templates
+      operationId: deleteTemplate
+      summary: 删除模板
+      description: 删除 [templates.<name>]；引用该模板的内联 [[apps]] 记录不受影响。必须带 confirm=true。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Confirm'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: 删除结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '400':
+          $ref: '#/components/responses/ConfirmationRequired'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/templates/{name}/packages:
+    parameters:
+      - $ref: '#/components/parameters/TemplateName'
+    post:
+      tags:
+        - Templates
+      operationId: bindTemplatePackages
+      summary: 批量绑定包名
+      description: |
+        mode=append（默认）保留已有顺序并在末尾追加，重复项去重并保留首次出现位置；mode=replace 整体替换。
+        若该包名已存在于其它模板，默认 409；allow_duplicate_package=true 时写入并回 duplicate_package 警告。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/AllowDuplicatePackage'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindPackagesRequest'
+            example:
+              packages: [com.example.app, 'com.example.app@999']
+              mode: append
+      responses:
+        '200':
+          description: 绑定结果（需要模板最新状态时再 GET /templates/{name}）
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DuplicatePackageConflict'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/templates/{name}/packages/{pkg}:
+    parameters:
+      - $ref: '#/components/parameters/TemplateName'
+      - $ref: '#/components/parameters/PackagePath'
+    delete:
+      tags:
+        - Templates
+      operationId: unbindTemplatePackage
+      summary: 解绑单个包名
+      description: 从该模板 packages 中删除精确匹配项（不删除 @userId 后缀不同的项）。不存在则 404。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: 解绑结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/apps:
+    get:
+      tags:
+        - Apps
+      operationId: listApps
+      summary: 已配置应用列表
+      description: 只列 config.toml 中 [[apps]] 的内联记录，顺序同数组顺序。模板绑定产生的应用用 GET /templates?package= 查。
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: source
+          in: query
+          required: false
+          description: 按来源过滤。inline 只返回内联记录（本增量唯一可列出的来源）。
+          schema:
+            type: string
+            enum: [inline, template]
+            example: inline
+      responses:
+        '200':
+          description: 应用列表
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppListResponse'
+              example:
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                total: 1
+                nextCursor: null
+                items:
+                  - {package: com.example.two, position: 0, source: {type: inline, template: null}, fieldsSet: [dpi, manufacturer, model]}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/apps/{pkg}:
+    parameters:
+      - $ref: '#/components/parameters/PackagePath'
+    get:
+      tags:
+        - Apps
+      operationId: getApp
+      summary: 单应用来源与解析结果
+      description: |
+        解释某个包名最终会伪装成什么：source 给出命中来源（inline / template / none），
+        resolved 给出最终生效字段。未配置的包名也返回 200，source.type=none 并带 no_config 警告。
+      responses:
+        '200':
+          description: 解析结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppResponse'
+              example:
+                package: com.example.app
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                installed: true
+                source: {type: template, template: pixel_9, alsoInline: false}
+                resolved:
+                  manufacturer: Google
+                  brand: google
+                  model: Pixel 9
+                  device: tokay
+                  android_version: '15'
+                  sdk_int: 35
+                  dpi: 420
+                  force_denylist_unmount: false
+                  hide_maps: []
+                  companion_resetprop: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      tags:
+        - Apps
+      operationId: putApp
+      summary: 写内联配置或绑定模板
+      description: |
+        template 与 config 必须恰好提供一个。
+        模式 A（template）：把该包加入指定模板的 packages（末尾追加、去重）；detachFromTemplates 默认 true，
+        会从其它模板移除该包避免重复；若存在内联记录则删除并回 inline_record_removed 警告。
+        模式 B（config）：整记录替换该包的内联 [[apps]] 记录（不是字段合并）；detachFromTemplates 默认 false。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/AllowDuplicatePackage'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppUpsertRequest'
+            examples:
+              bindTemplate:
+                summary: 绑定模板
+                value:
+                  template: pixel_9
+                  detachFromTemplates: true
+              inlineConfig:
+                summary: 写内联配置
+                value:
+                  config:
+                    package: com.example.two
+                    manufacturer: Xiaomi
+                    brand: Redmi
+                    model: 2509FPN0BC
+                    android_version: '15'
+                    sdk_int: 35
+                    dpi: 420
+                    force_denylist_unmount: true
+      responses:
+        '200':
+          description: 写入结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings:
+                  - {code: inline_record_removed, message: '已删除 com.example.app 的内联配置，使模板绑定生效', details: {package: com.example.app}}
+        '201':
+          description: 新建内联记录
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/DuplicatePackageConflict'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '413':
+          $ref: '#/components/responses/BodyTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - Apps
+      operationId: deleteApp
+      summary: 移除应用配置
+      description: 删除该包名的内联 [[apps]] 记录；detach_templates=true 时同时从所有模板的 packages 中移除。必须带 confirm=true。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Confirm'
+        - $ref: '#/components/parameters/DetachTemplates'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: 删除结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteResult'
+              example:
+                revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                backupId: 20261124T031002Z-9f2c
+                diffTruncated: false
+                warnings: []
+        '400':
+          $ref: '#/components/responses/ConfirmationRequired'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/RevisionMismatch'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/apps/{pkg}/restart:
+    parameters:
+      - $ref: '#/components/parameters/PackagePath'
+    post:
+      tags:
+        - Apps
+      operationId: restartApp
+      summary: force-stop / 重新拉起应用
+      description: |
+        作用域 ops。执行 am force-stop --user <user> <pkg>，可选再 am start。
+        需要让新配置立即生效时调用；带 Idempotency-Key 时 24 小时内同键重放返回首次结果。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestartRequest'
+            example:
+              forceStop: true
+              launch: false
+              user: 0
+      responses:
+        '200':
+          description: 重启结果
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestartResponse'
+              example:
+                package: com.example.app
+                forceStopped: true
+                launched: false
+                durationMs: 118
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+  /api/v1/packages:
+    get:
+      tags:
+        - Packages
+      operationId: listPackages
+      summary: 已安装包元数据
+      description: 取自 PackageManager。label 本增量恒为 null（应用名属后续增量）。source=unavailable 时 items 为空并带 pm_unavailable 警告。
+      parameters:
+        - name: names
+          in: query
+          required: false
+          description: 逗号分隔的包名列表，最多 500 个；用于等价 pm getPackagesInfo。
+          schema:
+            type: string
+            example: com.android.chrome,com.example.app
+        - name: user
+          in: query
+          required: false
+          description: 只返回该 Android 用户下安装的包。
+          schema:
+            type: integer
+            minimum: 0
+            example: 0
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: 包列表
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackagesResponse'
+              example:
+                total: 1
+                nextCursor: null
+                source: pm
+                warnings: []
+                items:
+                  - {package: com.android.chrome, userIds: [0], installed: true, isSystem: true, versionName: 131.0.6778.200, versionCode: 677820000, label: null}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/device:
+    get:
+      tags:
+        - Device
+      operationId: getDevice
+      summary: 设备与模块信息
+      description: 返回模块版本、设备 Build 摘要、服务运行时信息与 root 管理器类型。
+      responses:
+        '200':
+          description: 设备信息
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+              example:
+                module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+                device:
+                  manufacturer: Google
+                  brand: google
+                  model: Pixel 9
+                  device: tokay
+                  android: '17'
+                  sdk: 37
+                  abi: arm64-v8a
+                  fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'
+                server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+                root: {manager: kernelsu, version: 1.0.7}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/device/props:
+    get:
+      tags:
+        - Device
+      operationId: getDeviceProps
+      summary: getprop 白名单读取
+      description: |
+        只允许读取白名单前缀的属性：ro.product.、ro.build.、ro.soc.、ro.hardware、ro.board.、ro.vendor.。
+        keys 为逗号分隔的 1..50 个键，每个不超过 128 字符；不在白名单或超限返回 422。
+      parameters:
+        - name: keys
+          in: query
+          required: true
+          description: 逗号分隔的属性键。
+          schema:
+            type: string
+            example: ro.product.model,ro.build.fingerprint
+      responses:
+        '200':
+          description: 属性值
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePropsResponse'
+              example:
+                props:
+                  ro.product.model: Pixel 9
+                  ro.build.fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'
+                missing: [ro.vendor.does_not_exist]
+                source: getprop
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/UpstreamUnavailable'
+  /api/v1/device/users:
+    get:
+      tags:
+        - Device
+      operationId: listDeviceUsers
+      summary: 用户列表
+      description: 返回 Android 多用户信息，供 pkg@userId 配置与包列表按用户过滤使用。
+      responses:
+        '200':
+          description: 用户列表
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceUsersResponse'
+              example:
+                users:
+                  - {id: 0, name: Owner, running: true, isCurrent: true}
+                  - {id: 999, name: Work, running: true, isCurrent: false}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: df_<base64url>
+      description: |
+        Token 明文形如 df_ 加 43 字符 base64url，落盘只存 sha256。
+        作用域 read / write / ops / admin 互不隐含（admin 是其余三个的超集）。
+        缺失或无效返回 401 unauthorized；作用域不足返回 403 forbidden_scope。
+  headers:
+    XRequestId:
+      description: 请求关联 ID；客户端可通过同名请求头指定，服务端原样回填
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._-]{1,128}$'
+        example: req_01JC7Z6Q3M8V2S9K4T1B0A
+    XDFRevision:
+      description: 当前配置 revision（不带引号）
+      schema:
+        type: string
+        example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+    ETag:
+      description: 强校验值，带引号的 revision，可直接作为 If-Match 回传
+      schema:
+        type: string
+        example: '"9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"'
+    RetryAfter:
+      description: 建议重试等待秒数
+      schema:
+        type: integer
+        minimum: 1
+        example: 30
+  parameters:
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 当前配置 revision（带或不带引号均可；* 表示无条件写）。缺失 428 precondition_required，不匹配 412 config_revision_mismatch。
+      schema:
+        type: string
+        example: '"9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"'
+    DryRun:
+      name: dry_run
+      in: query
+      required: false
+      description: 只执行校验与 diff 计算，不落盘、不备份
+      schema:
+        type: boolean
+        default: false
+        example: false
+    Diff:
+      name: diff
+      in: query
+      required: false
+      description: 写入成功时返回 unified diff（上限 64 KiB，超出置 diffTruncated=true）
+      schema:
+        type: boolean
+        default: false
+        example: true
+    Confirm:
+      name: confirm
+      in: query
+      required: true
+      description: 破坏性操作确认，必须为 true；缺失返回 400 confirmation_required
+      schema:
+        type: boolean
+        example: true
+    DetachTemplates:
+      name: detach_templates
+      in: query
+      required: false
+      description: 为 true 时同时把该包名从所有模板的 packages 中移除
+      schema:
+        type: boolean
+        default: false
+        example: false
+    AllowDuplicatePackage:
+      name: allow_duplicate_package
+      in: query
+      required: false
+      description: 允许写出「同一包名出现在多个模板」并返回 duplicate_package 警告；默认拒绝（409）
+      schema:
+        type: boolean
+        default: false
+        example: false
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: 幂等键（不超过 128 字符，保留 24 小时）；目前仅 POST /apps/{pkg}/restart 生效
+      schema:
+        type: string
+        maxLength: 128
+        example: restart-com.example.app-1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: 每页数量，默认 50，最大 500
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+        example: 50
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: 上一页响应里的 nextCursor（不透明字符串）
+      schema:
+        type: string
+        example: eyJvIjo1MH0
+    TemplateName:
+      name: name
+      in: path
+      required: true
+      description: 模板名（配置键，不是模板字段 name），需百分号编码
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$'
+        example: pixel_9
+    PackagePath:
+      name: pkg
+      in: path
+      required: true
+      description: Java 包名，可带 @userId（@ 需编码为 %40）
+      schema:
+        type: string
+        pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+(@[0-9]{1,5})?$'
+        example: com.example.app
+  responses:
+    Unauthorized:
+      description: 缺少、格式错误或无效的 Bearer Token
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unauthorized
+              message: 缺少或无效的 Bearer Token
+              details: null
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    ForbiddenScope:
+      description: Token 作用域不足
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: forbidden_scope
+              message: 当前 Token 缺少 write 作用域
+              details: {required: write, granted: [read]}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    NotFound:
+      description: 资源不存在（含未实现的 /api/v1 路径）
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: not_found
+              message: 模板不存在
+              details: {resource: template, name: pixel_9}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    MethodNotAllowed:
+      description: 路径存在但不支持该方法
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: method_not_allowed
+              message: 该方法不受支持
+              details: {method: GET, path: /api/v1/config}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    ConfirmationRequired:
+      description: 破坏性操作缺少 confirm=true
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: confirmation_required
+              message: 需要 confirm=true 才可执行删除
+              details: {action: delete_template}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    DuplicatePackageConflict:
+      description: 会写出重复包名，需要 allow_duplicate_package=true
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: conflict_duplicate_package
+              message: 包名已绑定到其它模板
+              details: {package: com.example.app, templates: [samsung_s24_ultra]}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    RevisionMismatch:
+      description: If-Match 与当前配置 revision 不一致（不自动合并）
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        X-DF-Revision:
+          $ref: '#/components/headers/XDFRevision'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: config_revision_mismatch
+              message: 配置已被其他客户端修改
+              details:
+                expected: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                actual: '1a7b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    PreconditionRequired:
+      description: 写请求缺少 If-Match
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: precondition_required
+              message: 写操作必须带 If-Match
+              details: {header: If-Match}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    ValidationFailed:
+      description: 请求体或配置语义不合法
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: validation_failed
+              message: 配置校验失败
+              details:
+                errors:
+                  - {path: templates.pixel_9.dpi, code: out_of_range, message: 'dpi 必须在 120..=640'}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    BodyTooLarge:
+      description: 请求体超过上限（默认 2 MiB）
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: body_too_large
+              message: 请求体超过 2 MiB
+              details: {limitBytes: 2097152}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    UnsupportedMediaType:
+      description: Content-Type 不受支持
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unsupported_media_type
+              message: 不支持的 Content-Type
+              details: {supported: [application/json, application/toml, text/plain]}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    RateLimited:
+      description: 触发限流
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: rate_limited
+              message: 请求过于频繁
+              details: {limit: 30, windowSec: 60}
+              retryable: true
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    InternalError:
+      description: 未预期错误，用 requestId 查服务日志
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: internal_error
+              message: 服务内部错误
+              details: null
+              retryable: true
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    UpstreamUnavailable:
+      description: 系统命令（pm / am / getprop）不可用或超时
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: upstream_unavailable
+              message: am 命令执行失败
+              details: {component: am}
+              retryable: true
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+  schemas:
+    ErrorResponse:
+      type: object
+      description: 统一错误信封，所有 4xx 与 5xx 响应体
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+      example:
+        error:
+          code: config_revision_mismatch
+          message: 配置已被其他客户端修改
+          details:
+            expected: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+            actual: '1a7b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9'
+          retryable: false
+          requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    ErrorBody:
+      type: object
+      description: 错误内容；code 稳定可用于分支，message 供人阅读，details 为结构化原因
+      required: [code, message, details, retryable, requestId]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          description: 稳定错误码
+          enum: [unauthorized, forbidden_scope, not_found, method_not_allowed, confirmation_required, conflict_duplicate_package, config_revision_mismatch, precondition_required, validation_failed, body_too_large, unsupported_media_type, rate_limited, internal_error, upstream_unavailable]
+          example: config_revision_mismatch
+        message:
+          type: string
+          description: 人类可读的短说明
+          example: 配置已被其他客户端修改
+        details:
+          description: 结构化原因，无附加信息时为 null
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+          example: {expected: '9f2c5d1e', actual: '1a7b2c3d'}
+        retryable:
+          type: boolean
+          description: 同一请求原样重试是否可能成功
+          example: false
+        requestId:
+          type: string
+          description: 与响应头 X-Request-Id 相同，用于查审计与服务日志
+          example: req_01JC7Z6Q3M8V2S9K4T1B0A
+      example:
+        code: unauthorized
+        message: 缺少或无效的 Bearer Token
+        details: null
+        retryable: false
+        requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    Warning:
+      type: object
+      description: 写入警告；不阻断写入，客户端应展示或记录
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          description: 稳定警告码
+          enum: [duplicate_package, empty_packages, package_not_installed, inline_record_removed, config_missing, unknown_field_preserved, pm_unavailable, no_config]
+          example: duplicate_package
+        message:
+          type: string
+          description: 人类可读说明
+          example: com.example.app 同时被 pixel_9 与 samsung_s24_ultra 声明
+        details:
+          description: 结构化上下文，无则为 null
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+          example: {package: com.example.app, templates: [pixel_9, samsung_s24_ultra]}
+      example:
+        code: empty_packages
+        message: 模板 pixel_9 没有绑定任何包名
+        details: {template: pixel_9}
+    ValidationError:
+      type: object
+      description: 字段级校验错误，422 响应的 details.errors 元素
+      required: [path, code, message]
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: 字段路径，如 templates.pixel_9.dpi 或 apps[0].package
+          example: templates.pixel_9.dpi
+        code:
+          type: string
+          description: 校验错误码
+          enum: [syntax_error, invalid_type, invalid_package, invalid_template_name, out_of_range, invalid_value, unknown_field, missing_required, duplicate_app_record]
+          example: out_of_range
+        message:
+          type: string
+          description: 人类可读说明
+          example: dpi 必须在 120..=640
+      example:
+        path: apps[0].package
+        code: invalid_package
+        message: 不是合法 Java 包名
+    HealthResponse:
+      type: object
+      description: 存活探针响应，无需认证
+      required: [status, version, uptimeSec]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          const: ok
+          description: 固定为 ok
+          example: ok
+        version:
+          type: string
+          description: 服务版本
+          example: 1.8.0
+        uptimeSec:
+          type: integer
+          minimum: 0
+          description: 服务已运行秒数
+          example: 3600
+      example: {status: ok, version: 1.8.0, uptimeSec: 3600}
+    ModuleInfo:
+      type: object
+      description: 模块信息，来自 module.prop
+      required: [id, version, versionCode]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: 模块 id
+          example: device_faker
+        version:
+          type: string
+          description: 模块版本（带 v 前缀）
+          example: v1.7.0
+        versionCode:
+          type: integer
+          description: 模块版本号
+          example: 20261109
+      example: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+    DeviceSummary:
+      type: object
+      description: 设备 Build 摘要
+      required: [manufacturer, brand, model, device, android, sdk, abi]
+      additionalProperties: false
+      properties:
+        manufacturer: {type: string, description: Build.MANUFACTURER, example: Google}
+        brand: {type: string, description: Build.BRAND, example: google}
+        model: {type: string, description: Build.MODEL, example: Pixel 9}
+        device: {type: string, description: Build.DEVICE, example: tokay}
+        android: {type: string, description: Build.VERSION.RELEASE, example: '17'}
+        sdk: {type: integer, description: Build.VERSION.SDK_INT, example: 37}
+        abi: {type: string, description: 服务运行的 ABI, example: arm64-v8a}
+        fingerprint: {type: string, description: Build.FINGERPRINT（/device 返回，/status 省略）, example: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
+      example:
+        manufacturer: Google
+        brand: google
+        model: Pixel 9
+        device: tokay
+        android: '17'
+        sdk: 37
+        abi: arm64-v8a
+    ServerInfo:
+      type: object
+      description: 服务运行时信息
+      required: [version, bind, uptimeSec]
+      additionalProperties: false
+      properties:
+        version: {type: string, description: device_faker_server 版本, example: 1.8.0}
+        bind: {type: string, description: 实际监听地址, example: '127.0.0.1:8686'}
+        uptimeSec: {type: integer, minimum: 0, description: 已运行秒数, example: 3600}
+        startedAt: {type: string, format: date-time, description: 启动时间（UTC）, example: '2026-11-24T03:00:00Z'}
+        pid: {type: integer, description: 进程 pid, example: 4321}
+      example: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+    ConfigStatus:
+      type: object
+      description: 配置文件的 revision 与统计；配置文件不存在（exists=false）时 mtime 为 null、size 为 0、revision 为空内容字节的 SHA-256
+      required: [revision, mtime, size, exists, templates, apps, conflicts]
+      additionalProperties: false
+      properties:
+        revision:
+          type: string
+          description: '配置 revision：配置原始字节的 SHA-256，64 位小写十六进制（实现可带 sha256: 前缀，客户端须视为不透明字符串）'
+          example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        mtime: {type: [string, 'null'], format: date-time, description: '文件 mtime（UTC RFC 3339）；配置文件不存在（exists=false）或元数据不可读时为 null', example: '2026-11-24T03:00:00Z'}
+        size: {type: integer, minimum: 0, description: 文件字节数, example: 9361}
+        exists: {type: boolean, description: 配置文件是否存在, example: true}
+        templates: {type: integer, minimum: 0, description: 模板数量, example: 26}
+        apps: {type: integer, minimum: 0, description: 内联应用记录数量, example: 27}
+        conflicts: {type: integer, minimum: 0, description: 同一包名被多个模板声明的去重包数, example: 0}
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        mtime: '2026-11-24T03:00:00Z'
+        size: 9361
+        exists: true
+        templates: 26
+        apps: 27
+        conflicts: 0
+    StatusResponse:
+      type: object
+      description: 状态快照；capabilities 列出本服务已实现的能力标签
+      required: [module, device, server, config, capabilities]
+      additionalProperties: false
+      properties:
+        module:
+          $ref: '#/components/schemas/ModuleInfo'
+        device:
+          $ref: '#/components/schemas/DeviceSummary'
+        server:
+          $ref: '#/components/schemas/ServerInfo'
+        config:
+          $ref: '#/components/schemas/ConfigStatus'
+        capabilities:
+          type: array
+          description: 已实现能力标签
+          items:
+            type: string
+            enum: [config, templates, apps, packages, device, validate]
+          example: [config, templates, apps, packages, device, validate]
+      example:
+        module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+        device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
+        server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+        config:
+          revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+          mtime: '2026-11-24T03:00:00Z'
+          size: 9361
+          exists: true
+          templates: 26
+          apps: 27
+          conflicts: 0
+        capabilities: [config, templates, apps, packages, device, validate]
+    ConfigDocument:
+      type: object
+      description: |
+        配置文档，字段与 config.toml 一一对应（snake_case）。
+        除 apps[].package 外全部可选；null 等价于省略。
+      additionalProperties: false
+      properties:
+        debug: {type: boolean, default: false, description: 调试日志开关, example: false}
+        default_force_denylist_unmount: {type: boolean, default: false, description: 全局 FORCE_DENYLIST_UNMOUNT 默认值, example: false}
+        default_hide_maps:
+          type: array
+          description: 默认 /proc/self/maps 清理模式
+          items: {type: string, maxLength: 256}
+          maxItems: 64
+          default: []
+          example: [df_*]
+        templates:
+          type: object
+          description: 模板表，键为模板名；顺序即 config.toml 书写顺序，服务端保留
+          additionalProperties:
+            $ref: '#/components/schemas/TemplateInput'
+          example:
+            pixel_9: {packages: [com.example.app], brand: google, model: Pixel 9, sdk_int: 35, dpi: 420}
+        apps:
+          type: array
+          description: 内联应用配置，顺序保留；同一 package 不得重复
+          items:
+            $ref: '#/components/schemas/AppConfig'
+          maxItems: 500
+          example:
+            - {package: com.example.two, manufacturer: Xiaomi, model: 2509FPN0BC, dpi: 420}
+      example:
+        debug: false
+        default_force_denylist_unmount: false
+        default_hide_maps: []
+        templates:
+          pixel_9: {packages: [com.example.app], brand: google, model: Pixel 9, sdk_int: 35, dpi: 420}
+        apps:
+          - {package: com.example.two, manufacturer: Xiaomi, model: 2509FPN0BC}
+    TemplateInput:
+      type: object
+      description: |
+        模板字段集合（不含模板名），与 config.toml 的 [templates.<name>] 字段一致。
+        PUT 为整体替换：缺席字段视为删除，packages 缺席等价于空数组。
+        PATCH 为 JSON Merge Patch：缺席不改，null 删除，数组与对象整体替换。
+      additionalProperties: false
+      properties:
+        packages:
+          type: array
+          description: 绑定包名列表，支持 pkg@userId；append 模式保留顺序并去重
+          items:
+            type: string
+            pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+(@[0-9]{1,5})?$'
+            example: com.example.app
+          maxItems: 200
+          default: []
+          example: [com.example.app, 'com.example.app@999']
+        manufacturer: {type: string, maxLength: 512, description: 厂商，映射 Build.MANUFACTURER, example: Google}
+        brand: {type: string, maxLength: 512, description: 品牌，映射 Build.BRAND, example: google}
+        marketname: {type: string, maxLength: 512, description: 市场名，仅属性 ro.product.marketname 与 OPPO/OnePlus 别名, example: Pixel 9 Pro}
+        model: {type: string, maxLength: 512, description: 型号，映射 Build.MODEL, example: Pixel 9}
+        name: {type: string, maxLength: 512, description: '设备内部产品名（模板字段，不是模板名），映射 ro.product.name', example: tokay}
+        device: {type: string, maxLength: 512, description: 代号，映射 Build.DEVICE, example: tokay}
+        product: {type: string, maxLength: 512, description: 产品代号，映射 Build.PRODUCT 与 ro.build.product, example: tokay}
+        hardware: {type: string, maxLength: 512, description: 硬件名，映射 Build.HARDWARE 与 ro.hardware, example: tensor}
+        board: {type: string, maxLength: 512, description: 主板名，映射 Build.BOARD 与 ro.product.board, example: g4}
+        soc_model: {type: string, maxLength: 512, description: SoC 型号，映射 Build.SOC_MODEL 与 ro.soc.model, example: Tensor G4}
+        fingerprint: {type: string, maxLength: 512, description: 构建指纹，映射 Build.FINGERPRINT；可自动补齐 brand/product/device 等, example: 'google/tokay/tokay:15/AP4A.250105.002/12345678:user/release-keys'}
+        build_id: {type: string, maxLength: 512, description: Build ID，映射 Build.ID 与分区副本, example: AP4A.250105.002}
+        display_id: {type: string, maxLength: 512, description: 系统版本号，映射 Build.DISPLAY, example: BP2A.250605.031}
+        incremental: {type: string, maxLength: 512, description: 构建增量号，映射 Build.VERSION.INCREMENTAL, example: '13000000'}
+        security_patch: {type: string, maxLength: 16, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', description: 安全补丁日期，映射 Build.VERSION.SECURITY_PATCH, example: '2025-06-05'}
+        characteristics: {type: string, maxLength: 512, description: 设备特性，仅属性 ro.build.characteristics, example: phone}
+        android_version: {type: string, maxLength: 16, pattern: '^[0-9]{1,2}(\.[0-9]{1,2}){0,2}$', description: Android 版本，映射 Build.VERSION.RELEASE, example: '15'}
+        sdk_int:
+          description: SDK 版本；整数 1..1000，或字符串 __DELETE__ 删除 ro.build.version.sdk 整族（高风险）
+          oneOf:
+            - type: integer
+              minimum: 1
+              maximum: 1000
+            - type: string
+              const: __DELETE__
+          example: 35
+        dpi: {type: integer, minimum: 120, maximum: 640, description: 临时屏幕密度（由 companion 用 wm density 应用）, example: 420}
+        custom_props:
+          type: object
+          description: 自定义属性映射，直接写入；键必须以 ro. 或 persist. 开头
+          propertyNames:
+            pattern: '^(ro|persist)\.[A-Za-z0-9_.-]{1,120}$'
+          additionalProperties:
+            type: string
+            maxLength: 1024
+          maxProperties: 128
+          example: {ro.product.vendor.model: Pixel 9, ro.debug.mode: __DELETE__}
+        force_denylist_unmount: {type: boolean, description: 是否对该应用强制 FORCE_DENYLIST_UNMOUNT（默认继承全局）, example: false}
+        hide_maps:
+          type: array
+          description: 从 /proc/self/maps 清除的属性映射模式
+          items: {type: string, maxLength: 256}
+          maxItems: 64
+          example: [df_*]
+        companion_resetprop: {type: boolean, description: 是否跳过 COW、全部交给 companion resetprop（全系统可见）, example: false}
+      example:
+        packages: [com.example.app]
+        manufacturer: Samsung
+        brand: samsung
+        model: SM-S9280
+        device: e3q
+        android_version: '15'
+        sdk_int: 35
+        dpi: 420
+        custom_props: {ro.product.vendor.model: SM-S9280}
+    AppConfig:
+      type: object
+      description: 内联应用配置（[[apps]] 记录）；整记录语义，未设置字段不回落模板，只回落全局默认
+      required: [package]
+      additionalProperties: false
+      properties:
+        package:
+          type: string
+          description: Java 包名，可带 @userId；同一条目在配置中必须唯一
+          pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+(@[0-9]{1,5})?$'
+          example: com.example.two
+        manufacturer: {type: string, maxLength: 512, description: 厂商，映射 Build.MANUFACTURER, example: Xiaomi}
+        brand: {type: string, maxLength: 512, description: 品牌，映射 Build.BRAND, example: Redmi}
+        marketname: {type: string, maxLength: 512, description: 市场名（仅属性）, example: Xiaomi 15 Pro}
+        model: {type: string, maxLength: 512, description: 型号，映射 Build.MODEL, example: 2509FPN0BC}
+        name: {type: string, maxLength: 512, description: 设备内部产品名，映射 ro.product.name, example: popsicle}
+        device: {type: string, maxLength: 512, description: 代号，映射 Build.DEVICE, example: 'Xiaomi 15 Pro'}
+        product: {type: string, maxLength: 512, description: 产品代号，映射 Build.PRODUCT, example: popsicle}
+        hardware: {type: string, maxLength: 512, description: 硬件名，映射 Build.HARDWARE, example: qcom}
+        board: {type: string, maxLength: 512, description: 主板名，映射 Build.BOARD, example: kalama}
+        soc_model: {type: string, maxLength: 512, description: SoC 型号，映射 Build.SOC_MODEL, example: SM8750}
+        fingerprint: {type: string, maxLength: 512, description: 构建指纹，映射 Build.FINGERPRINT, example: 'Xiaomi/popsicle/popsicle:15/AP3A.240905.015/12345:user/release-keys'}
+        build_id: {type: string, maxLength: 512, description: Build ID, example: AP3A.240905.015}
+        display_id: {type: string, maxLength: 512, description: 系统版本号，映射 Build.DISPLAY, example: OS2.0.1.0}
+        incremental: {type: string, maxLength: 512, description: 构建增量号, example: '12345'}
+        security_patch: {type: string, maxLength: 16, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', description: 安全补丁日期, example: '2024-12-05'}
+        characteristics: {type: string, maxLength: 512, description: 设备特性（仅属性）, example: phone}
+        android_version: {type: string, maxLength: 16, pattern: '^[0-9]{1,2}(\.[0-9]{1,2}){0,2}$', description: Android 版本, example: '15'}
+        sdk_int:
+          description: SDK 版本；整数 1..1000，或字符串 __DELETE__
+          oneOf:
+            - type: integer
+              minimum: 1
+              maximum: 1000
+            - type: string
+              const: __DELETE__
+          example: 35
+        dpi: {type: integer, minimum: 120, maximum: 640, description: 临时屏幕密度, example: 420}
+        custom_props:
+          type: object
+          description: 自定义属性映射
+          propertyNames:
+            pattern: '^(ro|persist)\.[A-Za-z0-9_.-]{1,120}$'
+          additionalProperties:
+            type: string
+            maxLength: 1024
+          maxProperties: 128
+          example: {ro.debug.mode: __DELETE__}
+        force_denylist_unmount: {type: boolean, description: 强制 FORCE_DENYLIST_UNMOUNT, example: true}
+        hide_maps:
+          type: array
+          description: 从 /proc/self/maps 清除的属性映射模式
+          items: {type: string, maxLength: 256}
+          maxItems: 64
+          example: []
+        companion_resetprop: {type: boolean, description: 全部属性交给 companion resetprop, example: false}
+      example:
+        package: com.example.two
+        manufacturer: Xiaomi
+        brand: Redmi
+        model: 2509FPN0BC
+        android_version: '15'
+        sdk_int: 35
+        dpi: 420
+    AppResolved:
+      type: object
+      description: 最终生效字段；未设置的字符串字段省略，布尔与数组给出继承后的有效值
+      properties:
+        manufacturer: {type: string, description: 生效厂商, example: Google}
+        brand: {type: string, description: 生效品牌, example: google}
+        marketname: {type: string, description: 生效市场名, example: Pixel 9 Pro}
+        model: {type: string, description: 生效型号, example: Pixel 9}
+        name: {type: string, description: 生效产品内部名, example: tokay}
+        device: {type: string, description: 生效代号, example: tokay}
+        product: {type: string, description: 生效产品代号, example: tokay}
+        hardware: {type: string, description: 生效硬件名, example: tensor}
+        board: {type: string, description: 生效主板名, example: g4}
+        soc_model: {type: string, description: 生效 SoC 型号, example: Tensor G4}
+        fingerprint: {type: string, description: 生效指纹, example: 'google/tokay/tokay:15/AP4A.250105.002/12345678:user/release-keys'}
+        build_id: {type: string, description: 生效 Build ID, example: AP4A.250105.002}
+        display_id: {type: string, description: 生效系统版本号, example: BP2A.250605.031}
+        incremental: {type: string, description: 生效构建增量号, example: '13000000'}
+        security_patch: {type: string, description: 生效安全补丁, example: '2025-06-05'}
+        characteristics: {type: string, description: 生效设备特性, example: phone}
+        android_version: {type: string, description: 生效 Android 版本, example: '15'}
+        sdk_int: {type: integer, description: 生效 SDK 版本（__DELETE__ 时省略）, example: 35}
+        dpi: {type: integer, description: 生效屏幕密度, example: 420}
+        custom_props: {type: object, additionalProperties: {type: string}, description: 生效自定义属性, example: {ro.product.vendor.model: Pixel 9}}
+        force_denylist_unmount: {type: boolean, description: 继承后的有效值, example: false}
+        hide_maps: {type: array, items: {type: string}, description: 继承后的有效值, example: []}
+        companion_resetprop: {type: boolean, description: 继承后的有效值, example: false}
+      example:
+        manufacturer: Google
+        brand: google
+        model: Pixel 9
+        android_version: '15'
+        sdk_int: 35
+        dpi: 420
+        force_denylist_unmount: false
+        hide_maps: []
+        companion_resetprop: false
+    TemplateListItem:
+      type: object
+      description: 模板列表项；position 为配置文件中的 0 基序号
+      required: [name, position, packages, packageCount, fieldsSet]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: 模板名, example: pixel_9}
+        position: {type: integer, minimum: 0, description: 配置文件中的 0 基序号, example: 0}
+        packages:
+          type: array
+          description: 绑定的包名（保序）
+          items: {type: string}
+          example: [com.example.app]
+        packageCount: {type: integer, minimum: 0, description: packages 长度, example: 1}
+        fieldsSet:
+          type: array
+          description: 该模板显式设置的字段名（snake_case）
+          items: {type: string}
+          example: [android_version, brand, dpi, model, sdk_int]
+      example:
+        name: pixel_9
+        position: 0
+        packages: [com.example.app]
+        packageCount: 1
+        fieldsSet: [android_version, brand, dpi, model, sdk_int]
+    TemplateListResponse:
+      type: object
+      description: 模板列表；items 顺序等于配置文件书写顺序
+      required: [revision, total, nextCursor, items]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 整份配置的 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        total: {type: integer, minimum: 0, description: 过滤后的模板总数, example: 2}
+        nextCursor: {type: [string, 'null'], description: 下一页游标，null 表示结束, example: null}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateListItem'
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        total: 1
+        nextCursor: null
+        items:
+          - {name: pixel_9, position: 0, packages: [com.example.app], packageCount: 1, fieldsSet: [brand, model]}
+    TemplateResponse:
+      type: object
+      description: 模板详情；模板名在顶层 name，template 为 TemplateInput（不含模板名）
+      required: [revision, position, name, template]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        position: {type: integer, minimum: 0, description: 配置文件中的 0 基序号, example: 0}
+        name: {type: string, description: 模板名（config.toml 的配置键）, pattern: '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$', example: pixel_9}
+        template:
+          $ref: '#/components/schemas/TemplateInput'
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        position: 0
+        name: pixel_9
+        template: {packages: [com.example.app], brand: google, model: Pixel 9, dpi: 420}
+    AppSource:
+      type: object
+      description: 应用配置来源
+      required: [type, template, alsoInline]
+      additionalProperties: false
+      properties:
+        type: {type: string, enum: [inline, template, none], description: 命中来源, example: template}
+        template: {type: [string, 'null'], description: 命中的模板名；内联或未配置时为 null, example: pixel_9}
+        alsoInline: {type: boolean, description: 内联记录存在但同时命中模板（内联优先）, example: false}
+      example: {type: template, template: pixel_9, alsoInline: false}
+    AppListItem:
+      type: object
+      description: 已配置应用列表项
+      required: [package, position, source, fieldsSet]
+      additionalProperties: false
+      properties:
+        package: {type: string, description: 包名, example: com.example.two}
+        position: {type: integer, minimum: 0, description: apps 数组中的 0 基序号, example: 0}
+        source:
+          $ref: '#/components/schemas/AppSource'
+        fieldsSet:
+          type: array
+          description: 内联记录显式设置的字段名
+          items: {type: string}
+          example: [dpi, manufacturer, model]
+      example: {package: com.example.two, position: 0, source: {type: inline, template: null, alsoInline: false}, fieldsSet: [dpi, manufacturer, model]}
+    AppListResponse:
+      type: object
+      description: 已配置应用列表（只含 [[apps]] 内联记录）
+      required: [revision, total, nextCursor, items]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        total: {type: integer, minimum: 0, description: 记录总数, example: 1}
+        nextCursor: {type: [string, 'null'], description: 下一页游标, example: null}
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppListItem'
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        total: 1
+        nextCursor: null
+        items:
+          - {package: com.example.two, position: 0, source: {type: inline, template: null, alsoInline: false}, fieldsSet: [dpi, manufacturer, model]}
+    AppResponse:
+      type: object
+      description: 单应用解析结果；未配置的包名也返回 200，source.type=none 且带 no_config 警告
+      required: [package, revision, installed, source, resolved, warnings]
+      additionalProperties: false
+      properties:
+        package: {type: string, description: 包名, example: com.example.app}
+        revision: {type: string, description: 配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        installed: {type: [boolean, 'null'], description: 是否能从 PackageManager 查到（pm 不可用时 null）, example: true}
+        source:
+          $ref: '#/components/schemas/AppSource'
+        resolved:
+          $ref: '#/components/schemas/AppResolved'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+      example:
+        package: com.example.app
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        installed: true
+        source: {type: template, template: pixel_9, alsoInline: false}
+        resolved: {brand: google, model: Pixel 9, android_version: '15', sdk_int: 35, dpi: 420}
+        warnings: []
+    AppUpsertRequest:
+      type: object
+      description: |
+        template 与 config 必须恰好提供一个。
+        template 模式：把该包加入模板 packages（末尾追加、去重），detachFromTemplates 默认 true 会从其它模板移除该包，
+        并删除同包名的内联记录（回 inline_record_removed 警告）。
+        config 模式：整记录替换内联 [[apps]] 记录；detachFromTemplates 默认 false。
+      additionalProperties: false
+      properties:
+        template: {type: [string, 'null'], description: 绑定到的模板名（与 config 互斥）, example: pixel_9}
+        config:
+          oneOf:
+            - $ref: '#/components/schemas/AppConfig'
+            - type: 'null'
+          description: 内联配置记录（与 template 互斥）
+        detachFromTemplates: {type: boolean, description: 是否从其它模板移除该包（template 模式默认 true，config 模式默认 false）, example: true}
+      example:
+        template: pixel_9
+        detachFromTemplates: true
+    WriteResult:
+      type: object
+      description: 写操作结果；dry_run 时 revision 仍为当前值且 backupId 为 null
+      required: [revision, dryRun, warnings]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 写入后的配置 revision, example: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'}
+        previousRevision: {type: [string, 'null'], description: 写入前 revision；首次创建为 null, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        dryRun: {type: boolean, description: 是否为演练（未落盘）, example: false}
+        backupId: {type: [string, 'null'], description: 自动备份 ID；dry_run 时为 null, example: 20261124T031002Z-9f2c}
+        diff: {type: string, description: 仅在 diff=true 或 dry_run=true 时出现；上限 64 KiB, example: '--- a/config.toml\n+++ b/config.toml\n@@ -1 +1,2 @@\n debug = false\n+default_hide_maps = []'}
+        diffTruncated: {type: boolean, description: diff 是否被截断, example: false}
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+      example:
+        revision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+        previousRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        dryRun: false
+        backupId: 20261124T031002Z-9f2c
+        diffTruncated: false
+        warnings: []
+    ConfigResponse:
+      type: object
+      description: 配置读取响应（format=json）；配置文件不存在时 exists=false、config 为空文档、mtime 为 null、size 为 0
+      required: [revision, mtime, size, exists, warnings, config]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        mtime: {type: [string, 'null'], format: date-time, description: '文件 mtime（UTC RFC 3339）；配置文件不存在（exists=false）或元数据不可读时为 null', example: '2026-11-24T03:00:00Z'}
+        size: {type: integer, minimum: 0, description: 文件字节数, example: 9361}
+        exists: {type: boolean, description: 配置文件是否存在, example: true}
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+        config:
+          $ref: '#/components/schemas/ConfigDocument'
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        mtime: '2026-11-24T03:00:00Z'
+        size: 9361
+        exists: true
+        warnings: []
+        config: {debug: false, templates: {}, apps: []}
+    ConfigRevisionResponse:
+      type: object
+      description: 配置 revision 与文件元信息；配置文件不存在时 exists=false、mtime 为 null、size 为 0
+      required: [revision, mtime, size, exists]
+      additionalProperties: false
+      properties:
+        revision: {type: string, description: 配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        mtime: {type: [string, 'null'], format: date-time, description: '文件 mtime（UTC RFC 3339）；配置文件不存在（exists=false）或元数据不可读时为 null', example: '2026-11-24T03:00:00Z'}
+        size: {type: integer, minimum: 0, description: 文件字节数, example: 9361}
+        exists: {type: boolean, description: 文件是否存在, example: true}
+      example:
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        mtime: '2026-11-24T03:00:00Z'
+        size: 9361
+        exists: true
+    ValidateRequest:
+      type: object
+      description: 校验请求；TOML 内容为字符串，JSON 内容可为对象或字符串
+      required: [format, content]
+      additionalProperties: false
+      properties:
+        format: {type: string, enum: [toml, json], description: 内容格式, example: toml}
+        content:
+          description: 待校验内容，上限 2 MiB
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+          example: |
+            debug = false
+
+            [templates.pixel_9]
+            packages = ["com.example.app"]
+            dpi = 900
+      example:
+        format: toml
+        content: |
+          debug = false
+          [templates.pixel_9]
+          dpi = 900
+    ValidateResponse:
+      type: object
+      description: 校验结果；valid=false 仍是 200，errors 给字段级原因
+      required: [valid, revision, errors, warnings]
+      additionalProperties: false
+      properties:
+        valid: {type: boolean, description: 内容是否合法, example: false}
+        revision: {type: string, description: 校验时的当前配置 revision, example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'}
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationError'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+      example:
+        valid: false
+        revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        errors:
+          - {path: templates.pixel_9.dpi, code: out_of_range, message: 'dpi 必须在 120..=640'}
+        warnings: []
+    BindPackagesRequest:
+      type: object
+      description: 批量绑定包名；append 追加去重，replace 整体替换
+      required: [packages]
+      additionalProperties: false
+      properties:
+        packages:
+          type: array
+          description: 要绑定的包名（1..200 项，支持 pkg@userId）
+          minItems: 1
+          maxItems: 200
+          items:
+            type: string
+            pattern: '^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+(@[0-9]{1,5})?$'
+            example: com.example.app
+          example: [com.example.app, 'com.example.app@999']
+        mode: {type: string, enum: [append, replace], default: append, description: 追加或整体替换, example: append}
+      example:
+        packages: [com.example.app, 'com.example.app@999']
+        mode: append
+    RestartRequest:
+      type: object
+      description: 重启应用请求；字段全可选，请求体可省略
+      additionalProperties: false
+      properties:
+        forceStop: {type: boolean, default: true, description: 是否执行 am force-stop, example: true}
+        launch: {type: boolean, default: false, description: force-stop 后是否重新拉起, example: false}
+        user: {type: integer, minimum: 0, default: 0, description: Android 用户 id（pkg 中的 @uid 优先）, example: 0}
+      example: {forceStop: true, launch: false, user: 0}
+    RestartResponse:
+      type: object
+      description: 重启结果
+      required: [package, forceStopped, launched, durationMs]
+      additionalProperties: false
+      properties:
+        package: {type: string, description: 包名, example: com.example.app}
+        forceStopped: {type: boolean, description: 是否执行了 force-stop, example: true}
+        launched: {type: boolean, description: 是否重新拉起, example: false}
+        durationMs: {type: integer, minimum: 0, description: 耗时（毫秒）, example: 118}
+      example: {package: com.example.app, forceStopped: true, launched: false, durationMs: 118}
+    PackageInfo:
+      type: object
+      description: 已安装包元数据；label 本增量恒为 null
+      required: [package, userIds, installed, isSystem]
+      additionalProperties: false
+      properties:
+        package: {type: string, description: 包名, example: com.android.chrome}
+        userIds: {type: array, items: {type: integer, minimum: 0}, description: 已安装的用户 id 列表, example: [0]}
+        installed: {type: boolean, description: 是否安装, example: true}
+        isSystem: {type: boolean, description: 是否系统应用, example: true}
+        versionName: {type: [string, 'null'], description: versionName, example: 131.0.6778.200}
+        versionCode: {type: [integer, 'null'], description: versionCode, example: 677820000}
+        label: {type: [string, 'null'], description: 应用名（本增量恒为 null）, example: null}
+      example:
+        package: com.android.chrome
+        userIds: [0]
+        installed: true
+        isSystem: true
+        versionName: 131.0.6778.200
+        versionCode: 677820000
+        label: null
+    PackagesResponse:
+      type: object
+      description: 已安装包列表；source=unavailable 时 items 为空并带 pm_unavailable 警告
+      required: [total, nextCursor, source, warnings, items]
+      additionalProperties: false
+      properties:
+        total: {type: integer, minimum: 0, description: 总数, example: 1}
+        nextCursor: {type: [string, 'null'], description: 下一页游标, example: null}
+        source: {type: string, enum: [pm, unavailable], description: 数据来源, example: pm}
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PackageInfo'
+      example:
+        total: 1
+        nextCursor: null
+        source: pm
+        warnings: []
+        items:
+          - {package: com.android.chrome, userIds: [0], installed: true, isSystem: true, versionName: 131.0.6778.200, versionCode: 677820000, label: null}
+    RootInfo:
+      type: object
+      description: root 管理器信息；无法识别时 manager 为 null
+      required: [manager, version]
+      additionalProperties: false
+      properties:
+        manager: {type: [string, 'null'], description: 'kernelsu / magisk / apatch，或 null', example: kernelsu}
+        version: {type: [string, 'null'], description: 管理器版本, example: 1.0.7}
+      example: {manager: kernelsu, version: 1.0.7}
+    DeviceResponse:
+      type: object
+      description: 设备与模块信息
+      required: [module, device, server, root]
+      additionalProperties: false
+      properties:
+        module:
+          $ref: '#/components/schemas/ModuleInfo'
+        device:
+          $ref: '#/components/schemas/DeviceSummary'
+        server:
+          $ref: '#/components/schemas/ServerInfo'
+        root:
+          $ref: '#/components/schemas/RootInfo'
+      example:
+        module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+        device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
+        server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+        root: {manager: kernelsu, version: 1.0.7}
+    DevicePropsResponse:
+      type: object
+      description: getprop 白名单读取结果；不存在的键放入 missing
+      required: [props, missing, source]
+      additionalProperties: false
+      properties:
+        props:
+          type: object
+          description: 读到的属性键值
+          additionalProperties: {type: string}
+          example: {ro.product.model: Pixel 9}
+        missing:
+          type: array
+          description: 请求了但设备上不存在的键
+          items: {type: string}
+          example: [ro.vendor.does_not_exist]
+        source: {type: string, enum: [getprop, unavailable], description: 数据来源, example: getprop}
+      example:
+        props: {ro.product.model: Pixel 9, ro.build.fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
+        missing: [ro.vendor.does_not_exist]
+        source: getprop
+    UserInfo:
+      type: object
+      description: Android 用户信息
+      required: [id, running, isCurrent]
+      additionalProperties: false
+      properties:
+        id: {type: integer, minimum: 0, description: 用户 id, example: 0}
+        name: {type: [string, 'null'], description: 用户名称, example: Owner}
+        running: {type: boolean, description: 是否运行中, example: true}
+        isCurrent: {type: boolean, description: 是否当前用户, example: true}
+      example: {id: 0, name: Owner, running: true, isCurrent: true}
+    DeviceUsersResponse:
+      type: object
+      description: 用户列表
+      required: [users]
+      additionalProperties: false
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserInfo'
+      example:
+        users:
+          - {id: 0, name: Owner, running: true, isCurrent: true}
+          - {id: 999, name: Work, running: true, isCurrent: false}
+    ConfigSchema:
+      type: object
+      description: |
+        schemars 0.8 依据 device_faker_core::config::Config 生成的单份 JSON Schema，方言为 draft-07
+        （$schema = http://json-schema.org/draft-07/schema#）。Config 字段直接位于顶层 properties；
+        被引用的类型（DeviceTemplate、AppConfig、NumberSetting）放在 definitions，$ref 形如
+        #/definitions/DeviceTemplate。没有 $id 与 additionalProperties: false；
+        该端点的 payload 与 OpenAPI 文档自身的 jsonSchemaDialect 无关。
+      additionalProperties: true
+      required: ['$schema', title, type, properties, definitions]
+      properties:
+        '$schema': {type: string, const: 'http://json-schema.org/draft-07/schema#', description: draft-07 方言 URI, example: 'http://json-schema.org/draft-07/schema#'}
+        title: {type: string, description: Schema 标题, example: DeviceFakerConfig}
+        type: {type: string, const: object, description: 顶层类型, example: object}
+        properties: {type: object, additionalProperties: true, description: 'Config 顶层字段：apps、debug、default_force_denylist_unmount、default_hide_maps、templates'}
+        definitions: {type: object, additionalProperties: true, description: 被引用类型的定义（draft-07 关键字），包含 DeviceTemplate、AppConfig、NumberSetting}
+      example:
+        '$schema': 'http://json-schema.org/draft-07/schema#'
+        title: DeviceFakerConfig
+        type: object
+        properties:
+          apps: {default: [], items: {'$ref': '#/definitions/AppConfig'}, type: array}
+          debug: {default: false, type: boolean}
+          default_force_denylist_unmount: {default: false, type: boolean}
+          default_hide_maps: {default: [], items: {type: string}, type: array}
+          templates: {additionalProperties: {'$ref': '#/definitions/DeviceTemplate'}, default: {}, type: object}
+        definitions:
+          NumberSetting:
+            anyOf:
+              - {type: integer, minimum: 1.0, maximum: 1000.0, description: 整数伪装值（sdk_int）}
+              - {type: string, const: __DELETE__, description: 删除 ro.build.version.sdk 整族}
+            description: 整数伪装值，或字符串 __DELETE__
+            title: NumberSetting
+          DeviceTemplate: {description: 机型模板, type: object}
+          AppConfig: {required: [package], type: object}

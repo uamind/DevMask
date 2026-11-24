@@ -1,0 +1,18 @@
+Packages:
+  Package [com.example.inline] (b2c3d4e5):
+    userId=10124
+    pkg=Package{7e6d5c4b com.example.inline}
+    codePath=/data/app/~~Qa2fixture==/com.example.inline-Qa2fixture==
+    resourcePath=/data/app/~~Qa2fixture==/com.example.inline-Qa2fixture==
+    legacyNativeLibraryDir=/data/app/~~Qa2fixture==/com.example.inline-Qa2fixture==/lib
+    primaryCpuAbi=arm64-v8a
+    secondaryCpuAbi=null
+    versionCode=7 minSdk=24 targetSdk=34
+    versionName=0.9.0
+    splits=[base]
+    flags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
+    dataDir=/data/user/0/com.example.inline
+    timeStamp=2026-10-20 18:22:10
+    firstInstallTime=2026-10-20 18:22:10
+    lastUpdateTime=2026-10-20 18:22:10
+    User 0: ceDataInode=393217 installed=true hidden=false suspended=false stopped=false notLaunched=false enabled=0

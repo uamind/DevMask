@@ -1,0 +1,19 @@
+{
+  "packages": [
+    "com.example.app"
+  ],
+  "manufacturer": "Google",
+  "brand": "google",
+  "marketname": "Pixel 9",
+  "model": "Pixel 9",
+  "device": "tokay",
+  "product": "tokay",
+  "fingerprint": "google/tokay/tokay:15/AP4A.250105.002/12345678:user/release-keys",
+  "build_id": "AP4A.250105.002",
+  "android_version": "15",
+  "sdk_int": 35,
+  "dpi": 420,
+  "custom_props": {
+    "ro.product.vendor.model": "Pixel 9"
+  }
+}

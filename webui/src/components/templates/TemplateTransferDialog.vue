@@ -203,7 +203,7 @@ import { toast } from 'kernelsu-alt'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../utils/i18n'
 import { useLazyMessageBox } from '../../utils/elementPlus'
-import { execCommand } from '../../utils/ksu'
+import { backend } from '../../backend'
 import {
   copyTextToClipboard,
   parseFirstTemplateFromToml,
@@ -431,7 +431,7 @@ async function loadCurrentDevice() {
       ;({ templateData, defaultName } = parseFirstTemplateFromToml(mockConfig))
     } else {
       // 直接读 getprop 输出在前端转换：不再需要临时文件与 device_faker_cli
-      const output = await execCommand('getprop')
+      const output = await backend.getProps()
       if (!output.trim()) {
         throw new Error(t('settings.messages.read_failed'))
       }

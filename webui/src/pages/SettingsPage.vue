@@ -84,6 +84,156 @@
       </div>
     </div>
 
+    <div v-if="serverAccess.supported" class="settings-section glass-effect">
+      <h2 class="section-title">{{ t('settings.serverAccess.title') }}</h2>
+      <p class="server-hint server-hint--lead">{{ t('settings.serverAccess.desc') }}</p>
+
+      <div class="setting-item setting-item-horizontal">
+        <div class="setting-info">
+          <div class="setting-icon">
+            <Wifi :size="24" />
+          </div>
+          <div class="setting-text">
+            <h3 class="setting-name">{{ t('settings.serverAccess.allow_lan.label') }}</h3>
+            <p class="setting-desc">{{ t('settings.serverAccess.allow_lan.desc') }}</p>
+          </div>
+        </div>
+        <el-switch v-model="serverAccess.allowLan" class="setting-control-switch" />
+      </div>
+
+      <div class="setting-item setting-item-split">
+        <div class="setting-info">
+          <div class="setting-icon">
+            <Network :size="24" />
+          </div>
+          <div class="setting-text">
+            <h3 class="setting-name">{{ t('settings.serverAccess.port.label') }}</h3>
+            <p class="setting-desc">{{ t('settings.serverAccess.port.desc') }}</p>
+          </div>
+        </div>
+        <el-input-number
+          v-model="serverAccess.port"
+          class="setting-control"
+          :min="1"
+          :max="65535"
+          :step="1"
+          step-strictly
+          controls-position="right"
+        />
+      </div>
+
+      <div class="server-rows">
+        <div class="server-row">
+          <span class="server-label">{{ t('settings.serverAccess.bind') }}</span>
+          <span class="server-value server-value--mono">{{ serverAccess.bindPreview }}</span>
+        </div>
+        <div class="server-row">
+          <span class="server-label">{{ t('settings.serverAccess.status') }}</span>
+          <span class="server-value">{{ serverAccess.statusLabel }}</span>
+        </div>
+        <div class="server-row">
+          <span class="server-label">Token</span>
+          <span class="server-value">
+            {{
+              serverAccess.hasToken
+                ? t('settings.serverAccess.token_present')
+                : t('settings.serverAccess.token_missing')
+            }}
+          </span>
+        </div>
+      </div>
+
+      <div class="lan-block">
+        <span class="server-label">{{ t('settings.serverAccess.lan') }}</span>
+        <ul v-if="serverAccess.lanUrls.length > 0" class="lan-list">
+          <li v-for="url in serverAccess.lanUrls" :key="url">
+            <code>{{ url }}</code>
+          </li>
+        </ul>
+        <p v-else class="server-hint">{{ t('settings.serverAccess.lan_empty') }}</p>
+      </div>
+
+      <p v-if="serverAccess.error" class="server-hint server-hint--error">
+        {{ serverAccess.error }}
+      </p>
+
+      <div class="server-actions">
+        <el-button type="primary" :loading="serverAccess.saving" @click="applyServerAccess">
+          {{ t('settings.serverAccess.actions.apply') }}
+        </el-button>
+        <el-button :loading="serverAccess.saving" @click="resetAccessToken">
+          {{ t('settings.serverAccess.actions.reset_token') }}
+        </el-button>
+        <el-button :loading="serverAccess.refreshing" @click="refreshServerAccess">
+          {{ t('settings.serverAccess.actions.refresh') }}
+        </el-button>
+      </div>
+    </div>
+
+    <div class="settings-section glass-effect">
+      <h2 class="section-title">{{ serverStore.messages.section.title }}</h2>
+
+      <div v-if="serverStore.isReadOnly" class="server-banner">
+        {{ serverStore.messages.section.readOnlyHint }}
+      </div>
+
+      <div class="server-rows">
+        <div class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.runtimeLabel }}</span>
+          <span class="server-value">{{ serverStore.runtimeLabel }}</span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.versionLabel }}</span>
+          <span class="server-value">{{ serverStore.serverVersion || '--' }}</span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.bindLabel }}</span>
+          <span class="server-value">{{ serverStore.bind || '--' }}</span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.revisionLabel }}</span>
+          <span class="server-value server-value--mono">{{ shortRevision }}</span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.configMtimeLabel }}</span>
+          <span class="server-value">{{ serverStore.configMtimeLabel }}</span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.tokenLabel }}</span>
+          <span class="server-value">
+            {{
+              serverStore.tokenPresent
+                ? serverStore.messages.section.tokenPresent
+                : serverStore.messages.section.tokenMissing
+            }}
+          </span>
+        </div>
+        <div v-if="serverStore.isNative" class="server-row">
+          <span class="server-label">{{ serverStore.messages.section.scopesLabel }}</span>
+          <span class="server-value">{{ serverStore.scopeSummary }}</span>
+        </div>
+      </div>
+
+      <p v-if="serverStore.isNative" class="server-hint">
+        {{ serverStore.messages.section.degradedHint }}
+      </p>
+      <p v-if="serverStore.error" class="server-hint server-hint--error">{{ serverStore.error }}</p>
+
+      <div v-if="serverStore.isNative || serverStore.isReadOnly" class="server-actions">
+        <el-button :loading="serverStore.loading" @click="refreshServerStatus">
+          {{ serverStore.messages.section.refresh }}
+        </el-button>
+        <template v-if="serverStore.isNative">
+          <el-button type="primary" @click="openTokenDialog">
+            {{ serverStore.messages.section.login }}
+          </el-button>
+          <el-button v-if="serverStore.tokenPresent" @click="logoutServer">
+            {{ serverStore.messages.section.logout }}
+          </el-button>
+        </template>
+      </div>
+    </div>
+
     <!-- 转换结果对话框 -->
     <el-dialog
       v-model="convertDialogVisible"
@@ -118,15 +268,40 @@
         }}</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="serverAccess.tokenDialogVisible"
+      :title="t('settings.serverAccess.token_dialog.title')"
+      width="90%"
+      :close-on-click-modal="false"
+      :append-to-body="true"
+      class="template-dialog"
+      modal-class="template-dialog-modal"
+      @closed="serverAccess.dismissTokenDialog()"
+    >
+      <p class="server-hint">{{ t('settings.serverAccess.token_dialog.desc') }}</p>
+      <el-input :model-value="serverAccess.generatedToken" readonly class="code-font" />
+      <template #footer>
+        <el-button @click="serverAccess.dismissTokenDialog()">
+          {{ t('settings.serverAccess.token_dialog.close') }}
+        </el-button>
+        <el-button type="primary" @click="copyAccessToken">
+          {{ t('settings.serverAccess.token_dialog.copy') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onActivated } from 'vue'
-import { Moon, Globe, Bug, FileUp } from '@lucide/vue'
+import { ref, watch, computed, onActivated, onMounted } from 'vue'
+import { Moon, Globe, Bug, FileUp, Network, Wifi } from '@lucide/vue'
 import { useConfigStore } from '../stores/config'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../utils/i18n'
+import { useServerStore } from '../stores/server'
+import { useServerAccessStore } from '../stores/serverAccess'
+import { copyTextToClipboard } from '../utils/templateTransfer'
 import { toast } from 'kernelsu-alt'
 import type { Template } from '../types'
 import { parseFirstTemplateFromToml } from '../utils/templateTransfer'
@@ -135,7 +310,56 @@ import { convertZipEntriesToTemplate } from '../utils/propsToTemplate'
 
 const configStore = useConfigStore()
 const settingsStore = useSettingsStore()
+const serverStore = useServerStore()
+const serverAccess = useServerAccessStore()
 const { t } = useI18n()
+
+/** revision 太长，界面只展示前 12 位（完整值仍可从服务端取）。 */
+const shortRevision = computed(() => {
+  const revision = serverStore.revision
+  return revision ? `${revision.slice(0, 12)}…` : '--'
+})
+
+/** 刷新传输类型与 /status（readonly 时也能看到提示）。 */
+async function refreshServerStatus() {
+  await serverStore.ensureReady()
+}
+
+/** 手动输入 Token（登录成功后重新加载配置）。 */
+async function openTokenDialog() {
+  const result = await serverStore.promptLogin('missing')
+  if (result) {
+    await configStore.loadConfig()
+  }
+}
+
+/** 保存外部访问开关/端口：写 server.toml → 重启服务 → 重新读取。 */
+async function applyServerAccess() {
+  await serverAccess.save()
+}
+
+/** 重置访问 Token（旧 Token 立即失效，明文只显示一次）。 */
+async function resetAccessToken() {
+  await serverAccess.resetToken()
+}
+
+/** 重新读取 server.toml、服务状态与本机地址。 */
+async function refreshServerAccess() {
+  await serverAccess.load()
+}
+
+/** 复制一次性展示的访问 Token。 */
+async function copyAccessToken() {
+  const copied = await copyTextToClipboard(serverAccess.generatedToken)
+  if (copied) {
+    toast(t('settings.serverAccess.messages.token_copied'))
+  }
+}
+
+/** 退出登录：只清本地 Token 与服务状态，不主动发请求（否则会立刻再弹登录框）。 */
+function logoutServer() {
+  serverStore.logout()
+}
 
 const currentTheme = ref(settingsStore.theme)
 const currentLanguage = ref(settingsStore.language)
@@ -260,11 +484,20 @@ watch(
   }
 )
 
+// 首次挂载时读一次服务状态（onActivated 只在 KeepAlive 场景触发，不能只靠它）
+onMounted(() => {
+  void serverStore.ensureReady()
+  if (serverAccess.supported) {
+    void serverAccess.load()
+  }
+})
+
 // KeepAlive 激活时同步最新配置
 onActivated(() => {
   currentTheme.value = settingsStore.theme
   currentLanguage.value = settingsStore.language
   debugMode.value = configStore.config.debug || false
+  void serverStore.ensureReady()
 })
 </script>
 
@@ -349,6 +582,89 @@ onActivated(() => {
 
 .setting-control {
   width: 100%;
+}
+
+.server-banner {
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.server-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.server-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.server-label {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.server-value {
+  color: var(--text);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.server-value--mono {
+  font-family: monospace;
+}
+
+.server-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.server-hint--error {
+  color: #dc2626;
+}
+
+.server-hint--lead {
+  margin: 0 0 0.75rem;
+}
+
+.lan-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.lan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.lan-list code {
+  font-family: monospace;
+  overflow-wrap: anywhere;
+}
+
+.server-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .setting-item-horizontal {

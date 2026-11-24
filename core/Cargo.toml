@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2025-2026 Seyud
+# Device Faker: https://github.com/Seyud/device_faker
+
+[package]
+name = "device_faker_core"
+version = "1.7.0"
+edition = "2024"
+authors = ["Seyud"]
+license = "GPL-3.0-or-later"
+description = "Device Faker 共享配置内核：配置模型、toml_edit 增量编辑、revision/备份与校验"
+
+[dependencies]
+anyhow = { version = "1.0.102", default-features = false }
+indexmap = { version = "2.13", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive", "std"] }
+# preserve_order：templates 按 config.toml 的书写顺序解析（底层 IndexMap），
+# 保证「同一包名被多个模板声明」时命中结果确定。
+toml = { version = "1.0", features = ["parse", "preserve_order"] }
+
+# 以下依赖按 feature 可选：zygisk 模块以 default-features = false 使用本 crate，
+# 不会把 toml_edit / schemars / sha2 带进模块 cdylib。
+libc = { version = "0.2", optional = true }
+schemars = { version = "0.8", features = ["derive", "indexmap2"], optional = true }
+serde_json = { version = "1.0.149", optional = true }
+sha2 = { version = "0.11", optional = true }
+toml_edit = { version = "0.25", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = ["edit", "store", "schema"]
+# 文档级增量编辑（保留注释/键顺序/未知字段）：server 写路径使用。
+edit = ["dep:toml_edit"]
+# revision + 原子写 + flock + 备份轮转；update() 依赖 edit 生成新文档。
+store = ["dep:sha2", "dep:libc", "edit"]
+# JSON Schema（schemars）：server 的 /api/v1/schema 使用。
+schema = ["dep:schemars", "dep:serde_json"]

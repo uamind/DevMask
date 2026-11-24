@@ -1,0 +1,28 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# PATH shim: 模拟 `getprop [key]`，数据来自 tests/fixtures/android/getprop.txt。
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+FIXTURES=$(dirname -- "$DIR")/android
+
+if [ "$#" -eq 0 ]; then
+  cat "$FIXTURES/getprop.txt"
+  exit 0
+fi
+
+key=$1
+awk -v key="$key" '
+  {
+    line = $0
+    if (index(line, "[" key "]: [") == 1) {
+      value = line
+      sub(/^\[[^]]*\]: \[/, "", value)
+      sub(/\]$/, "", value)
+      print value
+      found = 1
+      exit
+    }
+  }
+  END { if (!found) exit 1 }
+' "$FIXTURES/getprop.txt"

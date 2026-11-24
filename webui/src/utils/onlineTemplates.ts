@@ -11,11 +11,10 @@ import type {
   TemplateCategory,
   TemplateMeta,
 } from '../types'
-import { execCommand } from './ksu'
+import { backend } from '../backend'
 import { extractTemplateMeta, sanitizeTemplate } from './config'
 
 const REQUEST_TIMEOUT_MS = 15000
-const SHELL_TIMEOUT_SECONDS = Math.ceil(REQUEST_TIMEOUT_MS / 1000)
 const DETAIL_CONCURRENCY = 6
 /** 聚合文件候选链整体重试次数（第二次尝试前等 TEMPLATE_BUNDLE_RETRY_DELAY_MS）。 */
 const TEMPLATE_BUNDLE_ATTEMPTS = 2
@@ -174,10 +173,6 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-function escapeShellArg(value: string): string {
-  return value.replace(/'/g, "'\\''")
-}
-
 function decodeBase64Utf8(content: string): string {
   const binary = atob(content.replace(/\s+/g, ''))
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
@@ -283,46 +278,17 @@ async function requestTextViaFetch(
   }
 }
 
-async function requestTextViaShell(
-  url: string,
-  accept: string = FETCH_ACCEPT_JSON
-): Promise<string> {
-  if (import.meta.env?.DEV) {
-    throw new Error('Shell HTTP fallback is not available in development mode.')
-  }
-
-  const escapedUrl = escapeShellArg(url)
-  const escapedAccept = escapeShellArg(accept)
-  const timeout = SHELL_TIMEOUT_SECONDS
-
-  // 不写死任何 root 方案的目录，运行时按「PATH → 通用 busybox 形态」自己找工具：
-  //   · WebUI 的 exec 通常直接以 root 跑 `sh`（真机实测 id = uid=0，context u:r:magisk:s0），
-  //     没有 su 参与，因此 PATH 就是 app 继承的标准 Android PATH —— 里面基本没有 curl/wget/busybox；
-  //   · KernelSU 的 ksud su 会注入 /data/adb/ksu/bin，Magisk/WeaveMask 则不注入，
-  //     所以只按 PATH 找不够，再补一层 `*/busybox`、`*/bin/busybox` 的通用 glob（不点名具体方案）。
-  // 顺带：shell 没有 CORS 限制，所以 gitee raw（WebView fetch 拿不到，响应缺
-  // Access-Control-Allow-Origin）也能借这条兜底直接抓。
-  const script = [
-    `CURL=$(command -v curl 2>/dev/null)`,
-    `WGET=$(command -v wget 2>/dev/null)`,
-    `BB=$(command -v busybox 2>/dev/null)`,
-    `[ -z "$BB" ] && BB=$(ls /data/adb/*/busybox /data/adb/*/bin/busybox 2>/dev/null | head -n 1)`,
-    // 不要用 exec 替换 shell：真机实测 libsu 抓不到 exec 之后的输出（返回空串），
-    // 用 if/elif 顺序执行才能把 stdout 正常带回来。
-    `if [ -n "$CURL" ]; then "$CURL" -fsSL --connect-timeout ${timeout} --max-time ${timeout} -H 'Accept: ${escapedAccept}' '${escapedUrl}'`,
-    `elif [ -n "$WGET" ]; then "$WGET" -q -O - --timeout=${timeout} --header='Accept: ${escapedAccept}' '${escapedUrl}'`,
-    `elif [ -n "$BB" ]; then "$BB" wget -q -O - -T ${timeout} --header='Accept: ${escapedAccept}' '${escapedUrl}'`,
-    `else echo 'No usable HTTP tool (curl/wget/busybox) found' >&2; exit 127; fi`,
-  ].join('; ')
-
-  return await execCommand(script)
-}
-
 async function requestText(
   url: string,
   signal?: AbortSignal,
   accept: string = FETCH_ACCEPT_JSON
 ): Promise<string> {
+  // 原生模式没有 shell：浏览器 fetch 就是唯一通道（由 backend/http.ts 实现），
+  // 失败即视为「在线模板不可用」（契约 §10.4）
+  if (backend.runtime !== 'ksu') {
+    return await backend.fetchOnlineTemplates(url, { accept, signal })
+  }
+
   try {
     return await requestTextViaFetch(url, signal, accept)
   } catch (error) {
@@ -334,7 +300,8 @@ async function requestText(
       throw error
     }
 
-    const fallback = await requestTextViaShell(url, accept)
+    // 管理器模式：WebView fetch 受 CORS 限制（gitee raw 无 ACAO）时回落 shell 抓取
+    const fallback = await backend.fetchOnlineTemplates(url, { accept })
     if (!fallback.trim()) {
       throw error instanceof Error ? error : new Error('Empty HTTP response')
     }

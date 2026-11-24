@@ -1,1 +1,4 @@
 /webroot
+# bin/device_faker_server 由 `cargo xtask build` 生成（xtask staging），不入库。
+/bin/*
+!/bin/.gitkeep

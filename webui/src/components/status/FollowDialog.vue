@@ -159,7 +159,7 @@ import { Globe, MessageCircleMore } from '@lucide/vue'
 import coolapkIcon from '../../assets/coolapk.png'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../utils/i18n'
-import { execCommand } from '../../utils/ksu'
+import { backend } from '../../backend'
 
 const props = defineProps<{ modelValue: boolean }>()
 
@@ -199,15 +199,9 @@ const authorLinks = computed(() => {
     .filter((entry) => entry.label)
 })
 
-function escapeShellArg(value: string) {
-  return value.replace(/'/g, `'\\''`)
-}
-
 async function openExternalUrl(url: string, fallbackUrl: string = url) {
   try {
-    await execCommand(
-      `am start -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d '${escapeShellArg(url)}' >/dev/null 2>&1`
-    )
+    await backend.openDeepLink(url)
   } catch {
     window.open(fallbackUrl, '_blank', 'noopener,noreferrer')
   } finally {
@@ -217,7 +211,7 @@ async function openExternalUrl(url: string, fallbackUrl: string = url) {
 
 async function openCoolapkProfile() {
   try {
-    await execCommand("am start -d 'coolmarket://u/4621247' >/dev/null 2>&1")
+    await backend.openDeepLink('coolmarket://u/4621247', { useViewAction: false })
   } catch {
     window.open('https://www.coolapk.com/u/4621247', '_blank', 'noopener,noreferrer')
   } finally {

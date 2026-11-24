@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2025-2026 Seyud
+# Device Faker: https://github.com/Seyud/device_faker
+
+[package]
+name = "device_faker_server"
+version = "1.8.0"
+edition = "2024"
+authors = ["Seyud"]
+license = "GPL-3.0-or-later"
+description = "Device Faker 原生 Web 服务：静态托管 module/webroot + /api/v1 控制面"
+
+[[bin]]
+name = "device_faker_server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { version = "1.0.102", default-features = false }
+# 只开骨架要用的 feature：http1 + json + tokio；后续增量按需追加。
+axum = { version = "0.8", default-features = false, features = [
+    "http1",
+    "json",
+    "original-uri",
+    "query",
+    "tokio",
+] }
+# 配置 revision / 原子写 / 备份：server 读写配置的唯一入口，与 zygisk 共用一套语义。
+# 保留默认 feature（edit + store + schema）：下一增量的 /api/v1/schema/config
+# 直接用 core 生成的 JSON Schema，不需要再改依赖。
+device_faker_core = { path = "../core" }
+percent-encoding = "2.3"
+serde = { version = "1.0.228", features = ["derive", "std"] }
+serde_json = "1.0"
+# Token 落盘只存 sha256；core 的 revision 也用同一份 sha2 版本。
+sha2 = "0.11"
+# 幂等重放需要收集响应体。
+http-body-util = "0.1"
+# 请求体反序列化时给出字段路径（422 invalid_type 的 path）。
+serde_path_to_error = "0.1"
+tokio = { version = "1", features = [
+    "fs",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
+toml = { version = "1.0", features = ["parse"] }
+# 与 core 同一版本：写事务里直接操作 DocumentMut。
+toml_edit = "0.25"
+tower-http = { version = "0.6", features = [
+    "compression-br",
+    "compression-gzip",
+    "trace",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+# 契约测试：解析 docs/openapi.yaml 与注册路由双向比对。
+serde_yaml = "0.9"

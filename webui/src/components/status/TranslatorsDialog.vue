@@ -86,7 +86,7 @@
 import { computed } from 'vue'
 import { siGithub } from 'simple-icons'
 import { projectTranslators, useI18n } from '../../utils/i18n'
-import { execCommand } from '../../utils/ksu'
+import { backend } from '../../backend'
 
 const props = defineProps<{ modelValue: boolean }>()
 
@@ -103,15 +103,9 @@ const translators = computed(() => {
   return projectTranslators || {}
 })
 
-function escapeShellArg(value: string) {
-  return value.replace(/'/g, `'\\''`)
-}
-
 async function openExternalUrl(url: string, fallbackUrl: string = url) {
   try {
-    await execCommand(
-      `am start -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d '${escapeShellArg(url)}' >/dev/null 2>&1`
-    )
+    await backend.openDeepLink(url)
   } catch {
     window.open(fallbackUrl, '_blank', 'noopener,noreferrer')
   } finally {

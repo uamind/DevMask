@@ -5,7 +5,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { InstalledApp } from '../types'
-import { getAppsInfo, getInstalledApps } from '../utils/ksu'
+import { backend } from '../backend'
 import { normalizePackageName } from '../utils/package'
 
 interface LoadInstalledAppsOptions {
@@ -97,7 +97,7 @@ export const useAppsStore = defineStore('apps', () => {
     normalizedPackages.forEach((pkg) => resolvingPackages.add(pkg))
 
     await runWithLoading(async () => {
-      const apps = await getAppsInfo(unresolved)
+      const apps = await backend.getPackagesInfo(unresolved)
       normalizedPackages.forEach((pkg) => resolvedPackages.add(pkg))
       upsertResolvedPackageInfo(apps)
     }).finally(() => {
@@ -114,7 +114,7 @@ export const useAppsStore = defineStore('apps', () => {
       userAppsLoadPromise = runWithLoading(async () => {
         error.value = null
         upsertInstalledApps(
-          (await getInstalledApps({ packageType: 'user' })).map((app) => ({
+          (await backend.getInstalledApps({ packageType: 'user' })).map((app) => ({
             ...app,
             installed: app.installed ?? true,
             isSystem: app.isSystem ?? false,
@@ -145,7 +145,7 @@ export const useAppsStore = defineStore('apps', () => {
       systemAppsLoadPromise = runWithLoading(async () => {
         error.value = null
         upsertInstalledApps(
-          (await getInstalledApps({ packageType: 'system' })).map((app) => ({
+          (await backend.getInstalledApps({ packageType: 'system' })).map((app) => ({
             ...app,
             installed: app.installed ?? true,
             isSystem: app.isSystem ?? true,

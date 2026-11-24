@@ -1,5 +1,5 @@
 [workspace]
-members = ["xtask"]
+members = ["core", "server", "xtask"]
 exclude = ["device_faker_cli"]
 
 [package]
@@ -10,6 +10,9 @@ authors = ["Seyud"]
 
 [dependencies]
 anyhow = { version = "1.0.102", default-features = false }
+# 共享配置内核（模型 / 合并语义）。模块侧不需要写路径与 schema，
+# 因此关掉默认 feature，避免把 toml_edit / schemars / sha2 编进 cdylib。
+device_faker_core = { path = "core", default-features = false }
 jni = { version = "0.22", default-features = false }
 log = { version = "^0.4", default-features = false }
 serde = { version = "1.0.228", features = ["derive", "std"] }

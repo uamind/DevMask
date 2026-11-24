@@ -1,0 +1,31 @@
+# Device Faker 最小可用配置 fixture
+# 供 core / server 单测引用：字段覆盖全局开关、模板与内联应用。
+# 注意：模板 packages 与 [[apps]] 不共用包名，避免产生重复包名冲突。
+
+default_force_denylist_unmount = false
+debug = false
+
+[templates.pixel_9]
+packages = ["com.example.app"]
+manufacturer = "Google"
+brand = "google"
+marketname = "Pixel 9"
+model = "Pixel 9"
+device = "tokay"
+product = "tokay"
+hardware = "tokay"
+board = "tokay"
+fingerprint = "google/tokay/tokay:15/AP4A.250105.002/12345678:user/release-keys"
+build_id = "AP4A.250105.002"
+android_version = "15"
+sdk_int = 35
+dpi = 420
+
+[[apps]]
+package = "com.example.inline"
+manufacturer = "samsung"
+brand = "samsung"
+model = "SM-S9280"
+device = "e3q"
+android_version = "14"
+sdk_int = 34

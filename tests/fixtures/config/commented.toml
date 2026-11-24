@@ -1,0 +1,37 @@
+# 注释与未知字段必须原样保留 —— toml_edit 往返测试 fixture
+# 本文件含：行内注释、块注释、空行、未知字段、未知表。
+# 期望：core::edit 写回后，除被修改的字段外其余文本逐字不变。
+
+default_force_denylist_unmount = true # 全局开关（行内注释）
+debug = false
+
+# 模板区：注释不能丢
+[templates.samsung_s24_ultra] # 模板行尾注释
+packages = [
+  "com.example.app",   # 主包
+  "com.example.app@999", # 分身（work profile）
+]
+manufacturer = "samsung"
+brand = "samsung"
+model = "SM-S9280"
+device = "e3q"
+fingerprint = "samsung/e3qxxx/e3q:15/UP1A.231005.007/S9280ZCS3AXK1:user/release-keys"
+android_version = "15"
+sdk_int = 35
+dpi = 420
+
+# 未知字段：core 解析可忽略，但写回必须保留
+future_field = "keep-me"
+
+[templates.samsung_s24_ultra.custom_props]
+"ro.product.vendor.model" = "SM-S9280"
+
+# 未知表：同样必须保留
+[experimental]
+enabled = false
+note = "未知表不应被编辑逻辑删除"
+
+[[apps]]
+package = "com.example.inline"
+model = "SM-S9280"
+brand = "samsung"

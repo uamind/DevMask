@@ -1,0 +1,6 @@
+package:com.android.settings uid:1000
+package:com.android.systemui uid:10100
+package:com.example.app uid:10123
+package:com.example.inline uid:10124
+package:com.example.installed uid:10125
+package:com.example.disabled uid:10126

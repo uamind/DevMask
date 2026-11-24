@@ -1,0 +1,15 @@
+# 语义非法 fixture：TOML 语法本身合法，用于校验规则测试。
+# 期望 validation_failed，details 至少包含 dpi 与 sdk_int 两处字段错误。
+
+[templates.broken]
+packages = ["not a package name!"]
+manufacturer = "Google"
+brand = "google"
+model = "Pixel 9"
+dpi = 9999
+sdk_int = "abc"
+
+[[apps]]
+package = "com.example.inline"
+dpi = 100
+sdk_int = -1

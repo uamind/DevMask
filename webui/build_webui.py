@@ -9,6 +9,7 @@ Device Faker WebUI 构建脚本
 """
 
 import os
+import shutil
 import sys
 import subprocess
 import argparse
@@ -65,43 +66,110 @@ class WebUIBuilder:
             self.dist_dir = self.project_dir / "dist"
         self.node_modules = self.project_dir / "node_modules"
         self.package_json = self.project_dir / "package.json"
-        self.node_path = None  # Node.js 路径
+        self.npm_path = None  # npm 可执行文件路径（由 check_node_npm 探测）
         
         if not self.package_json.exists():
             raise FileNotFoundError(f"在 {self.project_dir} 中找不到 package.json")
     
+    @staticmethod
+    def _spawn_args(command: list) -> list:
+        """把命令列表改成可直接执行的 argv。
+
+        Windows 上 .cmd / .bat 不能直接交给 CreateProcess（npm 就是 npm.cmd），
+        统一用 `cmd.exe /c` 包一层；其它平台原样返回。
+        """
+        if os.name == "nt" and command and str(command[0]).lower().endswith((".cmd", ".bat")):
+            comspec = os.environ.get("COMSPEC") or "cmd.exe"
+            return [comspec, "/c", *command]
+        return command
+
+    def _probe_version(self, executable: str) -> Optional[str]:
+        """跑 `<exe> --version`；能跑通就返回首行版本号，否则返回 None。"""
+        try:
+            completed = subprocess.run(
+                self._spawn_args([executable, "--version"]),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+        output = (completed.stdout or "").strip()
+        if completed.returncode != 0 or not output:
+            return None
+        return output.splitlines()[0].strip()
+
     def check_node_npm(self) -> bool:
-        """检查 Node.js 和 npm 是否已安装"""
-        # 直接使用 D:\nodejs 路径
-        node_path = r"D:\nodejs"
-        node_exe = os.path.join(node_path, "node.exe")
-        npm_exe = os.path.join(node_path, "npm.cmd")  # Windows 下 npm 是 cmd 文件
-        
-        if os.path.exists(node_exe) and os.path.exists(npm_exe):
-            logger.info(f"在 {node_path} 找到 Node.js")
-            try:
-                node_version = subprocess.run(
-                    [node_exe, "--version"], 
-                    capture_output=True, 
-                    text=True, 
-                    check=True
-                ).stdout.strip()
-                npm_version = subprocess.run(
-                    [npm_exe, "--version"], 
-                    capture_output=True, 
-                    text=True, 
-                    check=True
-                ).stdout.strip()
-                logger.info(f"Node.js 版本: {node_version}")
-                logger.info(f"npm 版本: {npm_version}")
-                self.node_path = node_path  # 保存 Node.js 路径
-                return True
-            except subprocess.CalledProcessError as e:
-                logger.error(f"检查 Node.js 版本失败: {e}")
-                return False
-        
-        logger.error(f"未找到 Node.js 或 npm，请确保 Node.js 已正确安装在：{node_path}")
-        return False
+        """探测 node / npm。
+
+        顺序：先看 PATH（macOS / Linux / 已把 Node.js 加进 PATH 的 Windows 都走这条），
+        Windows 再回退到常见安装目录（包含历史上硬编码的 D:\nodejs）。
+        探测到的 npm 绝对路径存进 self.npm_path，后续所有 npm 调用都用它。
+        """
+        npm_candidates: list = []
+        node_candidates: list = []
+
+        for name in ("npm", "npm.cmd", "npm.exe"):
+            found = shutil.which(name)
+            if found and found not in npm_candidates:
+                npm_candidates.append(found)
+        for name in ("node", "node.exe"):
+            found = shutil.which(name)
+            if found and found not in node_candidates:
+                node_candidates.append(found)
+
+        if os.name == "nt":
+            # Windows 的 Node.js 安装器经常只写用户 PATH，这里保留目录兜底。
+            for base in (
+                os.environ.get("NODE_HOME"),
+                r"D:\nodejs",
+                r"C:\Program Files\nodejs",
+                r"C:\Program Files (x86)\nodejs",
+            ):
+                if not base:
+                    continue
+                for exe in ("npm.cmd", "npm.exe"):
+                    candidate = os.path.join(base, exe)
+                    if os.path.exists(candidate) and candidate not in npm_candidates:
+                        npm_candidates.append(candidate)
+                for exe in ("node.exe", "node"):
+                    candidate = os.path.join(base, exe)
+                    if os.path.exists(candidate) and candidate not in node_candidates:
+                        node_candidates.append(candidate)
+
+        if not npm_candidates:
+            logger.error(
+                "未找到 npm：请安装 Node.js（https://nodejs.org/）并确保 node / npm 在 PATH 中；"
+                "Windows 也可以安装在 D:\\nodejs"
+            )
+            return False
+
+        npm_version = None
+        for candidate in npm_candidates:
+            npm_version = self._probe_version(candidate)
+            if npm_version:
+                self.npm_path = candidate
+                break
+
+        if not npm_version:
+            logger.error(
+                "npm 存在但无法执行：" + "、".join(npm_candidates) + "；请检查 Node.js 安装是否完整"
+            )
+            return False
+
+        logger.info(f"npm 路径: {self.npm_path}")
+        logger.info(f"npm 版本: {npm_version}")
+
+        for candidate in node_candidates:
+            node_version = self._probe_version(candidate)
+            if node_version:
+                logger.info(f"Node.js 版本: {node_version}（{candidate}）")
+                break
+
+        return True
     
     def install_dependencies(self) -> bool:
         """安装 npm 依赖"""
@@ -122,16 +190,14 @@ class WebUIBuilder:
         """
         logger.info(f"正在执行: {description}")
         
-        # 如果需要使用 npm 且有指定的 node_path，则使用完整路径
-        if use_npm and self.node_path:
-            npm_path = os.path.join(self.node_path, "npm.cmd")
-            if command[0] == "npm":
-                command[0] = npm_path
-        
+        # npm 一律用探测到的绝对路径（PATH 优先，Windows 回退到常见安装目录）
+        if use_npm and command and command[0] == "npm":
+            command[0] = self.npm_path or "npm"
+
         try:
             # 使用 Popen 实现实时输出
             process = subprocess.Popen(
-                command,
+                self._spawn_args(command),
                 cwd=self.project_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # 合并 stderr 到 stdout
@@ -182,15 +248,10 @@ class WebUIBuilder:
             return
         logger.info("启动开发服务器...")
         
-        # 使用正确的 npm 路径
-        if self.node_path:
-            npm_path = os.path.join(self.node_path, "npm.cmd")
-            command = [npm_path, "run", "dev"]
-        else:
-            command = ["npm", "run", "dev"]
-        
+        command = [self.npm_path or "npm", "run", "dev"]
+
         try:
-            subprocess.run(command, cwd=self.project_dir)
+            subprocess.run(self._spawn_args(command), cwd=self.project_dir)
         except KeyboardInterrupt:
             logger.info("开发服务器已停止")
     

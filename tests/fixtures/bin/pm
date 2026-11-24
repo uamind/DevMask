@@ -1,0 +1,67 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# PATH shim: 用 tests/fixtures/android/* 模拟 Android 的 `pm`，
+# 让 host 上的 server/core 测试不需要真机即可解析包列表。
+#
+# 用法：PATH="$(pwd)/tests/fixtures/bin:$PATH" cargo test
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+FIXTURES=$(dirname -- "$DIR")/android
+
+if [ "$#" -eq 0 ]; then
+  echo "pm shim: missing arguments" >&2
+  exit 2
+fi
+
+cmd=$1
+shift || true
+
+if [ "$cmd" = "path" ]; then
+  for pkg in "$@"; do
+    case "$pkg" in
+      com.example.app)
+        echo "package:/data/app/~~Zx9fixture==/com.example.app-Zx9fixture==/base.apk"
+        ;;
+      com.example.inline)
+        echo "package:/data/app/~~Qa2fixture==/com.example.inline-Qa2fixture==/base.apk"
+        ;;
+      com.example.installed)
+        echo "package:/data/app/~~Lm7fixture==/com.example.installed-Lm7fixture==/base.apk"
+        ;;
+      com.android.settings)
+        echo "package:/system/priv-app/Settings/Settings.apk"
+        ;;
+      *)
+        ;;
+    esac
+  done
+  exit 0
+fi
+
+if [ "$cmd" != "list" ] || [ "${1:-}" != "packages" ]; then
+  echo "pm shim: unsupported invocation: pm $cmd $*" >&2
+  exit 2
+fi
+shift
+
+mode=default
+for arg in "$@"; do
+  case "$arg" in
+    -f) mode=f ;;
+    -U) mode=u ;;
+    -3) mode=3 ;;
+    -s) mode=s ;;
+    -d) mode=d ;;
+    *) : ;;
+  esac
+done
+
+case "$mode" in
+  f) cat "$FIXTURES/pm-list-packages-f.txt" ;;
+  u) cat "$FIXTURES/pm-list-packages-u.txt" ;;
+  3) cat "$FIXTURES/pm-list-packages-3.txt" ;;
+  s) cat "$FIXTURES/pm-list-packages-s.txt" ;;
+  d) cat "$FIXTURES/pm-list-packages-d.txt" ;;
+  *) cat "$FIXTURES/pm-list-packages.txt" ;;
+esac

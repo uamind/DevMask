@@ -7,3 +7,7 @@ target/
 website/node_modules/
 website/docs/.vitepress/dist/
 website/docs/.vitepress/cache/
+
+# Local agent/team state and Python bytecode
+.agent-teams/
+__pycache__/

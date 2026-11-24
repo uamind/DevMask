@@ -1,0 +1,18 @@
+# 冲突 fixture：同一个裸包名同时出现在两个模板中。
+# server 的 GET /api/v1/conflicts 与模板校验应报 conflict_duplicate_package。
+
+[templates.alpha]
+packages = ["com.example.conflict"]
+manufacturer = "Google"
+brand = "google"
+model = "Pixel 9"
+
+[templates.beta]
+packages = ["com.example.conflict", "com.example.beta"]
+manufacturer = "samsung"
+brand = "samsung"
+model = "SM-S9280"
+
+[[apps]]
+package = "com.example.inline"
+model = "SM-S9280"

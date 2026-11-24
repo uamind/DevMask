@@ -90,12 +90,46 @@ fi
 
 rm -f "$MODPATH/config.toml"
 
+# 原生 Web 服务（bin/device_faker_server）的运行时目录与默认设置。
+RUNTIME_DIR="/data/adb/device_faker"
+SERVER_CONFIG_DIR="$RUNTIME_DIR/config"
+SERVER_CONFIG_FILE="$SERVER_CONFIG_DIR/server.toml"
+SERVER_LOG_DIR="$RUNTIME_DIR/logs"
+SERVER_BACKUP_DIR="$SERVER_CONFIG_DIR/backups"
+
+mkdir -p "$SERVER_CONFIG_DIR" "$SERVER_LOG_DIR" "$SERVER_BACKUP_DIR"
+chmod 755 "$SERVER_CONFIG_DIR" "$SERVER_LOG_DIR"
+chmod 700 "$SERVER_BACKUP_DIR"
+
+if [ -f "$SERVER_CONFIG_FILE" ]; then
+    tr_print "- 保留已有服务设置: $SERVER_CONFIG_FILE" "- Keeping existing server settings: $SERVER_CONFIG_FILE"
+elif [ -f "$MODPATH/server.default.toml" ]; then
+    cp -f "$MODPATH/server.default.toml" "$SERVER_CONFIG_FILE"
+    tr_print "- 已写入默认服务设置: $SERVER_CONFIG_FILE" "- Wrote default server settings: $SERVER_CONFIG_FILE"
+fi
+if [ -f "$SERVER_CONFIG_FILE" ]; then
+    chmod 600 "$SERVER_CONFIG_FILE"
+fi
+
+tr_print "- 原生 Web 服务: http://127.0.0.1:8686（重启设备后由 service.sh 拉起）" "- Native web service: http://127.0.0.1:8686 (started by service.sh after reboot)"
+tr_print "- 首次启动的 Token 在 $SERVER_LOG_DIR/server.log 的横幅里" "- The first-run token is printed once in $SERVER_LOG_DIR/server.log"
+
 tr_print "- 配置文件位置: $CONFIG_FILE" "- Config file location: $CONFIG_FILE"
 tr_print "- 编辑配置文件添加需要伪装的应用" "- Edit config file to add apps for spoofing"
 tr_print "- 修改配置后无需重启，仅需重启对应应用" "- No reboot needed, just restart the target app"
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/zygisk" 0 0 0755 0644
+# 上面一行把 $MODPATH 下所有文件都设成 0644，会抹掉服务二进制与启动脚本的执行位，
+# 这里补回来：service.sh 由 init 执行，bin/device_faker_server 由 service.sh 执行。
+if [ -d "$MODPATH/bin" ]; then
+    set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
+fi
+for _script in service.sh customize.sh uninstall.sh; do
+    if [ -f "$MODPATH/$_script" ]; then
+        set_perm "$MODPATH/$_script" 0 0 0755
+    fi
+done
 # TODO(remove-cli): device_faker_cli 已不随模块打包（WebUI 转换已纯前端实现）。
 # 若确认无人再手动使用，可连同 device_faker_cli/ crate 一起删除。
 

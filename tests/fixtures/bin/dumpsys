@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# PATH shim: 用 tests/fixtures/android/dumpsys-package-*.txt 模拟
+# `dumpsys package <pkg>`，供 server 解析 versionName / uid / 安装状态。
+set -eu
+
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+FIXTURES=$(dirname -- "$DIR")/android
+
+if [ "$#" -lt 2 ] || [ "$1" != "package" ]; then
+  echo "dumpsys shim: only 'dumpsys package <pkg>' is supported" >&2
+  exit 2
+fi
+
+pkg=$2
+case "$pkg" in
+  com.example.app)
+    cat "$FIXTURES/dumpsys-package-com.example.app.txt"
+    ;;
+  com.example.inline)
+    cat "$FIXTURES/dumpsys-package-com.example.inline.txt"
+    ;;
+  com.android.settings)
+    cat "$FIXTURES/dumpsys-package-com.example.app.txt" \
+      | sed 's/com\.example\.app/com.android.settings/g; s/userId=10123/userId=1000/'
+    ;;
+  *)
+    echo "Unable to find package: $pkg" >&2
+    exit 1
+    ;;
+esac

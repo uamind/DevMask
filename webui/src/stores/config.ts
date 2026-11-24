@@ -5,18 +5,29 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Config, Template, AppConfig } from '../types'
-import { readFile, writeFile, fileExists, mkdir, getModuleInfo } from '../utils/ksu'
+import {
+  backend,
+  readConflictDetails,
+  isApiError,
+  CONFIG_DIR,
+  CONFIG_PATH,
+  type ApiError,
+  type WriteConfigResult,
+} from '../backend'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { anyConfigApplies, resolvePackageConfig, resolvePackageMatches } from '../utils/package'
 import { toast } from 'kernelsu-alt'
+import { useLazyMessageBox } from '../utils/elementPlus'
 import { useI18n } from '../utils/i18n'
+import { notify } from '../components/shared/notify'
+import { ensureServerRuntimeWired, useServerStore } from './server'
+import { describeApiError, pickServerMessages } from './serverMessages'
 import {
   mergeAppConfigWithExisting,
   mergeTemplateWithExisting,
   sanitizeConfigForSave,
 } from '../utils/config'
 
-const CONFIG_PATH = '/data/adb/device_faker/config/config.toml'
 /**
  * module.prop 的兜底位置（宿主没有 `ksu.moduleInfo()` 时用）。
  *
@@ -30,6 +41,15 @@ const MODULE_PROP_FALLBACK_PATHS = [
   '/data/adb/modules_update/device_faker/module.prop',
 ]
 const CONFIG_BACKUP_KEY = 'device_faker_config_backup_v1'
+
+/** 429 限流冷却截止时间（毫秒时间戳）：冷却期内直接拒绝保存（契约 §10.5）。 */
+let rateLimitedUntil = 0
+
+/** 409 冲突确认框：并发保存复用同一个对话框，避免弹窗叠在一起。 */
+let pendingDuplicateConfirm: Promise<boolean> | null = null
+
+/** 登录成功事件只订阅一次（bootstrap 可能被重跑）。 */
+let tokenListenerRegistered = false
 
 /** 解析 module.prop 的键值行（`key=value`，忽略注释与空行）。 */
 function parseModulePropValue(content: string, key: string): string {
@@ -48,7 +68,7 @@ export const useConfigStore = defineStore('config', () => {
   const configReady = ref(false)
   const moduleMetaReady = ref(false)
   const templateOrder = ref<string[]>([])
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
 
   let bootstrapPromise: Promise<void> | null = null
 
@@ -68,13 +88,15 @@ export const useConfigStore = defineStore('config', () => {
 
   // 加载配置文件
   async function loadConfig() {
+    // 首次网络请求之前注册好 Token 输入框，401 才能弹出登录框（契约 §3.5）
+    ensureServerRuntimeWired()
     loading.value = true
     error.value = null
     try {
       let content: string | null = null
 
       try {
-        content = await readFile(CONFIG_PATH)
+        content = await backend.readConfigRaw()
       } catch {
         content = null
       }
@@ -86,10 +108,10 @@ export const useConfigStore = defineStore('config', () => {
         return
       }
 
-      const exists = await fileExists(CONFIG_PATH)
+      const exists = await backend.fileExists(CONFIG_PATH)
       if (!exists && (!content || content.trim().length === 0)) {
         // 创建默认配置
-        await mkdir('/data/adb/device_faker/config')
+        await backend.mkdir(CONFIG_DIR)
         config.value = {}
         rebuildTemplateOrder()
         await saveConfig()
@@ -117,30 +139,135 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
+  /** 当前语言下的原生模式文案（含错误描述）。 */
+  function serverText() {
+    return pickServerMessages(locale.value)
+  }
+
+  /** 序列化当前配置；空配置写注释占位（写后校验与下次加载都按内容非空判断）。 */
+  function buildConfigContent(): string {
+    const configToSave = sanitizeConfigForSave(config.value)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let content = stringifyToml(configToSave as any)
+    if (!content || content.trim().length === 0) {
+      content = '# 空配置，全部使用模块默认值\n'
+    }
+    return content
+  }
+
+  /** 记录失败的可见文本，并在原生模式下弹出提示（管理器模式不会产生 ApiError）。 */
+  function reportSaveFailure(failure: unknown): string {
+    const text = describeApiError(failure, serverText())
+
+    if (isApiError(failure)) {
+      if (failure.code === 'rate_limited' && typeof failure.retryAfterSec === 'number') {
+        rateLimitedUntil = Date.now() + failure.retryAfterSec * 1000
+      }
+      if (failure.code === 'config_revision_mismatch') {
+        // 契约 §10.5：412 后自动刷新 revision，让用户直接重试
+        void useServerStore().refreshStatus()
+      }
+      void notify(text, 'error')
+    }
+
+    return text
+  }
+
+  /** 409：展示冲突包名与模板，确认后用 allow_duplicate_package=true 重写。 */
+  function confirmDuplicateWrite(failure: ApiError): Promise<boolean> {
+    if (!pendingDuplicateConfirm) {
+      pendingDuplicateConfirm = askDuplicateWrite(failure).finally(() => {
+        pendingDuplicateConfirm = null
+      })
+    }
+    return pendingDuplicateConfirm
+  }
+
+  async function askDuplicateWrite(failure: ApiError): Promise<boolean> {
+    const apiText = serverText().api
+    const conflict = readConflictDetails(failure)
+    const detail = [conflict.packageName, conflict.templates.join(' / ')]
+      .filter(Boolean)
+      .join(' — ')
+
+    try {
+      const ElMessageBox = await useLazyMessageBox()()
+      await ElMessageBox.confirm(
+        `${apiText.duplicateConfirm}${detail ? `\n${detail}` : ''}`,
+        apiText.duplicatePackage,
+        {
+          confirmButtonText: apiText.duplicateConfirmAccept,
+          cancelButtonText: apiText.duplicateConfirmCancel,
+          type: 'warning',
+        }
+      )
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** 写配置（含 409 冲突确认与重试）。 */
+  async function writeConfigContent(content: string): Promise<WriteConfigResult> {
+    try {
+      return await backend.writeConfigRaw(content)
+    } catch (failure) {
+      if (
+        isApiError(failure) &&
+        failure.code === 'conflict_duplicate_package' &&
+        (await confirmDuplicateWrite(failure))
+      ) {
+        return await backend.writeConfigRaw(content, { allowDuplicatePackage: true })
+      }
+      throw failure
+    }
+  }
+
   // 保存配置文件
   async function saveConfig() {
+    ensureServerRuntimeWired()
     loading.value = true
     error.value = null
     try {
-      const configToSave = sanitizeConfigForSave(config.value)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let content = stringifyToml(configToSave as any)
-      if (!content || content.trim().length === 0) {
-        // 空配置也需保持文件非空（写后校验与下次加载都按内容非空判断），用注释占位，不写任何键
-        content = '# 空配置，全部使用模块默认值\n'
+      // 429 冷却期内不再发请求（契约 §10.5：按 Retry-After 倒计时禁用提交）
+      if (Date.now() < rateLimitedUntil) {
+        const seconds = Math.max(1, Math.ceil((rateLimitedUntil - Date.now()) / 1000))
+        const text = serverText().api.saveBlocked.replace('{seconds}', String(seconds))
+        error.value = text
+        throw new Error(text)
       }
 
-      await writeFile(CONFIG_PATH, content)
+      const content = buildConfigContent()
+      const result = await writeConfigContent(content)
 
-      const verifyContent = await readFile(CONFIG_PATH)
+      const verifyContent = await backend.readConfigRaw()
       if (!verifyContent || verifyContent.trim().length === 0) {
         throw new Error(t('config.save_verify_failed'))
       }
 
       parseToml(verifyContent)
       saveConfigBackup(verifyContent)
+      rateLimitedUntil = 0
+
+      // 原生模式：回填 revision（412 之后界面显示的版本号要跟着走）并记录已验证的写权限
+      if (backend.runtime === 'http') {
+        const serverStore = useServerStore()
+        serverStore.setRevision(result.revision)
+        serverStore.markWriteVerified()
+        // 管理器模式下页面自己会 toast；原生模式没有原生 toast，这里补一条可见反馈
+        void notify(serverText().api.saved, 'success')
+        if (result.warnings.length > 0) {
+          const warnings = result.warnings
+            .map((warning) => warning.message || warning.code)
+            .filter(Boolean)
+            .join('; ')
+          if (warnings) {
+            void notify(warnings, 'warning')
+          }
+        }
+      }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = reportSaveFailure(e)
       throw e
     } finally {
       loading.value = false
@@ -150,7 +277,7 @@ export const useConfigStore = defineStore('config', () => {
   // 加载模块版本
   async function loadModuleVersion() {
     // 首选宿主直供的 `ksu.moduleInfo()`：不依赖文件读写、也不依赖模块目录名。
-    const moduleInfo = getModuleInfo()
+    const moduleInfo = await backend.getModuleInfo()
     let version = (moduleInfo?.version || '').trim()
     let author = (moduleInfo?.author || '').trim()
 
@@ -163,7 +290,7 @@ export const useConfigStore = defineStore('config', () => {
 
       for (const path of candidates) {
         try {
-          const content = await readFile(path)
+          const content = await backend.readFile(path)
           if (!content) continue
           if (!version) version = parseModulePropValue(content, 'version')
           if (!author) author = parseModulePropValue(content, 'author')
@@ -183,6 +310,18 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   async function bootstrap() {
+    ensureServerRuntimeWired()
+    // 首次 401 → 登录成功后重跑一次加载，避免界面停在「--」
+    if (!tokenListenerRegistered && typeof window !== 'undefined') {
+      tokenListenerRegistered = true
+      window.addEventListener('device-faker:token-changed', (event) => {
+        if ((event as CustomEvent<string>).detail !== 'login') return
+        configReady.value = false
+        moduleMetaReady.value = false
+        void bootstrap()
+      })
+    }
+
     if (configReady.value && moduleMetaReady.value) {
       return
     }

@@ -1,0 +1,109 @@
+# Device Faker API
+
+> Device Faker 是 Android 上的机型伪装模块（Zygisk / KernelSU / Magisk）。它自带一个原生 HTTP 服务（device_faker_server），
+> 在设备本机 http://127.0.0.1:8686 提供 WebUI 与 /api/v1 机器接口。本文是第一增量（配置 / 模板 / 应用 / 包 / 设备）的 AI 使用说明。
+> 完整契约见 docs/API.md，机器可读契约见 docs/openapi.yaml。
+
+## 认证
+
+- 所有请求（除 /api/v1/healthz）都需要 `Authorization: Bearer <token>`。
+- Token 由模块首次启动时生成，明文只出现在日志一次：`[device-faker-server] initial token = df_...`（`/data/adb/device_faker/logs/server.log`）。
+- 作用域：`read` / `write` / `ops` / `admin`，互不隐含；`admin` 是其余的超集。
+  - 典型 Agent 用 `["read","write"]`；要重启应用再加 `ops`。
+- 401 = Token 缺失或无效；403 = 作用域不足（`details.required` 告诉你缺哪个）。
+
+## 基本约定
+
+- 基地址：`http://127.0.0.1:8686/api/v1`（真机本机，或 `adb forward tcp:8686 tcp:8686` 后用 localhost）。
+- 字段命名：
+  - 配置内容（模板、应用、ConfigDocument 内）一律 **snake_case**，与 `config.toml` 同名：`brand`、`model`、`sdk_int`、`dpi`、`custom_props`、`default_force_denylist_unmount`。
+  - API 元数据（`revision`、`nextCursor`、`dryRun`、`backupId`、`forceStop`）为 lowerCamelCase。
+  - 查询参数为 snake_case：`dry_run`、`diff`、`confirm`、`detach_templates`、`allow_duplicate_package`、`format`、`limit`、`cursor`。
+- 所有修改配置的端点（PUT / PATCH / DELETE）必须带 `If-Match: "<revision>"`：
+  1. 先 `GET /config/revision` 或 `GET /status` 拿 `revision`（64 位小写十六进制，原样回传即可）。
+  2. 写入时把该值放进 `If-Match`。`ETag` 的值带引号，可直接使用；不带引号也接受。
+  3. 返回 `412 config_revision_mismatch` 表示别人改过：重新读取 revision、重建你的变更，**不要盲目重试**。
+  4. 首次创建可用 `If-Match: *`；缺 `If-Match` 返回 428。
+
+## 端点速查
+
+系统
+- `GET /healthz` — 探活，无需认证。
+- `GET /status` — 模块/设备/服务/配置状态，含 `config.revision` 与 `capabilities`。
+- `GET /schema/config` — 配置 JSON Schema（draft-07，schemars 0.8 生成；字段在顶层 properties，被引用类型在 definitions）。
+
+配置
+- `GET /config?format=json|toml` — json 返回 `{revision,mtime,size,exists,warnings,config}`，toml 返回原文。配置文件不存在时 `exists:false`、`mtime` 为 null、`size` 为 0。
+- `GET /config/revision` — 轻量取 revision。
+- `PUT /config` — 整体替换；body 为 ConfigDocument（JSON）或 TOML 原文（`application/toml` / `text/plain`）。
+- `POST /config/validate` — 校验任意文本，不落盘；失败也返回 200 + `valid:false` + `errors[]`。
+
+模板（顺序 = config.toml 书写顺序，服务端保序）
+- `GET /templates`（`?package=` 过滤）— 列表项含 `name`、`position`、`packages`、`fieldsSet`。
+- `GET /templates/{name}` — `{revision,position,name,template}`；`template` 就是 TOML 里的模板对象（不含模板名）。
+- `PUT /templates/{name}` — 新建或整体替换（未出现的字段被删除；`packages` 省略等于清空）。
+- `PATCH /templates/{name}` — 字段级合并：缺席不改、`null` 删除、数组/对象整体替换；不存在则 404。
+- `DELETE /templates/{name}?confirm=true` — 删除模板（内联应用记录不受影响）。
+- `POST /templates/{name}/packages` — `{"packages":[...],"mode":"append|replace"}`，批量绑定，append 去重保序。
+- `DELETE /templates/{name}/packages/{pkg}` — 解绑单个包名（`@` 写成 `%40`）。
+
+应用
+- `GET /apps` — 只列 [[apps]] 内联记录（保序）。
+- `GET /apps/{pkg}` — 解释生效来源：`source{type:inline|template|none}` + `resolved{...}`（未配置也 200）。
+- `PUT /apps/{pkg}` — 二选一：`{"template":"pixel_9","detachFromTemplates":true}` 绑定模板；或 `{"config":{...}}` 写内联记录（整记录替换）。
+- `DELETE /apps/{pkg}?confirm=true` — 删除内联记录；加 `detach_templates=true` 同时从模板解绑。
+- `POST /apps/{pkg}/restart` — `{"forceStop":true,"launch":false,"user":0}`，让新配置生效。
+
+包与设备
+- `GET /packages?names=a,b&user=0` — 已安装包元数据（`label` 本增量恒 null）。
+- `GET /device`、`GET /device/props?keys=ro.product.model,ro.build.fingerprint`（白名单前缀：`ro.product.`、`ro.build.`、`ro.soc.`、`ro.hardware`、`ro.board.`、`ro.vendor.`）、`GET /device/users`。
+
+## 典型流程
+
+A. 只读检查
+1) `GET /status` 记下 `config.revision`。
+2) `GET /templates` 找可复用模板；`GET /apps/{pkg}` 看当前来源与解析值。
+
+B. 新建模板并绑定包名
+1) `POST /config/validate` 先校验要写入的模板（可选但推荐）。
+2) `PUT /templates/pixel_9` + `If-Match: "<current revision>"`，body 至少含 `packages`。
+3) `POST /templates/pixel_9/packages` 追加 `com.example.app@0`（若第 2 步已写好可跳过）。
+4) `GET /templates/pixel_9` 确认，再 `GET /apps/com.example.app` 看 `source.type="template"`。
+5) `POST /apps/com.example.app/restart` 让配置立即生效（目标应用下次启动也会生效）。
+
+C. 绑定模板（一步到位）
+- `PUT /apps/com.example.app` + `{"template":"pixel_9","detachFromTemplates":true}`
+  会加入模板 packages、从其它模板移除该包、并删除同包名内联记录（回 `inline_record_removed` 警告）。
+
+D. 安全变更
+- 所有写端点可加 `dry_run=true` 预演：返回 `dryRun:true` + `diff` + `warnings`，不落盘。
+- 加 `diff=true` 可在真正写入时一并拿到 diff。
+- 破坏性删除必须 `confirm=true`。
+
+## 错误处理
+
+统一信封（所有 4xx/5xx）：
+
+    {"error":{"code":"config_revision_mismatch","message":"...","details":{"expected":"9f2c5d1e...","actual":"1a7b2c3d..."},"retryable":false,"requestId":"req_..."}}
+
+- 稳定错误码：`unauthorized`(401)、`forbidden_scope`(403)、`not_found`(404)、`method_not_allowed`(405)、`confirmation_required`(400)、`conflict_duplicate_package`(409)、`config_revision_mismatch`(412)、`precondition_required`(428)、`validation_failed`(422，`details.errors[]` 为字段级原因)、`body_too_large`(413)、`unsupported_media_type`(415)、`rate_limited`(429)、`internal_error`(500)、`upstream_unavailable`(503)。
+- 只有 `retryable:true` 才考虑重试（429/500/503）：指数退避，尊重 `Retry-After`，最多 3 次。
+- 412 必须重读 revision 后重建变更；409 需显式 `allow_duplicate_package=true`；422 按 `path` 修正字段。
+- 排查请求用响应头 `X-Request-Id`（= `error.requestId`）对照 `/data/adb/device_faker/logs/`。
+
+## 限制
+
+- 请求体上限 2 MiB；`limit` 默认 50、最大 500。
+- 限流：读 120 次/分钟/Token，写 30 次/分钟/Token；鉴权失败 10 次/分钟触发 5 分钟封禁。
+- 单请求 15 s 超时；大配置与包列表建议分页。
+- 本增量不含：MCP（/mcp）、plan/apply/simulate/batch/conflicts、备份管理、审计与日志查询、Token 管理、应用名与图标、TLS、Unix socket、深链。
+  未实现的 `/api/v1/` 路径返回 404 错误信封（不会回退到 WebUI 页面）。
+- 不存在任意 shell 执行或任意文件读写端点。
+- 写配置用 toml_edit 定点修改，注释与未知字段保留；`PUT /config` 的 TOML 原文路径按你提交的内容整体重写。
+
+## 相关文档
+
+- docs/API.md — 人读契约（端点明细、数据结构、校验规则、WebUI 约定、curl 冒烟）。
+- docs/openapi.yaml — OpenAPI 3.1，可直接转成函数调用 schema。
+- docs/CONFIG.md — config.toml 字段语义与优先级。
+- docs/dev/server-api-plan.md — 总体设计与路线图。

@@ -1,0 +1,49 @@
+# device_faker_server 默认服务设置。
+# 安装时由 customize.sh 复制到 /data/adb/device_faker/config/server.toml；
+# 已存在同名文件时不会覆盖。改完重启服务生效：
+#   sh /data/adb/modules/device_faker/service.sh restart
+#
+# 权限 0600：这里只存 Token 的 sha256，永远不要把明文写进本文件。
+
+# 监听地址。默认只对本机可见：手机浏览器打开 http://127.0.0.1:8686，
+# 电脑用 `adb forward tcp:8686 tcp:8686` 后访问同一地址。
+bind = "127.0.0.1:8686"
+
+# WebUI 静态资源目录（模块安装位置）。
+static_dir = "/data/adb/modules/device_faker/webroot"
+
+# 唯一事实来源：Zygisk 与本服务共用的 config.toml。
+config_path = "/data/adb/device_faker/config/config.toml"
+
+# 配置写入前的备份目录（保留最近 10 份）。
+backup_dir = "/data/adb/device_faker/config/backups"
+
+# 审计日志（JSON Lines，本增量只透传路径）。
+audit_log = "/data/adb/device_faker/logs/api-audit.jsonl"
+
+# 局域网访问：默认关闭。改成 bind = "0.0.0.0:8686" 时必须同时把 allow_lan 改成 true
+# 并配置至少一个 Token，否则服务会拒绝启动（避免管理面无认证暴露到网络）。
+allow_lan = false
+
+# 请求体上限（字节）与限流（次/分钟/Token）。
+body_limit_bytes = 2097152
+read_rate_per_min = 120
+write_rate_per_min = 30
+
+# Token 占位：只存 sha256，不存明文。
+#
+# 首次启动（bind 是 loopback 且没有任何 Token）时，服务会自动生成一个
+# id=default、name=owner、scopes=[read, write, ops, admin] 的 Token，
+# 明文只打印一次到 /data/adb/device_faker/logs/server.log 的横幅里：
+#   grep 'initial token' /data/adb/device_faker/logs/server.log
+#
+# 想自己指定 Token 时，生成哈希并取消下面的注释（scopes 按需裁剪）：
+#   TOKEN=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')
+#   echo "$TOKEN"
+#   printf '%s' "$TOKEN" | sha256sum
+#
+# [[tokens]]
+# id = "owner"
+# name = "phone"
+# hash = "sha256:把上面的 64 位十六进制粘到这里"
+# scopes = ["read", "write", "ops", "admin"]

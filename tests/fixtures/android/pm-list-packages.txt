@@ -1,0 +1,6 @@
+package:com.android.settings
+package:com.android.systemui
+package:com.example.app
+package:com.example.inline
+package:com.example.installed
+package:com.example.disabled

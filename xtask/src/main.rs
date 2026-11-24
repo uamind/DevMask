@@ -141,6 +141,10 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     // 开发/排障用的命令行工具（`cargo run -p device_faker_cli -- ...`）。若确认无人再用，
     // 可整 crate 删除并一并清掉本文件的 cli_bin_path()、AGENTS.md 的 CLI 说明。
 
+    // 原生 Web 服务：与 zygisk 打进同一个模块包（bin/device_faker_server），
+    // 由 module/service.sh 在开机后拉起。
+    build_server(release, verbose)?;
+
     // Build WebUI first so that module/webroot/ exists before copying
     build_webui()?;
 
@@ -168,6 +172,7 @@ fn build(release: bool, verbose: bool) -> Result<()> {
         &file::CopyOptions::new().overwrite(true),
     )
     .context("failed to stage zygisk/arm64-v8a.so")?;
+    stage_server_binary(release, &temp_dir)?;
     let build_type = if release { "release" } else { "debug" };
     let package_path = Path::new("output").join(format!("device_faker-({build_type}).zip"));
 
@@ -176,7 +181,8 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     zip_create_from_directory_with_options(&package_path, &temp_dir, |entry_path| {
         let mut options: FileOptions<'_, '_, ()> = FileOptions::default()
             .compression_method(CompressionMethod::Deflated)
-            .compression_level(Some(9));
+            .compression_level(Some(9))
+            .unix_permissions(zip_entry_mode(entry_path));
 
         if let Some(modified_time) = zip_entry_modified_time(entry_path, local_offset) {
             options = options.last_modified_time(modified_time);
@@ -191,6 +197,33 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     Ok(())
 }
 
+/// zip 条目的 unix 权限位。
+///
+/// Magisk / KernelSU 安装时按 zip 里的 mode 落盘：`*.sh` 与 `bin/` 下的
+/// `device_faker_server` 必须是 0755，否则装机后 service.sh 与二进制都没有
+/// 执行权限（只有 customize.sh 里的 set_perm 兜底，一旦脚本本身跑不起来就彻底失效）。
+fn zip_entry_mode(entry_path: &Path) -> u32 {
+    if entry_path.is_dir() {
+        return 0o755;
+    }
+
+    let in_bin_dir = entry_path
+        .parent()
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "bin");
+    let is_shell_script = entry_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("sh"));
+
+    if in_bin_dir || is_shell_script {
+        0o755
+    } else {
+        0o644
+    }
+}
+
 fn zip_entry_modified_time(entry_path: &Path, local_offset: UtcOffset) -> Option<DateTime> {
     let modified = fs::metadata(entry_path).ok()?.modified().ok()?;
     let modified = OffsetDateTime::from(modified).to_offset(local_offset);
@@ -199,6 +232,87 @@ fn zip_entry_modified_time(entry_path: &Path, local_offset: UtcOffset) -> Option
     let primitive = time::PrimitiveDateTime::new(modified.date(), modified.time());
 
     DateTime::try_from(primitive).ok()
+}
+
+/// device_faker_server 的 ABI：与 zygisk 一致，只出 arm64-v8a。
+const SERVER_ABI: &str = "arm64-v8a";
+/// device_faker_server 的最低 API level（计划书 8.6：-p 29）。
+const SERVER_NDK_PLATFORM: &str = "29";
+/// 模块 bin/ 里的文件名。
+const SERVER_BIN_NAME: &str = "device_faker_server";
+
+/// 构建 device_faker_server（arm64）。
+///
+/// 服务是纯 Rust + tokio，不需要任何 `-Z` 特性，所以走默认 toolchain
+/// （不跟随 zygisk 的 `+nightly`，少一个 nightly 依赖）。
+fn build_server(release: bool, verbose: bool) -> Result<()> {
+    let mut cargo = Command::new("cargo");
+    // cargo-ndk 4.x 把短参数从 `-p` 改成了 `-P`；长参数 `--platform` 两代语义一致，
+    // 因此这里只用长写法，装哪个版本都能跑。
+    cargo.args(["ndk", "--platform", SERVER_NDK_PLATFORM, "-t", SERVER_ABI]);
+    cargo.args(["build", "-p", "device_faker_server"]);
+    if release {
+        cargo.arg("--release");
+    }
+    if verbose {
+        cargo.arg("--verbose");
+    }
+    run_command(&mut cargo, "cargo ndk build -p device_faker_server")?;
+
+    Ok(())
+}
+
+/// 把 server 二进制复制到 staging 的 bin/ 下并置 0755。
+fn stage_server_binary(release: bool, temp_dir: &Path) -> Result<()> {
+    let source = server_bin_path(release);
+    if !source.exists() {
+        bail!(
+            "{} was not produced by the build (see the cargo ndk output above)",
+            source.display()
+        );
+    }
+
+    let bin_dir = temp_dir.join("bin");
+    fs::create_dir_all(&bin_dir)
+        .with_context(|| format!("failed to create {}", bin_dir.display()))?;
+    let staged = bin_dir.join(SERVER_BIN_NAME);
+    file::copy(&source, &staged, &file::CopyOptions::new().overwrite(true))
+        .with_context(|| format!("failed to stage {}", staged.display()))?;
+    set_executable(&staged)?;
+
+    let size = fs::metadata(&staged).map(|meta| meta.len()).unwrap_or(0);
+    println!(
+        "device_faker_server staged: {} ({:.2} MiB)",
+        staged.display(),
+        size as f64 / (1024.0 * 1024.0)
+    );
+
+    Ok(())
+}
+
+fn server_bin_path(release: bool) -> PathBuf {
+    Path::new("target")
+        .join("aarch64-linux-android")
+        .join(if release { "release" } else { "debug" })
+        .join(SERVER_BIN_NAME)
+}
+
+#[cfg(unix)]
+fn set_executable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions)
+        .with_context(|| format!("failed to chmod 755 {}", path.display()))?;
+
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_executable(_path: &Path) -> Result<()> {
+    // Windows 上没有 unix mode：zip 条目由 zip_entry_mode() 写成 0755，装机后即可执行。
+    Ok(())
 }
 
 fn check(release: bool, verbose: bool) -> Result<()> {
@@ -348,4 +462,41 @@ fn build_webui() -> Result<()> {
     run_command(npm().args(["run", "build"]), "npm run build")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zip_entry_mode_marks_scripts_and_bin_executable() {
+        assert_eq!(zip_entry_mode(Path::new("service.sh")), 0o755);
+        assert_eq!(zip_entry_mode(Path::new("uninstall.sh")), 0o755);
+        assert_eq!(zip_entry_mode(Path::new("bin/device_faker_server")), 0o755);
+        assert_eq!(zip_entry_mode(Path::new("config.toml")), 0o644);
+        assert_eq!(zip_entry_mode(Path::new("server.default.toml")), 0o644);
+        assert_eq!(zip_entry_mode(Path::new("webroot/assets/index.js")), 0o644);
+    }
+
+    #[test]
+    fn zip_entry_mode_marks_directories_executable() {
+        // cargo test 的工作目录是 package root（xtask/），src/ 一定存在。
+        assert_eq!(zip_entry_mode(Path::new("src")), 0o755);
+    }
+
+    #[test]
+    fn server_bin_path_points_at_ndk_output() {
+        let release = server_bin_path(true);
+        assert!(
+            release.ends_with("aarch64-linux-android/release/device_faker_server"),
+            "{}",
+            release.display()
+        );
+        let debug = server_bin_path(false);
+        assert!(
+            debug.ends_with("aarch64-linux-android/debug/device_faker_server"),
+            "{}",
+            debug.display()
+        );
+    }
 }

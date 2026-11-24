@@ -1,0 +1,30 @@
+# device_faker_server 默认配置 fixture
+# 供 server 单测直接加载；token 明文只出现在本注释与测试文档中，文件只存 sha256。
+#
+# 可用测试 token（明文）：
+#   owner    : df_test_token_0123456789      scopes = read/write/ops/admin
+#   readonly : df_readonly_token_9876543210  scopes = read
+#
+# 重新生成：python3 -c 'import hashlib;print("sha256:"+hashlib.sha256(b"<token>").hexdigest())'
+
+bind = "127.0.0.1:8686"
+static_dir = "/data/adb/modules/device_faker/webroot"
+config_path = "/data/adb/device_faker/config/config.toml"
+backup_dir = "/data/adb/device_faker/config/backups"
+audit_log = "/data/adb/device_faker/logs/api-audit.jsonl"
+allow_lan = false
+body_limit_bytes = 2097152
+read_rate_per_min = 120
+write_rate_per_min = 30
+
+[[tokens]]
+id = "default"
+name = "owner"
+hash = "sha256:179384792b5506f5af1959b30674f8c1a4f207fb57b4ec9722e3a0d5fa95614a"
+scopes = ["read", "write", "ops", "admin"]
+
+[[tokens]]
+id = "readonly"
+name = "readonly"
+hash = "sha256:c0bd624fdd457e5e0ee2662528a46743b75943c1efec3033e1d18ed1f38ba40e"
+scopes = ["read"]

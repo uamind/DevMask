@@ -2,9 +2,32 @@
 // Copyright (c) 2025-2026 Seyud
 // Device Faker: https://github.com/Seyud/device_faker
 
-import { exec, listPackages, getPackagesInfo, pm, io } from 'kernelsu-alt'
-import { normalizePackageName, parsePackageUser } from './package'
+import { exec, listPackages as listPackagesLegacy, getPackagesInfo, pm, io } from 'kernelsu-alt'
+import { normalizePackageName, parsePackageUser } from '../utils/package'
 import type { InstalledApp } from '../types'
+import { parseDhcpProps, parseIpAddrOutput } from '../utils/serverConfig'
+import {
+  CONFIG_PATH,
+  MODULE_DIR_FALLBACK,
+  SERVER_CONFIG_PATH,
+  type Backend,
+  type DeepLinkOptions,
+  type FetchOnlineTemplatesOptions,
+  type GetAppsInfoOptions,
+  type GetInstalledAppsOptions,
+  type ModuleInfo,
+  type PackageQueryType,
+  type ServerTokenPair,
+} from './types'
+
+/**
+ * 管理器模式（`window.ksu`）的传输实现。
+ *
+ * 本文件是原 `utils/ksu.ts` 的原样迁移（该文件已删除）：组件与 stores
+ * 不再直接引用它，统一从 `backend/index.ts` 取 `Backend` 实例。除迁移外只补了接口
+ * 要求的适配方法（`readConfigRaw` / `writeConfigRaw` / `getProps` / `openDeepLink` /
+ * `fetchOnlineTemplates`），实现直接复用下面的既有函数。
+ */
 
 /**
  * 旧版兼容清单（TODO：确认最低支持 manager 版本后整体删除）
@@ -28,18 +51,6 @@ import type { InstalledApp } from '../types'
  * - 「读当前设备配置」的 `getprop`（ZIP/属性→模板的转换已在
  *   `utils/propsToTemplate.ts` 里纯前端完成，不再调用 device_faker_cli）
  */
-
-type PackageQueryType = 'user' | 'system' | 'all'
-
-interface GetInstalledAppsOptions {
-  includeSystem?: boolean
-  packageType?: PackageQueryType
-}
-
-interface GetAppsInfoOptions {
-  fallbackType?: PackageQueryType
-  assumeInstalled?: boolean
-}
 
 /**
  * KernelSU `getPackagesInfo` / `pm.getPackagesInfo` 返回的条目。
@@ -100,7 +111,7 @@ export async function execCommand(command: string): Promise<string> {
 export async function readFile(path: string): Promise<string> {
   // 开发模式返回模拟数据
   if (import.meta.env?.DEV) {
-    const { mockConfig, mockModuleProp } = await import('./mockData')
+    const { mockConfig, mockModuleProp } = await import('../utils/mockData')
     if (path.includes('config.toml')) {
       return mockConfig
     }
@@ -290,13 +301,13 @@ async function getPackageListViaLegacyApi(type: PackageQueryType): Promise<strin
   try {
     if (type === 'all') {
       const [userPkgs, systemPkgs] = await Promise.all([
-        listPackages('user').catch(() => []),
-        listPackages('system').catch(() => []),
+        listPackagesLegacy('user').catch(() => []),
+        listPackagesLegacy('system').catch(() => []),
       ])
       return [...userPkgs, ...systemPkgs]
     }
 
-    return await listPackages(type)
+    return await listPackagesLegacy(type)
   } catch {
     return []
   }
@@ -490,6 +501,39 @@ async function getPackageList(type: PackageQueryType): Promise<string[]> {
   return Array.from(new Set(packageList))
 }
 
+/**
+ * 枚举已安装包名（实例键：user 0 是裸包名，其他用户带 `@userId` 后缀）。
+ *
+ * `pm` 接口优先，环境不支持时回退旧的 shell 链；两条路都不可用时返回空数组
+ * （与 `getInstalledApps` 的降级语义一致）。
+ */
+export async function listPackages(packageType: PackageQueryType = 'user'): Promise<string[]> {
+  // 开发模式返回模拟数据（过滤规则与 getInstalledApps 保持一致）
+  if (import.meta.env?.DEV) {
+    const { mockInstalledApps } = await import('../utils/mockData')
+    return mockInstalledApps
+      .filter((app) => {
+        if (packageType === 'system') return app.isSystem === true
+        if (packageType === 'user') return app.isSystem !== true
+        return true
+      })
+      .map((app) => app.packageName)
+  }
+
+  try {
+    if (pm.support) {
+      const names = await pm.listPackages(packageType)
+      if (names.length > 0) {
+        return names
+      }
+    }
+  } catch {
+    // pm 接口存在但不可用，落到下面的旧路径
+  }
+
+  return await getPackageList(packageType)
+}
+
 export async function getAppsInfo(packageNames: string[], options: GetAppsInfoOptions = {}) {
   const uniquePackages = Array.from(new Set(packageNames.map((pkg) => pkg.trim()).filter(Boolean)))
 
@@ -547,7 +591,7 @@ async function loadInstalledAppsViaPm(type: PackageQueryType): Promise<Installed
 export async function getInstalledApps(options: GetInstalledAppsOptions = {}) {
   // 开发模式返回模拟数据
   if (import.meta.env?.DEV) {
-    const { mockInstalledApps } = await import('./mockData')
+    const { mockInstalledApps } = await import('../utils/mockData')
     const packageType = options.packageType || (options.includeSystem ? 'all' : 'user')
     return mockInstalledApps.filter((app) => {
       if (packageType === 'system') return app.isSystem === true
@@ -581,22 +625,9 @@ export async function getInstalledApps(options: GetInstalledAppsOptions = {}) {
 }
 
 /**
- * 宿主 `ksu.moduleInfo()` 的返回结构（KernelSU / WeaveMask 等 manager 直供）。
- *
- * 只声明 WebUI 实际用到的字段：`moduleDir` 是当前模块的**真实目录**（
- * `/data/adb/modules/<目录名>`，目录名与 module.prop 里的 `id` 不保证相同），
- * 其余是 manager 已解析好的 module.prop 元数据。
+ * @deprecated 用 `backend/types` 里的 `ModuleInfo`；保留旧名，避免调用方跟着改。
  */
-export interface KsuModuleInfo {
-  moduleDir?: string
-  id?: string
-  name?: string
-  version?: string
-  versionCode?: number
-  author?: string
-  description?: string
-  enabled?: boolean
-}
+export type KsuModuleInfo = ModuleInfo
 
 /** `ksu` 桥接里本文件需要的那部分（`kernelsu-alt` 未封装 `moduleInfo`）。 */
 interface KsuBridgeWithModuleInfo {
@@ -612,6 +643,7 @@ interface KsuBridgeWithModuleInfo {
  * 依然能拿到版本号。
  *
  * 宿主未实现（旧版 manager / 非 KernelSU 系宿主）时返回 `null`，调用方自行回退。
+ * 这里是同步实现，`Backend` 接口由 `createKsuBackend()` 包成 Promise。
  */
 export function getModuleInfo(): KsuModuleInfo | null {
   const bridge = (globalThis as { ksu?: KsuBridgeWithModuleInfo }).ksu
@@ -660,6 +692,221 @@ export async function mkdir(path: string): Promise<void> {
 
   // TODO(legacy-compat): io 接口不可用时回退 `mkdir -p`，兼容期结束后删除该分支
   await execCommand(`mkdir -p ${shellQuotePath(path)}`)
+}
+
+/**
+ * 读当前设备属性全集（`getprop` 输出，`[key]: [value]` 行）。
+ *
+ * 属性→模板的转换在 `utils/propsToTemplate.ts` 里纯前端完成，这里只取原始文本。
+ */
+export async function getProps(): Promise<string> {
+  return await execCommand('getprop')
+}
+
+/**
+ * 用系统意图打开链接 / scheme。
+ *
+ * 失败（宿主没有 exec 能力 / am 报错）时抛错，调用方按原有语义回落到 `window.open`。
+ */
+export async function openDeepLink(url: string, options: DeepLinkOptions = {}): Promise<void> {
+  const { useViewAction = true } = options
+  const flags = useViewAction
+    ? '-a android.intent.action.VIEW -c android.intent.category.BROWSABLE '
+    : ''
+  await execCommand(`am start ${flags}-d ${shellQuotePath(url)} >/dev/null 2>&1`)
+}
+
+/** 在线模板抓取的 shell 超时（秒），与原先 15s 的请求超时保持一致。 */
+const SHELL_FETCH_TIMEOUT_SECONDS = 15
+const DEFAULT_FETCH_ACCEPT = 'application/json'
+
+/**
+ * 管理器模式抓取在线模板原始文本。
+ *
+ * WebView 的 fetch 受 CORS 限制（gitee raw 不带 `Access-Control-Allow-Origin`），
+ * shell 没有这条限制，所以管理器模式保留 shell 兜底；原生服务模式由服务端代理取代。
+ *
+ * TODO(dual-transport): `utils/onlineTemplates.ts` 的 shell 兜底切换到本方法后，
+ * 删除那里的本地实现。
+ */
+export async function fetchOnlineTemplates(
+  url: string,
+  options: FetchOnlineTemplatesOptions = {}
+): Promise<string> {
+  if (import.meta.env?.DEV) {
+    throw new Error('Shell HTTP fallback is not available in development mode.')
+  }
+
+  const accept = options.accept || DEFAULT_FETCH_ACCEPT
+  const escapedUrl = escapeShellPath(url)
+  const escapedAccept = escapeShellPath(accept)
+  const timeout = SHELL_FETCH_TIMEOUT_SECONDS
+
+  // 不写死任何 root 方案的目录，运行时按「PATH → 通用 busybox 形态」自己找工具：
+  //   · WebUI 的 exec 通常直接以 root 跑 `sh`（真机实测 id = uid=0，context u:r:magisk:s0），
+  //     没有 su 参与，因此 PATH 就是 app 继承的标准 Android PATH —— 里面基本没有 curl/wget/busybox；
+  //   · KernelSU 的 ksud su 会注入 /data/adb/ksu/bin，Magisk/WeaveMask 则不注入，
+  //     所以只按 PATH 找不够，再补一层 `*/busybox`、`*/bin/busybox` 的通用 glob（不点名具体方案）。
+  // 顺带：shell 没有 CORS 限制，所以 gitee raw（WebView fetch 拿不到，响应缺
+  // Access-Control-Allow-Origin）也能借这条兜底直接抓。
+  const script = [
+    `CURL=$(command -v curl 2>/dev/null)`,
+    `WGET=$(command -v wget 2>/dev/null)`,
+    `BB=$(command -v busybox 2>/dev/null)`,
+    `[ -z "$BB" ] && BB=$(ls /data/adb/*/busybox /data/adb/*/bin/busybox 2>/dev/null | head -n 1)`,
+    // 不要用 exec 替换 shell：真机实测 libsu 抓不到 exec 之后的输出（返回空串），
+    // 用 if/elif 顺序执行才能把 stdout 正常带回来。
+    `if [ -n "$CURL" ]; then "$CURL" -fsSL --connect-timeout ${timeout} --max-time ${timeout} -H 'Accept: ${escapedAccept}' '${escapedUrl}'`,
+    `elif [ -n "$WGET" ]; then "$WGET" -q -O - --timeout=${timeout} --header='Accept: ${escapedAccept}' '${escapedUrl}'`,
+    `elif [ -n "$BB" ]; then "$BB" wget -q -O - -T ${timeout} --header='Accept: ${escapedAccept}' '${escapedUrl}'`,
+    `else echo 'No usable HTTP tool (curl/wget/busybox) found' >&2; exit 127; fi`,
+  ].join('; ')
+
+  return await execCommand(script)
+}
+
+/**
+ * 管理器模式的 `Backend` 实现。
+ *
+ * 除 `readConfigRaw` / `writeConfigRaw` 固定映射到 config.toml 外，其余方法与
+ * 上面的同名函数一一对应——迁移只换了调用方式，没有改行为。
+ */
+// ---------------------------------------------------------------- 原生服务开关
+
+/** 模块目录：优先宿主直供的 moduleDir，其次标准安装路径。 */
+function resolveModuleDir(): string {
+  const moduleDir = (getModuleInfo()?.moduleDir || '').trim()
+  return moduleDir || MODULE_DIR_FALLBACK
+}
+
+/**
+ * 读 server.toml；缺失（或为空）时回退模块目录里的 server.default.toml。
+ *
+ * 回退的意义：新装设备上 server.toml 还没被 service.sh 生成，UI 仍要能展示默认
+ * bind 并让用户直接开启外部访问（保存时会写到正式路径）。
+ */
+export async function readServerConfig(): Promise<string | null> {
+  try {
+    const current = await readFile(SERVER_CONFIG_PATH)
+    if (current.trim()) {
+      return current
+    }
+  } catch {
+    // 文件不存在 / 无权限：走默认模板
+  }
+
+  try {
+    const fallback = await readFile(`${resolveModuleDir()}/server.default.toml`)
+    return fallback.trim() ? fallback : null
+  } catch {
+    return null
+  }
+}
+
+/** 写 server.toml 并把权限收紧到 0600（文件里存着 Token 哈希）。 */
+export async function writeServerConfig(text: string): Promise<void> {
+  await writeFile(SERVER_CONFIG_PATH, text)
+  await execCommand(`chmod 600 ${shellQuotePath(SERVER_CONFIG_PATH)}`)
+}
+
+/** 调 service.sh 执行一个动作（start / stop / restart / status）。 */
+async function runServiceScript(action: string): Promise<string> {
+  const script = `${resolveModuleDir()}/service.sh`
+  // status 需要读输出；start/stop/restart 的守护进程会继承 stdout，
+  // 不关掉的话 adb/管理器会一直等管道 EOF（实测 restart 挂到超时）。
+  const redirect = action === 'status' ? '' : ' >/dev/null 2>&1'
+  return await execCommand(`sh ${shellQuotePath(script)} ${action}${redirect}`)
+}
+
+/** 重启原生服务（service.sh restart），返回脚本 stdout。 */
+export async function restartServer(): Promise<string> {
+  return await runServiceScript('restart')
+}
+
+/** 原生服务状态（service.sh status）的原始输出。 */
+export async function getServerControlStatus(): Promise<string> {
+  return await runServiceScript('status')
+}
+
+/**
+ * 生成访问 Token（明文只返回一次，不落盘）。
+ *
+ * 与 server.default.toml 注释里的命令保持一致：32 字节随机数 → base64url（`-_`、
+ * 去掉 `=`）→ `df_` 前缀；哈希用 sha256sum 取 64 位小写十六进制，返回时带
+ * `sha256:` 前缀，可直接写进 [[tokens]]。
+ */
+export async function generateServerToken(): Promise<ServerTokenPair> {
+  const script = [
+    'set -e',
+    'RAW=$(head -c 32 /dev/urandom | base64 | tr -d "\\n" | tr "+/" "-_")',
+    'RAW=$(printf "%s" "$RAW" | tr -d "=")',
+    'TOKEN="df_$RAW"',
+    'HASH=$(printf "%s" "$TOKEN" | sha256sum | cut -d" " -f1)',
+    'printf "%s\\n%s\\n" "$TOKEN" "$HASH"',
+  ].join('; ')
+
+  const output = (await execCommand(script)).trim()
+  const [token, hash] = output.split('\n').map((line) => line.trim())
+
+  if (!token?.startsWith('df_') || !/^[0-9a-f]{64}$/.test(hash || '')) {
+    throw new Error(`Token 生成失败：${output || '无输出'}`)
+  }
+
+  return { token, hash: `sha256:${hash}` }
+}
+
+/** 本机可用于局域网访问的 IPv4（`ip` 优先，`getprop dhcp.*` 兜底）。 */
+export async function getLanAddresses(): Promise<string[]> {
+  let addresses: string[]
+
+  try {
+    addresses = parseIpAddrOutput(await execCommand('ip -4 addr show 2>/dev/null || true'))
+  } catch {
+    addresses = []
+  }
+
+  if (addresses.length === 0) {
+    try {
+      addresses = parseDhcpProps(await execCommand('getprop 2>/dev/null || true'))
+    } catch {
+      addresses = []
+    }
+  }
+
+  return addresses
+}
+
+export function createKsuBackend(): Backend {
+  return {
+    runtime: 'ksu',
+    // 管理器模式没有服务端，也就没有服务版本/bind/注入信息
+    serverRuntime: null,
+    readConfigRaw: () => readFile(CONFIG_PATH),
+    // 直接写文件：没有 revision 可以比对，写后也不回填（保持旧行为）
+    writeConfigRaw: async (content) => {
+      await writeFile(CONFIG_PATH, content)
+      return { revision: '', previousRevision: null, warnings: [] }
+    },
+    getConfigRevision: async () => ({ revision: '', exists: await fileExists(CONFIG_PATH) }),
+    getServerStatus: async () => null,
+    readFile,
+    writeFile,
+    fileExists,
+    mkdir,
+    listPackages,
+    getPackagesInfo: getAppsInfo,
+    getInstalledApps,
+    getModuleInfo: async () => getModuleInfo(),
+    getProps,
+    readServerConfig,
+    writeServerConfig,
+    restartServer,
+    getServerControlStatus,
+    generateServerToken,
+    getLanAddresses,
+    openDeepLink,
+    fetchOnlineTemplates,
+  }
 }
 
 export default {

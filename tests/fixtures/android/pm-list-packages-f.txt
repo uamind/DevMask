@@ -1,0 +1,5 @@
+package:/data/app/~~Zx9fixture==/com.example.app-Zx9fixture==/base.apk=com.example.app
+package:/data/app/~~Qa2fixture==/com.example.inline-Qa2fixture==/base.apk=com.example.inline
+package:/data/app/~~Lm7fixture==/com.example.installed-Lm7fixture==/base.apk=com.example.installed
+package:/system/priv-app/Settings/Settings.apk=com.android.settings
+package:/system/priv-app/SystemUI/SystemUI.apk=com.android.systemui
