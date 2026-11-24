@@ -651,6 +651,9 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
     generateServerToken: async (): Promise<ServerTokenPair> => {
       throw new UnsupportedError('原生模式不支持生成访问 Token')
     },
+    hashServerToken: async (_token: string): Promise<ServerTokenPair> => {
+      throw new UnsupportedError('原生模式不支持修改访问 Token')
+    },
     getLanAddresses: async (): Promise<string[]> => {
       throw new UnsupportedError('原生模式不支持枚举本机地址')
     },

@@ -36,11 +36,23 @@ export interface ApplyServerSettingsOptions {
 export const DEFAULT_SERVER_PORT = 8686
 export const LOOPBACK_HOST = '127.0.0.1'
 export const ANY_HOST = '0.0.0.0'
+/** 首次启动与服务端引导使用的默认访问 Token（内网便利优先）。 */
+export const DEFAULT_ACCESS_TOKEN = 'admin123'
 
 const BIND_LINE_RE = /^(\s*bind\s*=\s*")([^"]*)("[^\n]*)$/m
 const ALLOW_LAN_LINE_RE = /^(\s*allow_lan\s*=\s*)(true|false)([^\n]*)$/m
 const TOKEN_TABLE_RE = /^\s*\[\[\s*tokens\s*\]\]\s*(?:#.*)?$/
 const TABLE_HEADER_RE = /^\s*\[/
+
+/** Token 是否可用：1-128 个字符，不含空白与控制字符（要能放进 Authorization 头）。 */
+export function isValidToken(value: string): boolean {
+  if (value.length === 0 || value.length > 128) return false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x20 || code === 0x7f) return false
+  }
+  return true
+}
 
 /** 端口是否合法（1-65535 的整数）。 */
 export function isValidPort(value: number | string): boolean {
@@ -167,7 +179,7 @@ export function appendTokenBlock(text: string, hash: string): string {
   const block = [
     '',
     '[[tokens]]',
-    'id = "ui"',
+    'id = "default"',
     'name = "owner"',
     `hash = "${normalizedHash}"`,
     'scopes = ["read", "write", "ops", "admin"]',

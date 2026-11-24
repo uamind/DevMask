@@ -38,12 +38,13 @@ TLS 尚未实现，见第 9 节。
 
 Token：
 
-- 模块 WebUI → 设置 → External Access → Reset access token；明文只显示一次。
-- 请求头：Authorization: Bearer df_xxx
+- 默认是 admin123（首次启动写入；日志横幅同样会打印一次）。
+- 模块 WebUI → 设置 → External Access → 「访问 Token」输入框可改成任意值；留空不动，Reset 恢复 admin123。
+- 请求头：Authorization: Bearer <token>（默认 admin123）
 - 作用域 read / write / ops / admin，互不隐含；常规 Agent 用 read + write，重启应用再加 ops。
 - 只放环境变量，不写脚本、日志或 git：
 
-    export DF_TOKEN=df_xxx
+    export DF_TOKEN=admin123
 
 401 = Token 缺失/无效；403 = 作用域不足（details.required）。
 
@@ -61,14 +62,15 @@ Token：
 ## 4. 只读检查
 
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/status"
+    curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/overview"
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/config?format=json"
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/config/revision"
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/templates"
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/apps"
     curl -s -H "Authorization: Bearer $DF_TOKEN" "$DF_BASE/packages?type=user"
 
-GET /apps/{pkg} 是排查「为什么没生效」的入口，返回 source、resolved、warnings。
-没有独立 /explain 端点。
+GET /overview 一次给出设备 fingerprint、全部模板和每个已配置包的 source/resolved/warnings；
+GET /apps/{pkg} 是单包排查入口；没有独立 /explain 端点。
 
 ## 5. 写操作流程（示例：把 com.example.app 伪装成 Pixel 9）
 
@@ -144,6 +146,7 @@ detachFromTemplates 默认 true：从其它模板移除该包，并删除同包�
 | --- | --- | --- | --- | --- |
 | GET | /healthz | 无 | 否 | 存活探针 |
 | GET | /status | read | 否 | 模块/设备/服务/配置状态 |
+| GET | /overview | read | 否 | 设备 fingerprint + 模板 + 每个包的 resolved |
 | GET | /config?format=json\|toml | read | 否 | 读配置；toml 原文 |
 | GET | /config/revision | read | 否 | 取 revision |
 | PUT | /config | write | 是 | 整体替换配置 |

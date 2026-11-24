@@ -122,6 +122,26 @@
         />
       </div>
 
+      <div class="setting-item setting-item-split">
+        <div class="setting-info">
+          <div class="setting-icon">
+            <KeyRound :size="24" />
+          </div>
+          <div class="setting-text">
+            <h3 class="setting-name">{{ t('settings.serverAccess.token_input.label') }}</h3>
+            <p class="setting-desc">{{ t('settings.serverAccess.token_input.desc') }}</p>
+          </div>
+        </div>
+        <el-input
+          v-model="serverAccess.tokenDraft"
+          class="setting-control"
+          type="password"
+          show-password
+          autocomplete="new-password"
+          :placeholder="t('settings.serverAccess.token_input.placeholder')"
+        />
+      </div>
+
       <div class="server-rows">
         <div class="server-row">
           <span class="server-label">{{ t('settings.serverAccess.bind') }}</span>
@@ -295,7 +315,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onActivated, onMounted } from 'vue'
-import { Moon, Globe, Bug, FileUp, Network, Wifi } from '@lucide/vue'
+import { Moon, Globe, Bug, FileUp, KeyRound, Network, Wifi } from '@lucide/vue'
 import { useConfigStore } from '../stores/config'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../utils/i18n'

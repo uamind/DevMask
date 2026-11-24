@@ -30,14 +30,16 @@ use crate::store;
 pub mod apps;
 pub mod config;
 pub mod device;
+pub mod overview;
 pub mod packages;
 pub mod schema;
 pub mod templates;
 
-/// 契约里 23 个操作的 (method, path)，用于契约测试与路由双向校验。
-pub const CONTRACT_OPERATIONS: [(&str, &str); 23] = [
+/// 契约里 24 个操作的 (method, path)，用于契约测试与路由双向校验。
+pub const CONTRACT_OPERATIONS: [(&str, &str); 24] = [
     ("GET", "/api/v1/healthz"),
     ("GET", "/api/v1/status"),
+    ("GET", "/api/v1/overview"),
     ("GET", "/api/v1/schema/config"),
     ("GET", "/api/v1/config"),
     ("GET", "/api/v1/config/revision"),
@@ -62,13 +64,14 @@ pub const CONTRACT_OPERATIONS: [(&str, &str); 23] = [
 ];
 
 /// 本增量已实现的能力标签（契约固定顺序）。
-pub const CAPABILITIES: [&str; 6] = [
+pub const CAPABILITIES: [&str; 7] = [
     "config",
     "templates",
     "apps",
     "packages",
     "device",
     "validate",
+    "overview",
 ];
 
 const X_DF_REVISION: HeaderName = HeaderName::from_static("x-df-revision");
@@ -230,15 +233,20 @@ fn config_status(state: &AppState, request_id: &str) -> Result<ConfigStatus, Api
     let config = Config::from_toml(text)
         .map_err(|error| ApiError::internal_error(request_id, format!("配置解析失败: {error}")))?;
 
-    Ok(ConfigStatus {
-        revision: snapshot.revision,
-        mtime: snapshot.mtime,
+    Ok(config_status_for(&snapshot, &config))
+}
+
+/// 用已读到的快照与解析结果拼 ConfigStatus，避免调用方重复读盘/解析。
+pub(crate) fn config_status_for(snapshot: &store::Snapshot, config: &Config) -> ConfigStatus {
+    ConfigStatus {
+        revision: snapshot.revision.clone(),
+        mtime: snapshot.mtime.clone(),
         size: snapshot.size,
         exists: snapshot.exists,
         templates: config.templates.len(),
         apps: config.apps.len(),
-        conflicts: count_conflicts(&config),
-    })
+        conflicts: count_conflicts(config),
+    }
 }
 
 /// 组装写端点响应：按需生成 unified diff（dry_run 时总是给）。
@@ -296,6 +304,6 @@ packages = ["com.example.three"]
         for (method, path) in CONTRACT_OPERATIONS {
             assert!(seen.insert((method, path)), "{method} {path} 重复");
         }
-        assert_eq!(seen.len(), 23);
+        assert_eq!(seen.len(), 24);
     }
 }

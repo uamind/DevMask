@@ -2,7 +2,7 @@
 // Copyright (c) 2025-2026 Seyud
 // Device Faker: https://github.com/Seyud/device_faker
 
-//! 契约测试：路由注册必须与 docs/openapi.yaml 的 23 个操作一致。
+//! 契约测试：路由注册必须与 docs/openapi.yaml 的 24 个操作一致。
 //!
 //! 两个方向都校验：
 //!
@@ -54,8 +54,8 @@ fn contract_table_matches_openapi() {
         .iter()
         .map(|(method, path)| ((*method).to_owned(), (*path).to_owned()))
         .collect();
-    assert_eq!(documented.len(), 23, "OpenAPI 操作数必须是 23");
-    assert_eq!(implemented.len(), 23, "路由表操作数必须是 23");
+    assert_eq!(documented.len(), 24, "OpenAPI 操作数必须是 24");
+    assert_eq!(implemented.len(), 24, "路由表操作数必须是 24");
     let missing: Vec<_> = documented.difference(&implemented).collect();
     let extra: Vec<_> = implemented.difference(&documented).collect();
     assert!(missing.is_empty(), "契约有但路由缺失: {missing:?}");

@@ -4,9 +4,11 @@
 
 //! 首次启动的 Token 引导（docs/API.md 3.4）。
 //!
-//! - server.toml 没有任何 Token 且 bind 是 loopback 时，生成一个 df_ + 43 字符
-//!   base64url 的 Token（name=owner，scopes=read/write/ops/admin），只把 sha256 写进
-//!   server.toml（0600），明文一次性写 logs/server.log 的横幅；
+//! - server.toml 没有任何 Token 且 bind 是 loopback 时，写入默认 Token
+//!   `admin123`（name=owner，scopes=read/write/ops/admin），只在 server.toml
+//!   里保存 sha256（0600），明文一次性写 logs/server.log 的横幅；
+//! - 默认值只用于「内网、首次启动」的便利，用户可在管理器 WebUI 的
+//!   「外部访问」里换成任意 Token（同样只写 sha256）；
 //! - bind 不是 loopback 时**不自动生成**：无认证暴露局域网比「服务起不来」更糟，
 //!   启动校验会直接拒绝（见 settings::validate）。
 
@@ -16,8 +18,9 @@ use anyhow::{Context, Result, bail};
 
 use crate::auth::{Scope, TokenEntry, hash_token};
 use crate::settings::{self, Settings};
-use crate::util;
 
+/// 首次启动写入的默认 Token 明文（内网便利优先；可在 WebUI 修改）。
+pub const DEFAULT_TOKEN: &str = "admin123";
 /// 自动生成 Token 的稳定 id。
 pub const INITIAL_TOKEN_ID: &str = "default";
 /// 自动生成 Token 的名字。
@@ -64,7 +67,7 @@ pub fn bootstrap(settings: &mut Settings) -> Result<BootstrapOutcome> {
         );
     }
 
-    let plaintext = util::generate_token();
+    let plaintext = DEFAULT_TOKEN.to_owned();
     let entry = TokenEntry::new(
         INITIAL_TOKEN_ID,
         INITIAL_TOKEN_NAME,
@@ -190,7 +193,8 @@ mod tests {
             .plaintext
             .clone()
             .expect("first run must return plaintext");
-        assert!(plaintext.starts_with("df_"));
+        assert_eq!(plaintext, DEFAULT_TOKEN);
+        assert_eq!(plaintext, "admin123");
         assert!(outcome.created_file);
 
         let path = dir.path().join("server.toml");

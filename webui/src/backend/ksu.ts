@@ -855,6 +855,36 @@ export async function generateServerToken(): Promise<ServerTokenPair> {
   return { token, hash: `sha256:${hash}` }
 }
 
+/**
+ * 计算用户自定义 Token 的 sha256（明文不落盘）。
+ *
+ * 单引号包裹后交给 shell，避免 `$`、反引号、空格等被解释；换行会让下面的
+ * 两行输出协议失效，因此直接拒绝。
+ */
+export async function hashServerToken(token: string): Promise<ServerTokenPair> {
+  if (!token) {
+    throw new Error('Token 不能为空')
+  }
+  if (token.includes('\n') || token.includes('\r')) {
+    throw new Error('Token 不能包含换行')
+  }
+
+  const quoted = shellQuotePath(token)
+  const script = [
+    'set -e',
+    `HASH=$(printf '%s' ${quoted} | sha256sum | cut -d" " -f1)`,
+    `printf '%s\\n%s\\n' ${quoted} "$HASH"`,
+  ].join('; ')
+
+  const output = (await execCommand(script)).trim()
+  const [echoed, hash] = output.split('\n').map((line) => line.trim())
+  if (echoed !== token || !/^[0-9a-f]{64}$/.test(hash || '')) {
+    throw new Error(`Token 哈希计算失败：${output || '无输出'}`)
+  }
+
+  return { token, hash: `sha256:${hash}` }
+}
+
 /** 本机可用于局域网访问的 IPv4（`ip` 优先，`getprop dhcp.*` 兜底）。 */
 export async function getLanAddresses(): Promise<string[]> {
   let addresses: string[]
@@ -903,6 +933,7 @@ export function createKsuBackend(): Backend {
     restartServer,
     getServerControlStatus,
     generateServerToken,
+    hashServerToken,
     getLanAddresses,
     openDeepLink,
     fetchOnlineTemplates,

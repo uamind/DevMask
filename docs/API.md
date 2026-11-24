@@ -1,7 +1,7 @@
 # Device Faker HTTP API（/api/v1）契约
 
 > 文档版本：v1（第一增量契约冻结）
-> 适用：device_faker v1.8.0 起自带的 `device_faker_server`
+> 适用：device_faker v1.9.0 起自带的 `device_faker_server`
 > 机器可读契约：[openapi.yaml](openapi.yaml) · 面向 AI 摘要：[llms.txt](llms.txt)
 > 设计依据：[docs/dev/server-api-plan.md](dev/server-api-plan.md) 第 5 节（API 设计）与第 10 节（安全设计）、[docs/CONFIG.md](CONFIG.md)
 
@@ -13,13 +13,13 @@
 
 ### 1.1 本增量（第一增量）实现的端点
 
-- 系统：`GET /api/v1/healthz`、`GET /api/v1/status`、`GET /api/v1/schema/config`
+- 系统：`GET /api/v1/healthz`、`GET /api/v1/status`、`GET /api/v1/overview`、`GET /api/v1/schema/config`
 - 配置：读取（JSON / TOML）、revision、整体替换、文本校验
 - 模板：列表、详情、整体替换、字段合并、删除、批量绑定包名、解绑单个包名
 - 应用：列表、详情（含解析结果）、内联写入或模板绑定、删除、重启
 - 包与设备：已安装包元数据、设备信息、getprop 白名单读取、用户列表
 
-合计 **23 个端点**，总表见 §4。
+合计 **24 个端点**，总表见 §4。
 
 ### 1.2 明确不在本增量
 
@@ -29,7 +29,7 @@
 | `POST /plan`、`/apply`、`/simulate`、`/batch`、`/conflicts` | P3 | 不存在；用写端点的 `dry_run` 替代预演 |
 | 备份管理 `/backups*`（列表 / 手动备份 / 恢复） | P4 | 不存在；写入时的自动备份已生效，见 §9 |
 | 审计查询 `GET /audit`、日志 `GET /logs` | P4 | 不存在；审计仍在后台写 JSONL |
-| Token 管理 `/tokens*` | 下一增量 | 不存在；Token 通过 `server.toml` 配置，见 §3.4 |
+| Token 管理 `/tokens*` | 下一增量 | 不存在；Token 通过管理器 WebUI 或 `server.toml` 配置，见 §3.4 |
 | 应用名 / 图标 `/packages/{pkg}/label`、`/packages/{pkg}/icon` | P4 | 不存在；包列表的 `label` 恒为 `null` |
 | TLS、Unix socket | P4 | 仅明文 HTTP + 可选 loopback 绑定 |
 | 限流（读/写配额）与鉴权失败封禁 | P4 | `server.toml` 的 `read_rate_per_min` / `write_rate_per_min` 只解析、**不执行**；本增量不会返回 429 |
@@ -161,7 +161,7 @@
 
 ### 3.1 认证方式
 
-- 唯一方式：`Authorization: Bearer <token>`。Token 明文形如 `df_` + 43 字符 base64url。
+- 唯一方式：`Authorization: Bearer <token>`。Token 可由用户自定义（默认 `admin123`），也支持 `df_` + 43 字符 base64url。
 - 落盘只存 `sha256(token)` 到 `/data/adb/device_faker/config/server.toml`（权限 600），明文只在生成时输出一次。
 - 不使用 Cookie 会话，因此没有 CSRF 面；前端统一加 `Authorization` 头。
 - 缺失、格式错误、未知、已撤销 → `401 unauthorized`（不区分原因，避免枚举）。
@@ -189,7 +189,8 @@
 
 ### 3.4 Token 供给
 
-- 首次启动：若 `server.toml` 没有任何 Token 且 `bind` 是 loopback，自动生成一个名为 `owner` 的 Token（`["read","write","ops","admin"]`），哈希写入 `server.toml`，**明文一次性写入 `logs/server.log`（带 `[device-faker-server] initial token = …` 横幅）**。
+- 首次启动：若 `server.toml` 没有任何 Token 且 `bind` 是 loopback，写入名为 `owner` 的默认 Token **`admin123`**（`["read","write","ops","admin"]`），只把哈希写入 `server.toml`，明文同时写一行 `logs/server.log` 横幅 `[device-faker-server] initial token = admin123`。
+- 修改 Token：管理器 WebUI → 设置 → 外部访问 → 「访问 Token」输入框，填任意值后保存；WebUI 用 `sha256sum` 算哈希写入 `server.toml`（0600），重启服务后生效。留空表示不修改。
 - `server.toml` 结构（计划书附录 A）：
 
       bind = "127.0.0.1:8686"
@@ -205,7 +206,7 @@
       scopes = ["read", "write", "ops", "admin"]
 
 - `bind` 非 loopback 且无 Token → **拒绝启动**，日志写明生成命令。
-- 本增量不提供 Token 的 HTTP 管理；轮换 = 改 `server.toml` 后重启服务（或调用未实现的 `/tokens` 的下个增量方案）。
+- 本增量不提供 Token 的 HTTP 管理；轮换 = 管理器 WebUI 里改 Token，或直接改 `server.toml` 的 `[[tokens]]` 后重启服务。
 
 ### 3.5 浏览器登录（原生模式）
 
@@ -247,6 +248,7 @@
 | 21 | GET | `/api/v1/device` | 设备与模块信息 | read | — |
 | 22 | GET | `/api/v1/device/props` | getprop 白名单读取 | read | — |
 | 23 | GET | `/api/v1/device/users` | 用户列表 | read | — |
+| 24 | GET | `/api/v1/overview` | 设备、模板与每个应用配置汇总 | read | — |
 
 ---
 
@@ -264,7 +266,7 @@
 
     {
       "status": "ok",
-      "version": "1.8.0",
+      "version": "1.9.0",
       "uptimeSec": 3600
     }
 
@@ -280,8 +282,8 @@
     {
       "module": {
         "id": "device_faker",
-        "version": "v1.7.0",
-        "versionCode": 20261109
+        "version": "v1.9.0",
+        "versionCode": 20261125
       },
       "device": {
         "manufacturer": "Google",
@@ -293,7 +295,7 @@
         "abi": "arm64-v8a"
       },
       "server": {
-        "version": "1.8.0",
+        "version": "1.9.0",
         "bind": "127.0.0.1:8686",
         "uptimeSec": 3600,
         "startedAt": "2026-11-24T03:00:00Z",
@@ -916,7 +918,7 @@ Content-Type: application/json
 响应 `200`：
 
     {
-      "module": { "id": "device_faker", "version": "v1.7.0", "versionCode": 20261109 },
+      "module": { "id": "device_faker", "version": "v1.9.0", "versionCode": 20261125 },
       "device": {
         "manufacturer": "Google",
         "brand": "google",
@@ -927,7 +929,7 @@ Content-Type: application/json
         "abi": "arm64-v8a",
         "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
       },
-      "server": { "version": "1.8.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
+      "server": { "version": "1.9.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
       "root": { "manager": "kernelsu", "version": "1.0.7" }
     }
 
@@ -970,6 +972,53 @@ Content-Type: application/json
         { "id": 999, "name": "Work", "running": true, "isCurrent": false }
       ]
     }
+
+错误：401、403、500。
+
+### 5.24 GET /api/v1/overview
+
+- 作用域：`read`。
+- 用途：一次拿全「设备状态 + 物理 fingerprint + 每个已配置应用的有效指纹」，AI 不必逐包调用。
+- `apps` 只包含**已配置**的包（内联记录与所有模板 `packages` 的并集），按包名排序；未配置的已安装包不出现。
+
+响应 `200`：
+
+    {
+      "revision": "9f2c5d1e…",
+      "module": { "id": "device_faker", "version": "v1.9.0", "versionCode": 20261125 },
+      "device": {
+        "manufacturer": "Google", "brand": "google", "model": "Pixel 9",
+        "device": "tokay", "android": "17", "sdk": 37, "abi": "arm64-v8a",
+        "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
+      },
+      "root": { "manager": "kernelsu", "version": "1.0.7" },
+      "server": { "version": "1.9.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "startedAt": "2026-11-24T03:00:00Z", "pid": 4321 },
+      "config": {
+        "revision": "9f2c5d1e…", "mtime": "2026-11-24T03:00:00Z",
+        "size": 9361, "exists": true, "templates": 2, "apps": 1, "conflicts": 1
+      },
+      "templates": [
+        {
+          "name": "pixel_9", "position": 0,
+          "packages": ["com.example.app"],
+          "config": { "brand": "google", "model": "Pixel 9", "dpi": 420 }
+        }
+      ],
+      "apps": [
+        {
+          "package": "com.example.app",
+          "installed": true,
+          "source": { "type": "template", "template": "pixel_9", "alsoInline": false },
+          "resolved": { "brand": "google", "model": "Pixel 9", "fingerprint": "google/tokay/tokay:17/…" },
+          "warnings": []
+        }
+      ],
+      "warnings": []
+    }
+
+- `resolved` 与 `GET /apps/{pkg}` 的 `resolved` 相同：最终生效值（含 `fingerprint`、`dpi`、`sdk_int` 等）。
+- `templates[].config` 是模板原始字段（不含 `packages`）。
+- 响应带 `X-DF-Revision`，可用于下一次写操作的 `If-Match`。
 
 错误：401、403、500。
 
@@ -1344,7 +1393,7 @@ Content-Type: application/json
 
 ## 12. 冒烟验收（curl）
 
-    TOKEN=df_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    TOKEN=admin123          # 默认值；在管理器 WebUI 改过就换成你的
     BASE=http://127.0.0.1:8686/api/v1
 
     # 1) 探活（无认证）
@@ -1352,6 +1401,8 @@ Content-Type: application/json
 
     # 2) 状态 + revision
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/status" | jq '.config.revision'
+    # 2b) 一次看设备指纹 + 每个已配置应用的最终值
+    curl -s -H "Authorization: Bearer $TOKEN" "$BASE/overview" | jq '{device, apps}'
 
     # 3) 读模板（保序）
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/templates" | jq '.items[].name'
@@ -1386,3 +1437,4 @@ Content-Type: application/json
 | 版本 | 日期 | 变更 |
 | --- | --- | --- |
 | v1 | 2026-11-24 | 第一增量契约冻结：23 个端点、错误码表、revision/If-Match 语义、WebUI 注入与降级规则 |
+| v1.1 | 2026-11-25 | 新增 `GET /overview`（合计 24 个端点）；首次启动 Token 默认 `admin123`，可在管理器 WebUI 修改 |

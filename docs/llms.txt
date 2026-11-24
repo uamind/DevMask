@@ -7,7 +7,7 @@
 ## 认证
 
 - 所有请求（除 /api/v1/healthz）都需要 `Authorization: Bearer <token>`。
-- Token 由模块首次启动时生成，明文只出现在日志一次：`[device-faker-server] initial token = df_...`（`/data/adb/device_faker/logs/server.log`）。
+- 首次启动的默认 Token 是 `admin123`；可在管理器 WebUI → 设置 → 外部访问里改成任意值（只存 sha256）。日志里会有一行 `[device-faker-server] initial token = admin123`。
 - 作用域：`read` / `write` / `ops` / `admin`，互不隐含；`admin` 是其余的超集。
   - 典型 Agent 用 `["read","write"]`；要重启应用再加 `ops`。
 - 401 = Token 缺失或无效；403 = 作用域不足（`details.required` 告诉你缺哪个）。
@@ -30,6 +30,7 @@
 系统
 - `GET /healthz` — 探活，无需认证。
 - `GET /status` — 模块/设备/服务/配置状态，含 `config.revision` 与 `capabilities`。
+- `GET /overview` — 一次返回设备 fingerprint、全部模板，以及每个已配置包的来源与最终生效值（`resolved`）；排查「每个 App 当前伪装成什么」优先用它。
 - `GET /schema/config` — 配置 JSON Schema（draft-07，schemars 0.8 生成；字段在顶层 properties，被引用类型在 definitions）。
 
 配置
@@ -61,8 +62,8 @@
 ## 典型流程
 
 A. 只读检查
-1) `GET /status` 记下 `config.revision`。
-2) `GET /templates` 找可复用模板；`GET /apps/{pkg}` 看当前来源与解析值。
+1) `GET /overview` 一次看设备指纹、模板和每个包的最终生效值（同时带 `revision`）。
+2) `GET /templates` 找可复用模板；`GET /apps/{pkg}` 看单个包的来源与解析值。
 
 B. 新建模板并绑定包名
 1) `POST /config/validate` 先校验要写入的模板（可选但推荐）。

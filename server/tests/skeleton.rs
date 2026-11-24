@@ -147,7 +147,8 @@ async fn status_with_read_token_returns_snapshot() {
             "apps",
             "packages",
             "device",
-            "validate"
+            "validate",
+            "overview"
         ])
     );
 }

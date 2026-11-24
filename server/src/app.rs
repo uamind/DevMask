@@ -168,6 +168,7 @@ pub fn router(state: AppState) -> Router {
     let read_routes = guarded(
         Router::new()
             .route("/status", get(api::status))
+            .route("/overview", get(api::overview::get_overview))
             .route("/schema/config", get(api::schema::get_config_schema))
             .route("/config", get(api::config::get_config))
             .route("/config/revision", get(api::config::get_revision))

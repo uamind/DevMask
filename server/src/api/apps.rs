@@ -137,28 +137,7 @@ pub async fn get(
     let config = Config::from_toml(&snapshot.text)
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
 
-    let inline = config.apps.iter().any(|app| app.package == package);
-    let templates: Vec<&str> = config.conflicting_templates_for_package(&package);
-    let source = if inline {
-        AppSource {
-            source_type: "inline",
-            template: None,
-            also_inline: !templates.is_empty(),
-        }
-    } else if let Some(name) = templates.first() {
-        AppSource {
-            source_type: "template",
-            template: Some((*name).to_owned()),
-            also_inline: false,
-        }
-    } else {
-        AppSource {
-            source_type: "none",
-            template: None,
-            also_inline: false,
-        }
-    };
-
+    let source = source_for(&config, &package);
     let installed = state.packages().is_installed(base_package(&package));
     let resolved = match config.get_merged_config(&package) {
         Some(merged) => {
@@ -175,23 +154,7 @@ pub async fn get(
             Some(json!({ "package": package })),
         ));
     }
-    if installed == Some(false) {
-        warnings.push(Warning::new(
-            "package_not_installed",
-            format!("包名 {package} 当前未安装，配置仍会保留"),
-            Some(json!({ "package": package })),
-        ));
-    }
-    if templates.len() > 1 {
-        warnings.push(Warning::new(
-            "duplicate_package",
-            format!("{package} 同时被 {} 声明", templates.join(" 与 ")),
-            Some(json!({
-                "package": package,
-                "templates": templates,
-            })),
-        ));
-    }
+    warnings.extend(warnings_for(&config, &package, installed));
 
     let body = AppResponse {
         package: package.clone(),
@@ -484,6 +447,59 @@ pub async fn restart(
         }),
     );
     Ok(response)
+}
+
+/// 包名来源：内联记录优先，其次按模板书写顺序取第一个命中的模板。
+pub(crate) fn source_for(config: &Config, package: &str) -> AppSource {
+    let inline = config.apps.iter().any(|app| app.package == package);
+    let templates = config.conflicting_templates_for_package(package);
+    if inline {
+        AppSource {
+            source_type: "inline",
+            template: None,
+            also_inline: !templates.is_empty(),
+        }
+    } else if let Some(name) = templates.first() {
+        AppSource {
+            source_type: "template",
+            template: Some((*name).to_owned()),
+            also_inline: false,
+        }
+    } else {
+        AppSource {
+            source_type: "none",
+            template: None,
+            also_inline: false,
+        }
+    }
+}
+
+/// 包级警告：未安装、被多个模板声明。`no_config` 由调用方按场景决定是否追加。
+pub(crate) fn warnings_for(
+    config: &Config,
+    package: &str,
+    installed: Option<bool>,
+) -> Vec<Warning> {
+    let templates = config.conflicting_templates_for_package(package);
+    let mut warnings = Vec::new();
+    if installed == Some(false) {
+        warnings.push(Warning::new(
+            "package_not_installed",
+            format!("包名 {package} 当前未安装，配置仍会保留"),
+            Some(json!({ "package": package })),
+        ));
+    }
+    if templates.len() > 1 {
+        warnings.push(Warning::new(
+            "duplicate_package",
+            format!("{package} 同时被 {} 声明", templates.join(" 与 ")),
+            Some(json!({
+                "package": package,
+                "templates": templates,
+            })),
+        ));
+    }
+    warnings
 }
 
 fn parse_app_config(value: &Value, package: &str, request_id: &str) -> Result<AppConfig, ApiError> {

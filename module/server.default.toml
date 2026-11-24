@@ -32,12 +32,14 @@ write_rate_per_min = 30
 
 # Token 占位：只存 sha256，不存明文。
 #
-# 首次启动（bind 是 loopback 且没有任何 Token）时，服务会自动生成一个
-# id=default、name=owner、scopes=[read, write, ops, admin] 的 Token，
-# 明文只打印一次到 /data/adb/device_faker/logs/server.log 的横幅里：
+# 首次启动（bind 是 loopback 且没有任何 Token）时，服务会写入默认 Token
+# admin123（id=default、name=owner、scopes=[read, write, ops, admin]），
+# 明文同时打印到 /data/adb/device_faker/logs/server.log 的横幅里：
 #   grep 'initial token' /data/adb/device_faker/logs/server.log
 #
-# 想自己指定 Token 时，生成哈希并取消下面的注释（scopes 按需裁剪）：
+# 修改 Token 的两种方式：
+#   1. 管理器 WebUI → 设置 → 外部访问 → 「访问 Token」填值后保存（推荐，自动算哈希）；
+#   2. 自己生成哈希并取消下面的注释（scopes 按需裁剪）：
 #   TOKEN=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')
 #   echo "$TOKEN"
 #   printf '%s' "$TOKEN" | sha256sum

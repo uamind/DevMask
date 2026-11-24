@@ -224,6 +224,8 @@ export interface Backend {
   getServerControlStatus(): Promise<string>
   /** 生成一个只返回、不落盘的访问 Token 与其 sha256。 */
   generateServerToken(): Promise<ServerTokenPair>
+  /** 计算任意 Token 的 sha256，返回明文与 `sha256:` 前缀哈希（管理器模式写 server.toml 用）。 */
+  hashServerToken(token: string): Promise<ServerTokenPair>
   /** 可用于局域网访问的本机 IPv4 列表。 */
   getLanAddresses(): Promise<string[]>
 

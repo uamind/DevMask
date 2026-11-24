@@ -5,10 +5,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  DEFAULT_ACCESS_TOKEN,
   appendTokenBlock,
   applyServerSettings,
   formatLanUrls,
   isValidPort,
+  isValidToken,
   normalizePort,
   parseDhcpProps,
   parseIpAddrOutput,
@@ -99,6 +101,21 @@ test('appendTokenBlock 补齐 sha256 前缀且只追加一条', () => {
   assert.match(out, new RegExp('hash = "sha256:' + hash + '"'))
   assert.equal(parseServerSettings(out).tokenCount, 1)
   assert.equal(parseServerSettings(out).hasToken, true)
+})
+
+test('默认 Token 为 admin123 且可校验自定义 Token', () => {
+  assert.equal(DEFAULT_ACCESS_TOKEN, 'admin123')
+  assert.equal(isValidToken('admin123'), true)
+  assert.equal(isValidToken('my-phone_token.1'), true)
+  assert.equal(isValidToken(''), false)
+  assert.equal(isValidToken('has space'), false)
+  assert.equal(isValidToken('a'.repeat(129)), false)
+})
+
+test('appendTokenBlock 使用 default id', () => {
+  const out = appendTokenBlock('bind = "127.0.0.1:8686"\n', 'a'.repeat(64))
+  assert.match(out, /id = "default"/)
+  assert.doesNotMatch(out, /id = "ui"/)
 })
 
 test('格式局域网地址与接口解析', () => {

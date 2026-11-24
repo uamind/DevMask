@@ -110,6 +110,9 @@ export function createReadOnlyBackend(): Backend {
     generateServerToken: async (): Promise<ServerTokenPair> => {
       throw readOnlyError('生成访问 Token')
     },
+    hashServerToken: async (_token: string): Promise<ServerTokenPair> => {
+      throw readOnlyError('修改访问 Token')
+    },
     getLanAddresses: async (): Promise<string[]> => {
       throw readOnlyError('读取本机地址')
     },
@@ -193,6 +196,7 @@ function createLazyBackend(): Backend {
     restartServer: async () => (await resolve()).restartServer(),
     getServerControlStatus: async () => (await resolve()).getServerControlStatus(),
     generateServerToken: async () => (await resolve()).generateServerToken(),
+    hashServerToken: async (token: string) => (await resolve()).hashServerToken(token),
     getLanAddresses: async () => (await resolve()).getLanAddresses(),
     openDeepLink: async (url: string, options?: DeepLinkOptions) =>
       (await resolve()).openDeepLink(url, options),

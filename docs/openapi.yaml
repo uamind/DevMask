@@ -62,7 +62,7 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
-                version: 1.8.0
+                version: 1.9.0
                 uptimeSec: 3600
         '500':
           $ref: '#/components/responses/InternalError'
@@ -88,9 +88,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/StatusResponse'
               example:
-                module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
                 device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-                server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
                 config:
                   revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
                   mtime: '2026-11-24T03:00:00Z'
@@ -99,7 +99,59 @@ paths:
                   templates: 26
                   apps: 27
                   conflicts: 0
-                capabilities: [config, templates, apps, packages, device, validate]
+                capabilities: [config, templates, apps, packages, device, validate, overview]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ForbiddenScope'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/overview:
+    get:
+      tags:
+        - System
+      operationId: getOverview
+      summary: 设备、模板与每个应用配置的汇总
+      description: |
+        一次返回设备 Build 摘要与物理 fingerprint、模块/服务/配置状态、全部模板，
+        以及每个已配置包名的来源（inline / template）与最终生效值（含 Build.FINGERPRINT）。
+        只包含「已配置」的包，不枚举整台设备；适合 AI 一次读取全局状态。
+      responses:
+        '200':
+          description: 汇总快照
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            X-DF-Revision:
+              $ref: '#/components/headers/XDFRevision'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverviewResponse'
+              example:
+                revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+                device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
+                root: {manager: kernelsu, version: 1.0.7}
+                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+                config: {revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5', mtime: '2026-11-24T03:00:00Z', size: 9361, exists: true, templates: 2, apps: 1, conflicts: 1}
+                templates:
+                  - name: pixel_9
+                    position: 0
+                    packages: [com.example.app, com.example.shared]
+                    config: {brand: google, model: Pixel 9, dpi: 420}
+                apps:
+                  - package: com.example.app
+                    installed: true
+                    source: {type: template, template: pixel_9, alsoInline: false}
+                    resolved: {brand: google, model: Pixel 9, dpi: 420}
+                    warnings: []
+                  - package: com.example.shared
+                    installed: true
+                    source: {type: template, template: pixel_9, alsoInline: false}
+                    resolved: {brand: google, model: Pixel 9, dpi: 420}
+                    warnings: [{code: duplicate_package, message: 'com.example.shared 同时被 pixel_9 与 pixel_9_pro 声明', details: {package: com.example.shared, templates: [pixel_9, pixel_9_pro]}}]
+                warnings: [{code: duplicate_package, message: 'com.example.shared 同时被 pixel_9 与 pixel_9_pro 声明', details: {package: com.example.shared, templates: [pixel_9, pixel_9_pro]}}]
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1153,7 +1205,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceResponse'
               example:
-                module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
                 device:
                   manufacturer: Google
                   brand: google
@@ -1163,7 +1215,7 @@ paths:
                   sdk: 37
                   abi: arm64-v8a
                   fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'
-                server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
                 root: {manager: kernelsu, version: 1.0.7}
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1729,7 +1781,7 @@ components:
           minimum: 0
           description: 服务已运行秒数
           example: 3600
-      example: {status: ok, version: 1.8.0, uptimeSec: 3600}
+      example: {status: ok, version: 1.9.0, uptimeSec: 3600}
     ModuleInfo:
       type: object
       description: 模块信息，来自 module.prop
@@ -1748,7 +1800,7 @@ components:
           type: integer
           description: 模块版本号
           example: 20261109
-      example: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+      example: {id: device_faker, version: v1.9.0, versionCode: 20261125}
     DeviceSummary:
       type: object
       description: 设备 Build 摘要
@@ -1762,7 +1814,7 @@ components:
         android: {type: string, description: Build.VERSION.RELEASE, example: '17'}
         sdk: {type: integer, description: Build.VERSION.SDK_INT, example: 37}
         abi: {type: string, description: 服务运行的 ABI, example: arm64-v8a}
-        fingerprint: {type: string, description: Build.FINGERPRINT（/device 返回，/status 省略）, example: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
+        fingerprint: {type: string, description: Build.FINGERPRINT（/device 与 /overview 返回，/status 省略）, example: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
       example:
         manufacturer: Google
         brand: google
@@ -1782,7 +1834,7 @@ components:
         uptimeSec: {type: integer, minimum: 0, description: 已运行秒数, example: 3600}
         startedAt: {type: string, format: date-time, description: 启动时间（UTC）, example: '2026-11-24T03:00:00Z'}
         pid: {type: integer, description: 进程 pid, example: 4321}
-      example: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+      example: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
     ConfigStatus:
       type: object
       description: 配置文件的 revision 与统计；配置文件不存在（exists=false）时 mtime 为 null、size 为 0、revision 为空内容字节的 SHA-256
@@ -1826,12 +1878,12 @@ components:
           description: 已实现能力标签
           items:
             type: string
-            enum: [config, templates, apps, packages, device, validate]
-          example: [config, templates, apps, packages, device, validate]
+            enum: [config, templates, apps, packages, device, validate, overview]
+          example: [config, templates, apps, packages, device, validate, overview]
       example:
-        module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+        module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-        server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+        server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
         config:
           revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
           mtime: '2026-11-24T03:00:00Z'
@@ -1840,7 +1892,76 @@ components:
           templates: 26
           apps: 27
           conflicts: 0
-        capabilities: [config, templates, apps, packages, device, validate]
+        capabilities: [config, templates, apps, packages, device, validate, overview]
+    OverviewResponse:
+      type: object
+      description: 设备、模板与每个已配置应用的有效配置汇总
+      required: [revision, module, device, root, server, config, templates, apps, warnings]
+      additionalProperties: false
+      properties:
+        revision:
+          type: string
+          description: 当前配置 revision
+          example: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+        module:
+          $ref: '#/components/schemas/ModuleInfo'
+        device:
+          $ref: '#/components/schemas/DeviceSummary'
+        root:
+          $ref: '#/components/schemas/RootInfo'
+        server:
+          $ref: '#/components/schemas/ServerInfo'
+        config:
+          $ref: '#/components/schemas/ConfigStatus'
+        templates:
+          type: array
+          description: 全部模板
+          items:
+            $ref: '#/components/schemas/TemplateOverview'
+        apps:
+          type: array
+          description: 每个已配置包名的来源与最终生效值
+          items:
+            $ref: '#/components/schemas/AppOverview'
+        warnings:
+          type: array
+          description: 配置级警告
+          items:
+            $ref: '#/components/schemas/Warning'
+    TemplateOverview:
+      type: object
+      description: 模板概览
+      required: [name, position, packages, config]
+      additionalProperties: false
+      properties:
+        name: {type: string, description: 模板名, example: pixel_9}
+        position: {type: integer, minimum: 0, description: 0 基书写位置, example: 0}
+        packages:
+          type: array
+          description: 绑定包名
+          items: {type: string}
+          example: [com.example.app]
+        config:
+          type: object
+          description: 模板原始字段（不含 packages）
+          additionalProperties: true
+          example: {brand: google, model: Pixel 9, dpi: 420}
+    AppOverview:
+      type: object
+      description: 应用概览
+      required: [package, installed, source, resolved, warnings]
+      additionalProperties: false
+      properties:
+        package: {type: string, description: 包名, example: com.example.app}
+        installed: {type: [boolean, 'null'], description: 是否已安装；pm 不可用时为 null}
+        source:
+          $ref: '#/components/schemas/AppSource'
+        resolved:
+          $ref: '#/components/schemas/AppResolved'
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Warning'
     ConfigDocument:
       type: object
       description: |
@@ -2419,9 +2540,9 @@ components:
         root:
           $ref: '#/components/schemas/RootInfo'
       example:
-        module: {id: device_faker, version: v1.7.0, versionCode: 20261109}
+        module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
-        server: {version: 1.8.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+        server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
         root: {manager: kernelsu, version: 1.0.7}
     DevicePropsResponse:
       type: object

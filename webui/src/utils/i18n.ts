@@ -406,6 +406,11 @@ export const messages = {
           label: '端口',
           desc: '取值 1-65535，默认 8686',
         },
+        token_input: {
+          label: '访问 Token',
+          desc: '留空表示不修改；默认 admin123，保存后立即生效',
+          placeholder: 'admin123',
+        },
         bind: '监听地址',
         status: '服务状态',
         status_running: '运行中',
@@ -414,10 +419,10 @@ export const messages = {
         lan: '局域网访问地址',
         lan_empty: '未检测到局域网地址，请确认已连接 Wi-Fi',
         token_present: '已配置访问 Token',
-        token_missing: '未配置访问 Token，开启外部访问时会自动生成',
+        token_missing: '未配置访问 Token，开启外部访问时会写入默认 admin123',
         actions: {
           apply: '保存并重启服务',
-          reset_token: '重置访问 Token',
+          reset_token: '重置为默认 Token',
           refresh: '刷新状态',
         },
         token_dialog: {
@@ -433,6 +438,7 @@ export const messages = {
         },
         errors: {
           invalid_port: '端口必须是 1-65535 的整数',
+          invalid_token: 'Token 不能为空、不能含空白或控制字符，且不超过 128 个字符',
           apply_failed: '保存服务设置失败',
           read_failed: '读取 server.toml 失败',
           token_failed: 'Token 生成失败',
@@ -864,6 +870,11 @@ export const messages = {
           label: 'Port',
           desc: '1-65535, default 8686',
         },
+        token_input: {
+          label: 'Access token',
+          desc: 'Leave blank to keep the current one; default is admin123, applied on save',
+          placeholder: 'admin123',
+        },
         bind: 'Bind address',
         status: 'Service status',
         status_running: 'Running',
@@ -872,10 +883,11 @@ export const messages = {
         lan: 'LAN addresses',
         lan_empty: 'No LAN address detected; make sure Wi-Fi is connected',
         token_present: 'Access token configured',
-        token_missing: 'No access token yet; one is generated when you enable external access',
+        token_missing:
+          'No access token yet; the default admin123 is written when you enable external access',
         actions: {
           apply: 'Save and restart service',
-          reset_token: 'Reset access token',
+          reset_token: 'Reset to default token',
           refresh: 'Refresh status',
         },
         token_dialog: {
@@ -891,6 +903,7 @@ export const messages = {
         },
         errors: {
           invalid_port: 'Port must be an integer between 1 and 65535',
+          invalid_token: 'Token must be 1-128 characters without whitespace or control characters',
           apply_failed: 'Failed to save service settings',
           read_failed: 'Failed to read server.toml',
           token_failed: 'Failed to generate token',
@@ -1330,6 +1343,11 @@ export const messages = {
           label: 'Bağlantı noktası',
           desc: '1-65535, varsayılan 8686',
         },
+        token_input: {
+          label: 'Erişim anahtarı',
+          desc: 'Boş bırakırsanız değişmez; varsayılan admin123, kaydedince uygulanır',
+          placeholder: 'admin123',
+        },
         bind: 'Dinleme adresi',
         status: 'Servis durumu',
         status_running: 'Çalışıyor',
@@ -1338,10 +1356,10 @@ export const messages = {
         lan: 'Yerel ağ adresleri',
         lan_empty: 'Yerel ağ adresi bulunamadı; Wi-Fi bağlantısını kontrol edin',
         token_present: 'Erişim anahtarı tanımlı',
-        token_missing: 'Erişim anahtarı yok; harici erişim açılırken otomatik oluşturulur',
+        token_missing: 'Erişim anahtarı yok; harici erişim açılırken varsayılan admin123 yazılır',
         actions: {
           apply: 'Kaydet ve servisi yeniden başlat',
-          reset_token: 'Erişim anahtarını sıfırla',
+          reset_token: 'Varsayılan anahtara sıfırla',
           refresh: 'Durumu yenile',
         },
         token_dialog: {
@@ -1357,6 +1375,7 @@ export const messages = {
         },
         errors: {
           invalid_port: 'Bağlantı noktası 1-65535 arasında bir tam sayı olmalı',
+          invalid_token: 'Anahtar 1-128 karakter olmalı; boşluk veya kontrol karakteri içermemeli',
           apply_failed: 'Servis ayarları kaydedilemedi',
           read_failed: 'server.toml okunamadı',
           token_failed: 'Anahtar oluşturulamadı',

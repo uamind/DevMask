@@ -36,14 +36,14 @@
 
 首次启动（`bind` 是 loopback 且 `server.toml` 里一个 Token 都没有）时，服务会：
 
-1. 生成一个 `df_` + 43 字符 base64url 的 Token（`id = default`、`name = owner`、`scopes = [read, write, ops, admin]`）；
+1. 写入默认 Token `admin123`（`id = default`、`name = owner`、`scopes = [read, write, ops, admin]`）；
 2. 只把 **sha256** 写进 `server.toml`（原子写，`0600`）；
 3. 明文往 **stdout 打印一次**，`service.sh` 把 stdout 重定向进 `logs/server.log`：
 
 ```sh
 # 手机（root）上取出 Token
 su -c "grep 'initial token' /data/adb/device_faker/logs/server.log"
-# [device-faker-server] initial token = df_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# [device-faker-server] initial token = admin123
 ```
 
 拿到后用法：
@@ -54,11 +54,15 @@ curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8686/api/v1/status
 
 注意事项：
 
-- 明文**只出现这一次**（重启不会重新生成，也不会再打印）；丢了就删掉 `server.toml` 里对应的 `[[tokens]]` 条目再重启服务，会重新生成；
+- 明文**只出现这一次**（重启不会重新生成，也不会再打印）；丢了就在 WebUI 里重设，或删掉 `server.toml` 里对应的 `[[tokens]]` 条目再重启服务（会写回 `admin123`）；
+- 覆盖安装不会覆盖已有的 `server.toml`：旧 Token 继续有效；要换成默认值，在 WebUI 的「访问 Token」填 `admin123` 保存，或点 Reset；
 - `bind` 不是 loopback 时**不会**自动生成，且没有 Token 会直接拒绝启动（避免管理面无认证暴露到网络）；
 - 作用域不隐含：`write` 不含 `read`，`admin` 是四个作用域的并集，按需给。
 
-想自己指定 Token：
+想自己指定 Token（任选一种）：
+
+- 管理器 WebUI → 设置 → 外部访问 → 「访问 Token」填值后保存（自动算 sha256、写盘、重启）；
+- 或用下面的命令自己算哈希后写 `server.toml`：
 
 ```sh
 TOKEN=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')
@@ -146,9 +150,10 @@ WebUI 会自动选择传输层：服务端注入的 `window.__DF_SERVER__` 存�
 
 | 操作 | 行为 |
 | --- | --- |
-| 打开开关 + 端口 → Save | 把 `bind` 改为 `0.0.0.0:<port>`、`allow_lan = true`；缺 Token 时自动生成 `df_…` 并以哈希写入 `[[tokens]]`；执行 `service.sh restart`；明文只在弹窗显示一次 |
+| 打开开关 + 端口 → Save | 把 `bind` 改为 `0.0.0.0:<port>`、`allow_lan = true`；缺 Token 时写入默认 `admin123` 的哈希；执行 `service.sh restart`；明文只在弹窗显示一次 |
 | 关闭开关 → Save | 改为 `bind = "127.0.0.1:<port>"`、`allow_lan = false`；保留已有 Token |
-| Reset token | 清空所有 `[[tokens]]`，写入一条新的 `id="ui"` 全量作用域 Token，重启并只显示一次明文 |
+| 访问 Token 输入框 + Save | 非空时清空所有 `[[tokens]]`，写入该 Token 的 sha256（`id="default"`、全量作用域），重启服务 |
+| Reset token | 清空所有 `[[tokens]]`，写回默认 `admin123`，重启服务 |
 | Refresh | 读取 `service.sh status` 与 `ip -4 addr` 的 wlan/eth/ap 地址，列出 `http://<IP>:<port>` |
 
 写盘保留 `server.toml` 的注释与未知字段，权限固定 `0600`。卡片上的「服务状态」

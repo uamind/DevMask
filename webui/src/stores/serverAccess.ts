@@ -8,10 +8,12 @@ import { backend, isUnsupportedError } from '../backend'
 import { notify } from '../components/shared/notify'
 import { useI18n } from '../utils/i18n'
 import {
+  DEFAULT_ACCESS_TOKEN,
   appendTokenBlock,
   applyServerSettings,
   formatLanUrls,
   isValidPort,
+  isValidToken,
   normalizePort,
   parseServerSettings,
   stripTokenBlocks,
@@ -43,6 +45,8 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
 
   const allowLan = ref(false)
   const port = ref(8686)
+  /** 用户输入的新 Token；留空表示不修改。 */
+  const tokenDraft = ref('')
 
   const tokenDialogVisible = ref(false)
   const generatedToken = ref('')
@@ -158,6 +162,12 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
       return false
     }
 
+    const customToken = tokenDraft.value.trim()
+    if (customToken && !isValidToken(customToken)) {
+      error.value = t('settings.serverAccess.errors.invalid_token')
+      return false
+    }
+
     saving.value = true
     error.value = null
     try {
@@ -167,8 +177,12 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
         port: normalizePort(port.value),
       })
 
-      if (allowLan.value && !parseServerSettings(nextText).hasToken) {
-        const pair = await backend.generateServerToken()
+      // 优先级：用户输入 > 缺 Token 时的默认 admin123 > 保留已有 Token。
+      const tokenToApply =
+        customToken ||
+        (allowLan.value && !parseServerSettings(nextText).hasToken ? DEFAULT_ACCESS_TOKEN : '')
+      if (tokenToApply) {
+        const pair = await backend.hashServerToken(tokenToApply)
         nextText = appendTokenBlock(stripTokenBlocks(nextText), pair.hash)
         generatedToken.value = pair.token
         tokenDialogVisible.value = true
@@ -178,6 +192,7 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
       await backend.restartServer()
       await waitForServerRunning()
       await load()
+      tokenDraft.value = ''
 
       if (status.value === 'stopped') {
         error.value = t('settings.serverAccess.errors.server_not_running')
@@ -196,7 +211,7 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
     }
   }
 
-  /** 重置访问 Token：清空旧 [[tokens]]，写入新哈希，重启服务后只显示一次明文。 */
+  /** 重置访问 Token：清空旧 [[tokens]]，写回默认 admin123，重启服务。 */
   async function resetToken(): Promise<boolean> {
     if (!supported.value) return false
 
@@ -204,13 +219,14 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
     error.value = null
     try {
       const base = await readBaseConfig()
-      const pair = await backend.generateServerToken()
+      const pair = await backend.hashServerToken(DEFAULT_ACCESS_TOKEN)
       const nextText = appendTokenBlock(stripTokenBlocks(base), pair.hash)
 
       await backend.writeServerConfig(nextText)
       await backend.restartServer()
       await waitForServerRunning()
       await load()
+      tokenDraft.value = ''
 
       generatedToken.value = pair.token
       tokenDialogVisible.value = true
@@ -250,6 +266,7 @@ export const useServerAccessStore = defineStore('serverAccess', () => {
     lanAddresses,
     allowLan,
     port,
+    tokenDraft,
     tokenDialogVisible,
     generatedToken,
     hasToken,
