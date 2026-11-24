@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "server", "xtask"]
+members = ["core", "manager", "server", "xtask"]
 exclude = ["device_faker_cli"]
 
 [package]

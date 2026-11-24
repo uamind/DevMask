@@ -1,0 +1,2 @@
+=== 2026-11-24T18:43:35+0800 R6 oversized device read ===
+HTTP 422 code= device_probe_failed reason= invalid_response

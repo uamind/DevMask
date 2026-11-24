@@ -1,0 +1,67 @@
+=== 2026-11-24T18:42:42+0800 t14 binary probes ===
+## R4a healthz 200 no-store
+HTTP/1.1 200 OK cache-control: no-store
+## R4b 401 no-store
+HTTP HTTP/1.1 401 Unauthorized cache-control: no-store code=unauthorized
+## R4c root POST /healthz 405 JSON no-store
+HTTP HTTP/1.1 405 Method Not Allowed cache-control: no-store code=method_not_allowed
+## R5 rotate malformed bodies (before any rotation)
+body=[]: HTTP 422 error=validation_failed tokenField=false tokenFile=absent oldToken=200 cache=cache-control: no-store
+malformed={: HTTP 422 error=validation_failed tokenField=false tokenFile=absent oldToken=200 cache=cache-control: no-store
+unknownField: HTTP 422 error=validation_failed tokenField=false tokenFile=absent oldToken=200 cache=cache-control: no-store
+textPlain: HTTP 415 error=unsupported_media_type tokenField=false tokenFile=absent oldToken=200 cache=cache-control: no-store
+## R1/R2 add mock device
+add HTTP 201 id=mock-t14 online=true
+## R2 first apply (Python mock forces one 412): expect attempts=2
+HTTP HTTP/1.1 202 Accepted cache-control: no-store job=job_01a20d26978571a685f487fd6f5939a8
+{"status":"succeeded","results":[{"deviceId":"mock-t14","status":"ok","code":null,"httpStatus":200,"attempts":2,"steps":[{"step":"revision","status":"ok","httpStatus":200},{"step":"template_get","status":"skipped","httpStatus":404},{"step":"template_put","status":"ok","httpStatus":201},{"step":"revision","status":"ok","httpStatus":200},{"step":"bind","status":"failed","httpStatus":412},{"step":"revision","status":"ok","httpStatus":200},{"step":"bind","status":"ok","httpStatus":200}]}]}
+## R2 second apply (412 consumed): expect attempts=1
+HTTP HTTP/1.1 202 Accepted cache-control: no-store job=job_01a20d2697cc72259ffa0d9a798893b7
+{"status":"succeeded","results":[{"deviceId":"mock-t14","status":"ok","code":null,"httpStatus":200,"attempts":1,"steps":[{"step":"revision","status":"ok","httpStatus":200},{"step":"template_get","status":"skipped","httpStatus":404},{"step":"template_put","status":"ok","httpStatus":201},{"step":"revision","status":"ok","httpStatus":200},{"step":"bind","status":"ok","httpStatus":200}]}]}
+templates now: {"packages":null,"model":"Pixel 9 Pro"}
+## R3 expired idempotency key replays same job
+first=job_01a20d2698427010b785b45fc6684aa1 replayHTTP=202 replayJob=job_01a20d2698427010b785b45fc6684aa1 replayHeader=idempotent-replay: true
+## R3 concurrent same key: expect 3x202 same job
+codes=202202202 jobs=job_01a20d2698d176d897d27d2b703777bd distinct=1
+## R3 413 body limit no-store
+HTTP 413 cache-control: no-store code=body_too_large
+## R8 audit since +08:00 vs Z
+## R4d rotate 200 no-store (after malformed bodies)
+HTTP 200 cache-control: no-store persisted=true tokenFile=present
+oldToken HTTP 401 newToken HTTP 200
+## R7 manager.token unreadable must fail closed
+exit= 1
+stderr= error: 加载配置失败: 读取 /tmp/dfm-t14-unreadable/manager.token 失败：Permission denied (os error 13): Permission denied (os error 13)
+=== done 2026-11-24T18:42:43+0800 ===
+
+## R1 binary GET template shape (real device endpoint through proxy)
+{"name":"pixel_9","template":{"model":"Pixel 9","packages":[]}}
+## R6 binary oversized overview probe (9 MiB from a local device stub)
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 64575)
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/socketserver.py", line 315, in _handle_request_noblock
+    self.process_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/socketserver.py", line 346, in process_request
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/socketserver.py", line 359, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/socketserver.py", line 763, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/http/server.py", line 474, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/http/server.py", line 462, in handle_one_request
+    method()
+    ~~~~~~^^
+  File "<stdin>", line 18, in do_GET
+  File "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/socketserver.py", line 842, in write
+    self._sock.sendall(b)
+    ~~~~~~~~~~~~~~~~~~^^^
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+HTTP 422 code= device_probe_failed reason= invalid_response

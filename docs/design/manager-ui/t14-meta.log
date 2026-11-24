@@ -1,0 +1,57 @@
+=== date ===
+2026-11-24T18:43:47+0800
+=== git ===
+d9aa881
+ M Cargo.lock
+ M Cargo.toml
+?? docs/design/
+?? docs/plans/
+?? manager/
+=== data dir ===
+total 764
+drwx------   7 crymang wheel    224 Nov 24 18:42 .
+drwxrwxrwt 774 root    wheel  24768 Nov 24 18:43 ..
+-rw-------   1 crymang wheel   4096 Nov 24 18:42 manager.db
+-rw-------   1 crymang wheel  32768 Nov 24 18:42 manager.db-shm
+-rw-------   1 crymang wheel 679832 Nov 24 18:43 manager.db-wal
+-rw-------   1 crymang wheel     32 Nov 24 18:42 manager.key
+-rw-------   1 crymang wheel     36 Nov 24 18:42 manager.token
+=== token file mode ===
+  File: /tmp/dfm-t14/manager.token
+    ID: 10000120000001a Namelen: ?       Type: apfs
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 120699413  Free: 16271417   Available: 16271417
+Inodes: Total: 654321358  Free: 650856680
+=== db counts ===
+devices|1
+jobs|4
+audit|14
+=== audit actions ===
+apply.bulk|ok|4
+auth.failed|failed|2
+device.add|failed|2
+device.add|ok|1
+job.finished|ok|4
+token.rotate|ok|1
+=== manager log ===
+2026-11-24T10:42:16.991159Z  WARN 正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换
+2026-11-24T10:42:16.991353Z  INFO Device Faker Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dfm-t14 token_source="default"
+2026-11-24T10:42:16.998069Z  INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dfm-t14/manager.key
+2026-11-24T10:42:17.003619Z  INFO 静态托管已启用 dir=manager/webui/dist
+2026-11-24T10:42:17.006344Z  INFO Manager 已就绪 address=127.0.0.1:8765
+=== mock log ===
+mock device on http://127.0.0.1:18687 token=admin123
+=== new test names ===
+120:async fn r1_object_template_keeps_other_bindings_and_packages() {
+263:async fn r2_object_template_binds_in_one_attempt() {
+297:async fn r2_forced_412_retries_bind_exactly_once() {
+334:async fn r3_expired_idempotency_key_replays_same_job() {
+384:async fn r3_concurrent_idempotency_keys_share_one_job() {
+435:async fn r4_every_api_response_is_no_store() {
+526:async fn r5_malformed_rotate_bodies_never_rotate() {
+624:async fn r6_oversized_device_reads_are_rejected() {
+673:async fn r8_audit_since_offset_equals_utc() {
+760:async fn r9_templates_device_filter_returns_that_device_config() {
+859:async fn low_template_put_412_retries_once() {
+890:async fn low_bind_404_template_is_skipped() {
+1045:async fn low_proxy_preserves_encoded_question_mark_as_path() {

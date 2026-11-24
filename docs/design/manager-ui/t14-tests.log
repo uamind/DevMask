@@ -1,0 +1,198 @@
+=== 2026-11-24T18:42:58+0800 t14 checks ===
+## cargo fmt --check
+EXIT=0
+
+## cargo clippy -p device_faker_manager --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
+EXIT=0
+
+## cargo test -p device_faker_manager
+   Compiling device_faker_manager v0.1.0 (/Users/crymang/Works/device_faker/manager)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.11s
+     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-ef33d6ec8213c0d5)
+
+running 56 tests
+test api::job_dto::tests::accepted_response_exposes_queued ... ok
+test api::apply::tests::error_payload_shape ... ok
+test api::apply::tests::validates_idempotency_keys ... ok
+test api::apply::tests::validates_package_names ... ok
+test api::apply::tests::validates_template_names ... ok
+test api::proxy::tests::rejects_traversal_segments ... ok
+test api::token::tests::validates_custom_tokens ... ok
+test args::tests::help_text_mentions_defaults ... ok
+test api::query::tests::missing_values_are_none ... ok
+test api::proxy::tests::extracts_upstream_error_code ... ok
+test api::aggregate::tests::aggregate_revision_changes_with_device_set ... ok
+test auth::tests::constant_time_comparison_matches_equality ... ok
+test auth::tests::parses_bearer_header ... ok
+test config::tests::allows_default_token_on_loopback ... ok
+test config::tests::concurrency_range_is_enforced ... ok
+test config::tests::rejects_default_token_on_non_loopback ... ok
+test args::tests::rejects_unknown_flag ... ok
+test api::token::tests::generated_token_has_contract_shape ... ok
+test api::job_dto::tests::job_response_includes_duration_and_results ... ok
+test api::query::tests::parses_repeated_and_typed_values ... ok
+test args::tests::rejects_missing_value ... ok
+test api::query::tests::rejects_invalid_booleans_and_numbers ... ok
+test config::tests::token_precedence_is_cli_env_file_config_default ... ok
+test args::tests::parses_flags_and_values ... ok
+test db::tests::device_crud_roundtrip ... ok
+test crypto::tests::encrypts_and_decrypts_roundtrip ... ok
+test crypto::tests::debug_does_not_leak_key_material ... ok
+test db::tests::migrates_and_reports_health ... ok
+test config::tests::static_site_requires_index ... ok
+test crypto::tests::rejects_bad_key_length ... ok
+test crypto::tests::tampered_ciphertext_fails ... ok
+test crypto::tests::wrong_device_id_fails ... ok
+test device_client::tests::joins_api_paths ... ok
+test crypto::tests::key_file_is_32_bytes_and_reloaded ... ok
+test config::tests::token_file_missing_is_none_but_unreadable_is_error ... ok
+test device_client::tests::maps_probe_failures ... ok
+test crypto::tests::rejects_unknown_prefix ... ok
+test device_client::tests::rejects_overview_without_device ... ok
+test ids::tests::request_and_job_ids_have_expected_shape ... ok
+test ids::tests::slug_falls_back_for_non_ascii_names ... ok
+test ids::tests::slugifies_names ... ok
+test ids::tests::timestamp_is_rfc3339_z ... ok
+test ids::tests::validates_device_ids ... ok
+test ids::tests::validates_request_ids ... ok
+test paging::tests::cursor_roundtrip ... ok
+test paging::tests::resolves_defaults_and_ranges ... ok
+test state::tests::token_state_debug_redacts_secret ... ok
+test static_files::tests::asset_cache_is_immutable ... ok
+test static_files::tests::maps_content_types ... ok
+test static_files::tests::safe_relative_rejects_traversal ... ok
+test device_client::tests::rejects_invalid_base_urls ... ok
+test device_client::tests::normalizes_base_urls ... ok
+test static_files::tests::resolves_first_candidate_with_index ... ok
+test db::tests::writes_audit_rows ... ok
+test db::tests::overview_cache_roundtrip ... ok
+test db::tests::recovers_interrupted_jobs ... ok
+
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/main.rs (target/debug/deps/device_faker_manager-beeebe0a9f880f2c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/apply_flow.rs (target/debug/deps/apply_flow-02dd0f5c3665b1b1)
+
+running 14 tests
+test concurrent_same_idempotency_key_returns_same_job ... ok
+test bulk_apply_creates_template_then_binds ... ok
+test restart_forbidden_only_warns ... ok
+test package_not_installed_is_skipped ... ok
+test idempotency_key_replays_same_job ... ok
+test missing_template_name_is_skipped ... ok
+test expired_idempotency_key_replays_instead_of_500 ... ok
+test assignments_support_per_device_templates ... ok
+test revision_conflict_refetches_and_retries_once ... ok
+test unknown_job_and_unknown_device_are_rejected ... ok
+test template_object_overwrites_and_warns ... ok
+test offline_device_is_skipped_without_failing_request ... ok
+test apply_writes_bulk_and_assignment_audits ... ok
+test template_object_preserves_existing_packages ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/devices_flow.rs (target/debug/deps/devices_flow-39e0d763fefc75c0)
+
+running 14 tests
+test apps_without_devices_returns_empty_matrix_with_warning ... ok
+test duplicate_base_url_and_id_conflict ... ok
+test add_device_persists_metadata_and_never_returns_token ... ok
+test delete_removes_device_from_list_and_matrix ... ok
+test device_detail_and_overview_endpoints ... ok
+test patch_updates_metadata_and_rejects_bad_token ... ok
+test list_filters_and_pagination ... ok
+test apps_matrix_flags_drift_and_aggregates_revision ... ok
+test probe_failures_return_422_without_persisting ... ok
+test unknown_fields_are_rejected ... ok
+test sync_refreshes_model_and_cache ... ok
+test offline_device_is_marked_but_aggregation_still_works ... ok
+test request_timeout_marks_device_offline ... ok
+test oversized_device_overview_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/e2e_flow.rs (target/debug/deps/e2e_flow-65f9566c504ac3eb)
+
+running 4 tests
+test device_token_mismatch_is_remapped_by_proxy ... ok
+test apply_validation_rejects_empty_duplicate_and_unknown_targets ... ok
+test full_lifecycle_covers_all_relay_endpoints ... ok
+test offline_device_degrades_to_502_but_keeps_cache_readable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/manager_api.rs (target/debug/deps/manager_api-87128e6be840c133)
+
+running 17 tests
+test key_file_is_generated_private ... ok
+test method_not_allowed_returns_envelope ... ok
+test missing_dist_returns_readable_build_hint ... ok
+test device_token_encryption_roundtrips_through_state_key ... ok
+test protected_route_without_token_returns_unified_401 ... ok
+test invalid_client_request_id_is_replaced ... ok
+test auth_failure_is_audited_without_token ... ok
+test healthz_is_public_and_reports_ok ... ok
+test request_id_is_echoed_into_header_and_envelope ... ok
+test api_responses_are_no_store_and_root_healthz_is_json_405 ... ok
+test root_healthz_alias_works ... ok
+test static_route_rejects_non_get_methods ... ok
+test unknown_api_route_returns_json_404 ... ok
+test wrong_token_is_rejected ... ok
+test unknown_device_returns_device_not_found ... ok
+test valid_token_lists_empty_devices ... ok
+test serves_index_assets_and_spa_fallback ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/ops_endpoints.rs (target/debug/deps/ops_endpoints-c3fe95423b9c95bd)
+
+running 8 tests
+test token_rotate_rejects_cli_or_env_source ... ok
+test audit_supports_action_target_and_cursor_filters ... ok
+test templates_report_conflicts_between_devices ... ok
+test overview_shape_and_fleet_counts ... ok
+test templates_aggregate_shape_filters_and_conflict ... ok
+test token_rotate_persists_and_invalidates_old_token ... ok
+test proxy_forwards_methods_bodies_and_status_codes ... ok
+test jobs_list_supports_pagination_and_filters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/review_reverify.rs (target/debug/deps/review_reverify-99b2526ef16ba7ff)
+
+running 13 tests
+test r5_malformed_rotate_bodies_never_rotate ... ok
+test low_proxy_preserves_encoded_question_mark_as_path ... ok
+test r3_concurrent_idempotency_keys_share_one_job ... ok
+test r4_every_api_response_is_no_store ... ok
+test r2_object_template_binds_in_one_attempt ... ok
+test low_template_put_412_retries_once ... ok
+test r2_forced_412_retries_bind_exactly_once ... ok
+test low_bind_404_template_is_skipped ... ok
+test r3_expired_idempotency_key_replays_same_job ... ok
+test r8_audit_since_offset_equals_utc ... ok
+test r9_templates_device_filter_returns_that_device_config ... ok
+test r1_object_template_keeps_other_bindings_and_packages ... ok
+test r6_oversized_device_reads_are_rejected ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+   Doc-tests device_faker_manager
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0
+
+## versions
+rustc 1.99.0 (b940084d7 2026-09-28)
+cargo 1.99.0 (5f94df478 2026-08-27)
+v26.13.1
+11.20.0

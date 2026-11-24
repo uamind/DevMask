@@ -1,0 +1,36 @@
+=== git ===
+d9aa881
+ M Cargo.lock
+ M Cargo.toml
+?? docs/design/
+?? docs/plans/
+?? manager/
+=== data dir ===
+total 568
+drwx------   6 crymang wheel    192 Nov 24 18:08 .
+drwxrwxrwt 728 root    wheel  23296 Nov 24 18:08 ..
+-rw-r--r--   1 crymang wheel   4096 Nov 24 18:08 manager.db
+-rw-r--r--   1 crymang wheel  32768 Nov 24 18:08 manager.db-shm
+-rw-r--r--   1 crymang wheel 482072 Nov 24 18:09 manager.db-wal
+-rw-------   1 crymang wheel     32 Nov 24 18:08 manager.key
+=== db counts (after WebUI 401 test) ===
+devices|2
+overviews|2
+jobs|1
+job_results|1
+audit|11
+=== manager log ===
+2026-11-24T10:08:13.432935Z  WARN 正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换
+2026-11-24T10:08:13.433194Z  INFO Device Faker Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dfm-acceptance token_source="default"
+2026-11-24T10:08:13.438555Z  INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dfm-acceptance/manager.key
+2026-11-24T10:08:13.443732Z  INFO 静态托管已启用 dir=manager/webui/dist
+2026-11-24T10:08:13.447166Z  INFO Manager 已就绪 address=127.0.0.1:8765
+=== mock log ===
+mock device on http://127.0.0.1:18687 token=admin123
+=== token leak scan (api log) ===
+0
+=== log sizes ===
+   49 /tmp/t7-api.log
+  208 /tmp/t7-checks.log
+   51 /tmp/t7-build.log
+  308 total

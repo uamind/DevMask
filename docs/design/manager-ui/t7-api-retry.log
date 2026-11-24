@@ -1,0 +1,64 @@
+=== 2026-11-24T18:04:15+0800 API acceptance ===
+## 1) healthz (no auth)
+{"status":"ok","version":"0.1.0","apiVersion":"v1","db":{"status":"ok","schemaVersion":1,"path":"manager.db"},"devices":{"total":0,"online":0,"offline":0}}
+## 2) 401 without token
+HTTP 401
+{"code":"unauthorized","retryable":false}
+## 3) add mock device
+{"id":"mock-acceptance","name":"Mock Pixel 9 · 验收","online":true,"model":"Pixel 9","serverVersion":"1.9.0","latencyMs":1,"tags":["mock","acceptance"]}
+{"id":"mock-acceptance","name":"Mock Pixel 9 · 验收","baseUrl":"http://127.0.0.1:18687","online":true,"tags":["mock","acceptance"],"model":"Pixel 9","brand":"google","android":"17","sdk":37,"fingerprint":"google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys","root":"kernelsu","moduleVersion":"v1.9.0","serverVersion":"1.9.0","lastSeen":"2026-11-24T10:04:15Z","lastSyncedAt":"2026-11-24T10:04:15Z","latencyMs":1,"createdAt":"2026-11-24T10:04:15Z","lastError":null}
+HTTP 201
+## 4) add real Pixel 9 (read-only probe; adb forward tcp:18686)
+{"id":"pixel-9-real","name":"Pixel 9 · 真机","online":true,"model":"Pixel 9","brand":"google","android":"17","sdk":37,"serverVersion":"1.9.0","latencyMs":589}
+{"id":"pixel-9-real","name":"Pixel 9 · 真机","baseUrl":"http://127.0.0.1:18686","online":true,"tags":["real","readonly"],"model":"Pixel 9","brand":"google","android":"17","sdk":37,"fingerprint":"google/tokay/tokay:17/CP3A.261005.005/16271449:user/release-keys","root":"kernelsu","moduleVersion":"v1.9.0","serverVersion":"1.9.0","lastSeen":"2026-11-24T10:04:15Z","lastSyncedAt":"2026-11-24T10:04:15Z","latencyMs":589,"createdAt":"2026-11-24T10:04:15Z","lastError":null}
+HTTP 201
+## 5) devices list
+{"total":2,"online":2,"offline":0,"devices":[{"id":"mock-acceptance","name":"Mock Pixel 9 · 验收","online":true,"model":"Pixel 9","tags":["mock","acceptance"]},{"id":"pixel-9-real","name":"Pixel 9 · 真机","online":true,"model":"Pixel 9","tags":["real","readonly"]}]}
+## 6) real device overview (live + cached)
+{"deviceId":"pixel-9-real","online":true,"stale":false,"model":"Pixel 9","android":"17","templates":26,"apps":22}
+{"deviceId":"pixel-9-real","online":true,"stale":false,"model":"Pixel 9"}
+## 7) apps matrix
+{"totals":{"apps":23,"appsConfigured":23,"driftApps":23,"devices":2},"apps":[{"package":"cn.soulapp.android","configured":1,"total":2,"inconsistent":true,"models":["PGT-AN10"]},{"package":"com.activision.callofduty.warzone","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.blizzard.diablo.immortal","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.coolapk.market","configured":1,"total":2,"inconsistent":true,"models":["A024"]},{"package":"com.heytap.market","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.mobilelegends.mi","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.netease.newspike","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.rekoo.pubgm","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.supercell.brawlstars","configured":1,"total":2,"inconsistent":true,"models":["NX809J"]},{"package":"com.tencent.jkchess","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.lolm","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.mf.uam","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.tmgp.cf","configured":1,"total":2,"inconsistent":true,"models":["NP05J"]},{"package":"com.tencent.tmgp.cod","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.tmgp.codev","configured":1,"total":2,"inconsistent":true,"models":["V2505A"]},{"package":"com.tencent.tmgp.dfm","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.tmgp.pubgmhd","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.tmgp.sgame","configured":1,"total":2,"inconsistent":true,"models":["V2505A"]},{"package":"com.tencent.tmgp.speedmobile","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.tencent.tmgp.supercell.clashofclans","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.vng.pubgmobile","configured":1,"total":2,"inconsistent":true,"models":["PLK110"]},{"package":"com.xingin.xhs","configured":1,"total":2,"inconsistent":true,"models":["Pixel 9"]},{"package":"flar2.devcheck","configured":1,"total":2,"inconsistent":true,"models":["V2505A"]}]}
+## 8) templates
+{"total":27,"names":["IQOO15","honor_magic","honor_magic_2","honor_magic_3","honor_magic_3_pro","honor_magic_4","honor_magic_4_pro","honor_magic_4_ultimate"]}
+## 9) apply to mock only (template object, restart=true)
+{"jobId":"job_01a20d0364f074e68bc29288959a6e56","status":"queued","kind":"bulk","total":1,"queued":1,"pollUrl":"/relay/api/v1/jobs/job_01a20d0364f074e68bc29288959a6e56"}
+{"jobId":"job_01a20d0364f074e68bc29288959a6e56","status":"queued","kind":"bulk","total":1,"queued":1,"createdAt":"2026-11-24T10:04:15Z","pollUrl":"/relay/api/v1/jobs/job_01a20d0364f074e68bc29288959a6e56"}
+HTTP 202
+jq: parse error: Invalid numeric literal at line 2, column 5
+
+## RETRY note: step 9 captured 'HTTP 202' into the JSON file, so jq failed after the job was created.
+## Continue by extracting jobId from the first JSON line; no second apply is issued.
+JOB=job_01a20d0364f074e68bc29288959a6e56
+## 10) poll job
+{"id":"job_01a20d0364f074e68bc29288959a6e56","status":"succeeded","kind":"bulk","total":1,"succeeded":1,"skipped":0,"failed":0,"durationMs":0,"results":[{"deviceId":"mock-acceptance","deviceName":"Mock Pixel 9 · 验收","status":"ok","code":null,"httpStatus":200,"attempts":2,"steps":["revision","template_get","template_put","bind","revision","bind","restart"],"restartStatus":"ok"}]}
+## 11) jobs list (items canonical)
+{"total":1,"items":[{"id":"job_01a20d0364f074e68bc29288959a6e56","status":"succeeded","kind":"bulk","total":1,"succeeded":1,"skipped":0,"failed":0}],"aliasMatches":true}
+## 12) overview
+{"fleet":{"devices":2,"online":2,"offline":0,"apps":23,"appsConfigured":23,"driftApps":23,"templates":28,"averageLatencyMs":25,"jobs":{"queued":0,"running":0,"last24h":1,"failedLast24h":0}},"drift":[{"package":"cn.soulapp.android","configured":1,"total":2},{"package":"com.activision.callofduty.warzone","configured":1,"total":2},{"package":"com.blizzard.diablo.immortal","configured":1,"total":2},{"package":"com.coolapk.market","configured":1,"total":2},{"package":"com.heytap.market","configured":1,"total":2},{"package":"com.mobilelegends.mi","configured":1,"total":2},{"package":"com.netease.newspike","configured":1,"total":2},{"package":"com.rekoo.pubgm","configured":1,"total":2},{"package":"com.supercell.brawlstars","configured":1,"total":2},{"package":"com.tencent.jkchess","configured":1,"total":2},{"package":"com.tencent.lolm","configured":1,"total":2},{"package":"com.tencent.mf.uam","configured":1,"total":2},{"package":"com.tencent.tmgp.cf","configured":1,"total":2},{"package":"com.tencent.tmgp.cod","configured":1,"total":2},{"package":"com.tencent.tmgp.codev","configured":1,"total":2},{"package":"com.tencent.tmgp.dfm","configured":1,"total":2},{"package":"com.tencent.tmgp.pubgmhd","configured":1,"total":2},{"package":"com.tencent.tmgp.sgame","configured":1,"total":2},{"package":"com.tencent.tmgp.speedmobile","configured":1,"total":2},{"package":"com.tencent.tmgp.supercell.clashofclans","configured":1,"total":2}],"recentJobs":1}
+## 13) audit (last 10)
+{"total":5,"actions":[{"action":"job.finished","status":"ok","target":{"type":"job","id":"job_01a20d0364f074e68bc29288959a6e56"}},{"action":"apply.bulk","status":"ok","target":{"type":"device","id":"multiple"}},{"action":"device.add","status":"ok","target":{"type":"device","id":"pixel-9-real"}},{"action":"device.add","status":"ok","target":{"type":"device","id":"mock-acceptance"}},{"action":"auth.failed","status":"failed","target":{"type":"token","id":null}}]}
+## 14) proxy (read-only): real device app config + mock echo
+{"package":"com.xingin.xhs","source":"none","model":null}
+{"method":null,"query":null}
+## 15) static hosting
+HTTP/1.1 200 OK
+content-type: text/html; charset=utf-8
+cache-control: no-cache
+x-content-type-options: nosniff
+content-security-policy: default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'
+asset=/assets/index-CCageFiY.js
+asset HTTP 200
+cache-control: public, max-age=31536000, immutable
+SPA /devices HTTP 200
+=== done 2026-11-24T18:04:24+0800 ===
+
+## RETRY note: Python Mock 没有 /api/v1/echo（仅测试用 axum Mock 有），改用 /api/v1/apps/{pkg} 验证代理；
+## 真机 com.xingin.xhs 未配置，改用一个真实已配置包 com.coolapk.market。
+## 14b) proxy real device (read-only)
+{"package":"com.coolapk.market","source":"inline","template":null,"model":"A024"}
+## 14c) proxy mock device
+{"package":"com.xingin.xhs","source":"template","template":"acceptance_pixel","model":"Pixel 9"}
+## 14d) proxy status codes (real 404 path / unknown device)
+device 404 HTTP 404
+unknown device HTTP 404

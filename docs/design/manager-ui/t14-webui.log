@@ -1,0 +1,23 @@
+=== npm run check:template-payload ===
+
+> device-faker-manager-webui@0.1.0 check:template-payload
+> node scripts/check-template-payload.mjs
+
+OK: bulk/assignments apply body has no packages; input config untouched
+EXIT=0
+=== npx vue-tsc --noEmit ===
+EXIT=0
+=== npm run build ===
+dist/assets/BatchPage-DZEabnS0.js       13.52 kB │ gzip:  4.92 kB
+dist/assets/validator-DVYVlFmK.js       16.39 kB │ gzip:  6.38 kB
+dist/assets/overlay-Cv0eqbfo.js         17.39 kB │ gzip:  6.36 kB
+dist/assets/form-DP-PuLpf.js            26.50 kB │ gzip:  9.12 kB
+dist/assets/select-boA6rtMU.js          32.61 kB │ gzip: 11.14 kB
+dist/assets/index-DKaCFOE4.js           45.05 kB │ gzip: 17.72 kB
+dist/assets/tooltip-BKPuUjzJ.js         49.03 kB │ gzip: 17.61 kB
+dist/assets/DevicesPage-BNfqEpoo.js     49.38 kB │ gzip: 17.79 kB
+dist/assets/table-Ifocx6eV.js           84.86 kB │ gzip: 28.74 kB
+dist/assets/manager-CT4kkn6c.js        188.81 kB │ gzip: 70.42 kB
+
+✓ built in 390ms
+EXIT=0

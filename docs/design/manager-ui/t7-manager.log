@@ -1,0 +1,5 @@
+2026-11-24T10:08:13.432935Z  WARN 正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换
+2026-11-24T10:08:13.433194Z  INFO Device Faker Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dfm-acceptance token_source="default"
+2026-11-24T10:08:13.438555Z  INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dfm-acceptance/manager.key
+2026-11-24T10:08:13.443732Z  INFO 静态托管已启用 dir=manager/webui/dist
+2026-11-24T10:08:13.447166Z  INFO Manager 已就绪 address=127.0.0.1:8765

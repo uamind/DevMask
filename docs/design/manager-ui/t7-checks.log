@@ -1,0 +1,207 @@
+=== 2026-11-24T18:06:27+0800 checks ===
+## cargo fmt --check
+EXIT=0
+
+## cargo test -p device_faker_manager
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-ef33d6ec8213c0d5)
+
+running 53 tests
+test api::job_dto::tests::accepted_response_exposes_queued ... ok
+test api::query::tests::missing_values_are_none ... ok
+test api::apply::tests::validates_template_names ... ok
+test api::apply::tests::validates_package_names ... ok
+test api::apply::tests::error_payload_shape ... ok
+test api::query::tests::rejects_invalid_booleans_and_numbers ... ok
+test api::proxy::tests::extracts_upstream_error_code ... ok
+test api::query::tests::parses_repeated_and_typed_values ... ok
+test api::job_dto::tests::job_response_includes_duration_and_results ... ok
+test api::token::tests::validates_custom_tokens ... ok
+test args::tests::help_text_mentions_defaults ... ok
+test api::proxy::tests::rejects_traversal_segments ... ok
+test auth::tests::constant_time_comparison_matches_equality ... ok
+test api::aggregate::tests::aggregate_revision_changes_with_device_set ... ok
+test auth::tests::parses_bearer_header ... ok
+test api::token::tests::generated_token_has_contract_shape ... ok
+test args::tests::rejects_unknown_flag ... ok
+test config::tests::concurrency_range_is_enforced ... ok
+test config::tests::allows_default_token_on_loopback ... ok
+test args::tests::rejects_missing_value ... ok
+test config::tests::rejects_default_token_on_non_loopback ... ok
+test args::tests::parses_flags_and_values ... ok
+test config::tests::token_precedence_is_cli_env_file_config_default ... ok
+test config::tests::static_site_requires_index ... ok
+test db::tests::device_crud_roundtrip ... ok
+test crypto::tests::rejects_bad_key_length ... ok
+test crypto::tests::tampered_ciphertext_fails ... ok
+test db::tests::migrates_and_reports_health ... ok
+test crypto::tests::encrypts_and_decrypts_roundtrip ... ok
+test db::tests::overview_cache_roundtrip ... ok
+test crypto::tests::key_file_is_32_bytes_and_reloaded ... ok
+test crypto::tests::debug_does_not_leak_key_material ... ok
+test db::tests::writes_audit_rows ... ok
+test db::tests::recovers_interrupted_jobs ... ok
+test device_client::tests::joins_api_paths ... ok
+test crypto::tests::wrong_device_id_fails ... ok
+test device_client::tests::maps_probe_failures ... ok
+test device_client::tests::rejects_overview_without_device ... ok
+test crypto::tests::rejects_unknown_prefix ... ok
+test ids::tests::request_and_job_ids_have_expected_shape ... ok
+test ids::tests::slug_falls_back_for_non_ascii_names ... ok
+test ids::tests::slugifies_names ... ok
+test ids::tests::timestamp_is_rfc3339_z ... ok
+test ids::tests::validates_device_ids ... ok
+test ids::tests::validates_request_ids ... ok
+test paging::tests::cursor_roundtrip ... ok
+test paging::tests::resolves_defaults_and_ranges ... ok
+test static_files::tests::asset_cache_is_immutable ... ok
+test static_files::tests::maps_content_types ... ok
+test static_files::tests::safe_relative_rejects_traversal ... ok
+test device_client::tests::rejects_invalid_base_urls ... ok
+test device_client::tests::normalizes_base_urls ... ok
+test static_files::tests::resolves_first_candidate_with_index ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (target/debug/deps/device_faker_manager-beeebe0a9f880f2c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/apply_flow.rs (target/debug/deps/apply_flow-02dd0f5c3665b1b1)
+
+running 11 tests
+test revision_conflict_refetches_and_retries_once ... ok
+test package_not_installed_is_skipped ... ok
+test bulk_apply_creates_template_then_binds ... ok
+test template_object_overwrites_and_warns ... ok
+test missing_template_name_is_skipped ... ok
+test idempotency_key_replays_same_job ... ok
+test restart_forbidden_only_warns ... ok
+test assignments_support_per_device_templates ... ok
+test unknown_job_and_unknown_device_are_rejected ... ok
+test offline_device_is_skipped_without_failing_request ... ok
+test apply_writes_bulk_and_assignment_audits ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/devices_flow.rs (target/debug/deps/devices_flow-39e0d763fefc75c0)
+
+running 13 tests
+test apps_without_devices_returns_empty_matrix_with_warning ... ok
+test add_device_persists_metadata_and_never_returns_token ... ok
+test duplicate_base_url_and_id_conflict ... ok
+test delete_removes_device_from_list_and_matrix ... ok
+test probe_failures_return_422_without_persisting ... ok
+test device_detail_and_overview_endpoints ... ok
+test apps_matrix_flags_drift_and_aggregates_revision ... ok
+test list_filters_and_pagination ... ok
+test patch_updates_metadata_and_rejects_bad_token ... ok
+test unknown_fields_are_rejected ... ok
+test sync_refreshes_model_and_cache ... ok
+test offline_device_is_marked_but_aggregation_still_works ... ok
+test request_timeout_marks_device_offline ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/e2e_flow.rs (target/debug/deps/e2e_flow-65f9566c504ac3eb)
+
+running 4 tests
+test apply_validation_rejects_empty_duplicate_and_unknown_targets ... ok
+test device_token_mismatch_is_remapped_by_proxy ... ok
+test full_lifecycle_covers_all_relay_endpoints ... ok
+test offline_device_degrades_to_502_but_keeps_cache_readable ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/manager_api.rs (target/debug/deps/manager_api-87128e6be840c133)
+
+running 16 tests
+test key_file_is_generated_private ... ok
+test missing_dist_returns_readable_build_hint ... ok
+test device_token_encryption_roundtrips_through_state_key ... ok
+test invalid_client_request_id_is_replaced ... ok
+test protected_route_without_token_returns_unified_401 ... ok
+test request_id_is_echoed_into_header_and_envelope ... ok
+test auth_failure_is_audited_without_token ... ok
+test healthz_is_public_and_reports_ok ... ok
+test method_not_allowed_returns_envelope ... ok
+test root_healthz_alias_works ... ok
+test static_route_rejects_non_get_methods ... ok
+test unknown_api_route_returns_json_404 ... ok
+test wrong_token_is_rejected ... ok
+test valid_token_lists_empty_devices ... ok
+test unknown_device_returns_device_not_found ... ok
+test serves_index_assets_and_spa_fallback ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/ops_endpoints.rs (target/debug/deps/ops_endpoints-c3fe95423b9c95bd)
+
+running 8 tests
+test token_rotate_rejects_cli_or_env_source ... ok
+test audit_supports_action_target_and_cursor_filters ... ok
+test overview_shape_and_fleet_counts ... ok
+test templates_report_conflicts_between_devices ... ok
+test templates_aggregate_shape_filters_and_conflict ... ok
+test token_rotate_persists_and_invalidates_old_token ... ok
+test proxy_forwards_methods_bodies_and_status_codes ... ok
+test jobs_list_supports_pagination_and_filters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+   Doc-tests device_faker_manager
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0
+
+## cd manager/webui && npx vue-tsc --noEmit
+EXIT=0
+
+## npm run build
+
+> device-faker-manager-webui@0.1.0 build
+> vite build
+
+vite v8.3.8 building client environment for production...
+transforming...
+✓ 1624 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          0.70 kB │ gzip:  0.39 kB
+dist/assets/index-oWUMhi5F.css         388.30 kB │ gzip: 53.71 kB
+dist/assets/clipboard-9d5XXcrX.js        0.32 kB │ gzip:  0.22 kB
+dist/assets/switch-Ba9IOaqz.js           4.95 kB │ gzip:  1.71 kB
+dist/assets/LogsPage-Ctq3UxP2.js         5.03 kB │ gzip:  2.33 kB
+dist/assets/radio-CrLIpwa6.js            5.12 kB │ gzip:  2.11 kB
+dist/assets/DashboardPage-CgeUV7VZ.js    8.76 kB │ gzip:  3.26 kB
+dist/assets/AppsPage-BoV2jXwC.js         8.97 kB │ gzip:  3.82 kB
+dist/assets/message-box-ecug9Pg4.js     11.21 kB │ gzip:  4.17 kB
+dist/assets/RelayPage-BET_71ch.js       12.09 kB │ gzip:  4.65 kB
+dist/assets/BatchPage-Cw1iIrgv.js       13.52 kB │ gzip:  4.92 kB
+dist/assets/validator-C-WX1mdl.js       16.39 kB │ gzip:  6.38 kB
+dist/assets/overlay-DtpVlJle.js         17.40 kB │ gzip:  6.36 kB
+dist/assets/form-DYXzFZVB.js            26.49 kB │ gzip:  9.09 kB
+dist/assets/select-RY3Mkt6O.js          32.61 kB │ gzip: 11.12 kB
+dist/assets/index-CCageFiY.js           45.02 kB │ gzip: 17.70 kB
+dist/assets/tooltip-CdNevedx.js         49.00 kB │ gzip: 17.57 kB
+dist/assets/DevicesPage-Cu5GGncF.js     49.37 kB │ gzip: 17.78 kB
+dist/assets/table-Ca99YEaB.js           84.86 kB │ gzip: 28.70 kB
+dist/assets/manager-Df3gcvwa.js        188.72 kB │ gzip: 70.40 kB
+
+✓ built in 375ms
+EXIT=0
+
+## versions
+rustc 1.99.0 (b940084d7 2026-09-28)
+cargo 1.99.0 (5f94df478 2026-08-27)
+v26.13.1
+11.20.0
+
+## manager still healthy after checks
+{"status":"ok","version":"0.1.0","apiVersion":"v1","uptimeSec":150,"startedAt":"2026-11-24T10:04:03Z","db":{"status":"ok","schemaVersion":1,"path":"manager.db"},"devices":{"total":2,"online":2,"offline":0},"jobs":{"queued":0,"running":0}}
+HTTP 200
