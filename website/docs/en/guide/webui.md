@@ -73,7 +73,7 @@ When several templates declare the same package, only the one written **first** 
 
 The WebUI has a built-in online template source. Import community templates with one click:
 
-- Repository: [devmask_config](https://github.com/uamind/DevMask_config)
+- Repository: [devmask_config](https://github.com/Seyud/device_faker_config)
 - Browse by brand/model category
 - Search by brand, model, template name or **template description**; space-separated keywords must all match
 

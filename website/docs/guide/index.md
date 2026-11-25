@@ -32,7 +32,7 @@ DevMask 提供了现代化的 Web 管理界面
 
 感谢社区成员的贡献，你也可以参与！DevMask 配置仓库：
 
-- 📦 [devmask_config](https://github.com/uamind/DevMask_config) - 贡献机型模板配置
+- 📦 [device_faker_config](https://github.com/Seyud/device_faker_config) - 贡献机型模板配置
 
 贡献设备配置，帮助更多用户获得更好的机型伪装效果！
 

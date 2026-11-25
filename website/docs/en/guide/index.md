@@ -32,7 +32,7 @@ The configuration file is located at `/data/adb/devmask/config/config.toml` and 
 
 Thanks to community contributions! You can also participate! DevMask configuration repository:
 
-- 📦 [devmask_config](https://github.com/uamind/DevMask_config) - Contribute device template configurations
+- 📦 [devmask_config](https://github.com/Seyud/device_faker_config) - Contribute device template configurations
 
 Contribute device configurations to help more users get better device spoofing results!
 

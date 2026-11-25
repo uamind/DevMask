@@ -73,12 +73,12 @@ WebUI 采用纯 KernelSU WebUI API 实现，支持 KernelSU、WeaveMask 和 APat
 
 WebUI 内置在线模板源，可以从社区模板仓库一键导入：
 
-- 仓库地址：[devmask_config](https://github.com/uamind/DevMask_config)
+- 仓库地址：[device_faker_config](https://github.com/Seyud/device_faker_config)
 - 支持按品牌、型号分类浏览
 - 支持按品牌、型号、模板名或**模板描述**搜索；多个关键词以空白分隔，需全部命中
 
 ::: tip 欢迎贡献
-如果你有整理好的机型配置，可以提交到 `devmask_config`，帮助更多用户。
+如果你有整理好的机型配置，可以提交到 `device_faker_config`，帮助更多用户。
 :::
 
 ### 重命名已存在模板

@@ -79,5 +79,5 @@ model = "FakeModel"
 ### 在线模板库加载失败
 
 - 检查设备网络连接
-- 模板源地址：https://github.com/uamind/DevMask_config
+- 模板源地址：https://github.com/Seyud/device_faker_config
 - 部分地区访问 GitHub 需要网络工具
