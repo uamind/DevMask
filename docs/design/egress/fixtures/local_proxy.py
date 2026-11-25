@@ -15,6 +15,7 @@
 """
 
 import base64
+import hashlib
 import ipaddress
 import os
 import socket
@@ -46,6 +47,25 @@ SOCKS_PASS = os.environ.get("FIXTURE_SOCKS_PASS", "")
 # require-userpass：只接受用户名密码，用于观察 libcore 到底有没有消费 java.net.socks.* 属性。
 SOCKS_MODE = os.environ.get("FIXTURE_SOCKS_MODE", "prefer-noauth")
 
+# ── t9 增量：上游认证（HTTP Basic / SOCKS5 RFC1929）──────────────────────────
+# 默认 off，t15/t18 的行为保持不变；require 时缺凭据或凭据错一律 407，
+# 日志只写摘要（sha256 前 12 位），永不写明文。
+#   FIXTURE_HTTP_AUTH=require  FIXTURE_HTTP_USER=…  FIXTURE_HTTP_PASS=…
+#   FIXTURE_SOCKS_MODE=require-userpass  FIXTURE_SOCKS_USER=…  FIXTURE_SOCKS_PASS=…
+HTTP_AUTH_MODE = os.environ.get("FIXTURE_HTTP_AUTH", "off").strip().lower()
+HTTP_USER = os.environ.get("FIXTURE_HTTP_USER", "")
+HTTP_PASS = os.environ.get("FIXTURE_HTTP_PASS", "")
+SOCKS_REQUIRE_USERPASS = SOCKS_MODE == "require-userpass"
+
+
+def credential_digest(user, password):
+    """凭据摘要：日志里只出现它，用来证明「内容正确」而不暴露内容。"""
+    return hashlib.sha256(("%s:%s" % (user, password)).encode("utf-8")).hexdigest()[:12]
+
+
+HTTP_DIGEST = credential_digest(HTTP_USER, HTTP_PASS)
+SOCKS_DIGEST = credential_digest(SOCKS_USER, SOCKS_PASS)
+
 _log_lock = threading.Lock()
 
 
@@ -68,6 +88,51 @@ def http_response(body, status="200 OK"):
         "\r\n" % (status, len(payload))
     )
     return head.encode("utf-8") + payload
+
+
+def http_407():
+    payload = b"proxy authentication required\n"
+    head = (
+        "HTTP/1.1 407 Proxy Authentication Required\r\n"
+        "Proxy-Authenticate: Basic realm=\"device-faker-t9\"\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n" % len(payload)
+    )
+    return head.encode("utf-8") + payload
+
+
+def http_auth_state(headers):
+    """上游视角的认证判定：off / ok / missing / bad（+ 仅摘要）。"""
+    if HTTP_AUTH_MODE != "require":
+        return "off", "-"
+    raw = headers.get("proxy-authorization", "")
+    if not raw:
+        return "missing", "-"
+    scheme, _, value = raw.partition(" ")
+    if scheme.strip().lower() != "basic" or not value.strip():
+        return "bad", "-"
+    try:
+        decoded = base64.b64decode(value.strip(), validate=True).decode("utf-8", "replace")
+    except Exception:
+        return "bad", "-"
+    user, _, password = decoded.partition(":")
+    digest = credential_digest(user, password)
+    return ("ok" if (user == HTTP_USER and password == HTTP_PASS) else "bad"), digest
+
+
+def tunnel_scan(raw):
+    """隧道内字节里是否出现 Proxy-Authorization 或 base64 凭据（都不该出现）。"""
+    lowered = raw.lower()
+    header_hit = 1 if b"proxy-authorization" in lowered else 0
+    cred_hit = 0
+    for user, password in ((HTTP_USER, HTTP_PASS), (SOCKS_USER, SOCKS_PASS)):
+        if user or password:
+            token = base64.b64encode(("%s:%s" % (user, password)).encode("utf-8")).lower()
+            if token and token in lowered:
+                cred_hit = 1
+    return header_hit, cred_hit
 
 
 def read_until_double_crlf(sock, limit=64 * 1024):
@@ -125,16 +190,24 @@ def handle_http(conn, listener_port):
             conn.sendall(http_response("bad request\n", "400 Bad Request"))
             return
         method, target = parts[0], parts[1]
-        has_auth = "proxy-authorization" in headers
+        auth_state, auth_digest = http_auth_state(headers)
+        if HTTP_AUTH_MODE == "require" and auth_state != "ok":
+            log("http", "listener=%d %s %s auth=%s digest=%s rejected=407" % (
+                listener_port, method, target, auth_state, auth_digest))
+            conn.sendall(http_407())
+            return
 
         if method.upper() == "CONNECT":
             host, _, port_text = target.partition(":")
             port = int(port_text or "443")
-            log("http", "listener=%d CONNECT %s:%d auth=%d" % (listener_port, host, port, int(has_auth)))
+            log("http", "listener=%d CONNECT %s:%d auth=%s digest=%s" % (
+                listener_port, host, port, auth_state, auth_digest))
             if host in VIRTUAL_HOSTS:
                 conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
                 inner = read_until_double_crlf(conn)
-                log("http", "listener=%d tunnel-request %s %d bytes" % (listener_port, host, len(inner)))
+                header_hit, cred_hit = tunnel_scan(inner)
+                log("http", "listener=%d tunnel-request %s %d bytes auth_header=%d cred_hit=%d" % (
+                    listener_port, host, len(inner), header_hit, cred_hit))
                 conn.sendall(http_response(VIRTUAL_HOSTS[host]))
                 return
             upstream = socket.create_connection((host, port), timeout=10)
@@ -151,7 +224,8 @@ def handle_http(conn, listener_port):
         path = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
         host, _, port_text = hostport.partition(":")
         port = int(port_text or ("443" if scheme == "https" else "80"))
-        log("http", "listener=%d %s %s host=%s auth=%d" % (listener_port, method, target, host, int(has_auth)))
+        log("http", "listener=%d %s %s host=%s auth=%s digest=%s" % (
+            listener_port, method, target, host, auth_state, auth_digest))
         if host in VIRTUAL_HOSTS:
             conn.sendall(http_response(VIRTUAL_HOSTS[host]))
             return
@@ -199,7 +273,19 @@ def socks5_handshake(conn):
         use_userpass = 0x02 in methods
     else:
         use_userpass = (0x00 not in methods) and (0x02 in methods)
-    if use_userpass and SOCKS_USER and 0x02 in methods:
+    if SOCKS_REQUIRE_USERPASS:
+        # fail-closed：要求认证时，fixture 没配凭据 / 客户端没提供 0x02 → 一律 0xff
+        if not (SOCKS_USER and SOCKS_PASS):
+            conn.sendall(b"\x05\xff")
+            log("socks5", "listener=%d methods=%s rejected=require-userpass-but-unconfigured" % (
+                listener_port_hint[0], offered))
+            return False, None, "fixture-unconfigured"
+        if 0x02 not in methods:
+            conn.sendall(b"\x05\xff")
+            log("socks5", "listener=%d methods=%s rejected=require-userpass-but-no-userpass-offered" % (
+                listener_port_hint[0], offered))
+            return False, None, "no-userpass-offered"
+    if SOCKS_REQUIRE_USERPASS or (use_userpass and SOCKS_USER and 0x02 in methods):
         conn.sendall(b"\x05\x02")
         ver_auth = conn.recv(2)
         if len(ver_auth) < 2 or ver_auth[0] != 0x01:
@@ -212,8 +298,8 @@ def socks5_handshake(conn):
         user_ok = user == SOCKS_USER
         pass_ok = password == SOCKS_PASS
         ok = user_ok and pass_ok
-        log("socks5", "listener=%d methods=%s auth user_ok=%d pass_ok=%d (values never logged)" % (
-            listener_port_hint[0], offered, int(user_ok), int(pass_ok)))
+        log("socks5", "listener=%d methods=%s auth user_ok=%d pass_ok=%d digest=%s (values never logged)" % (
+            listener_port_hint[0], offered, int(user_ok), int(pass_ok), credential_digest(user, password)))
         conn.sendall(b"\x01\x00" if ok else b"\x01\x01")
         if not ok:
             return False, None, "auth-failed"
@@ -255,7 +341,9 @@ def handle_socks(conn, listener_port):
         if host in VIRTUAL_HOSTS:
             conn.sendall(b"\x05\x00\x00\x01\x7f\x00\x00\x01\x00\x00")
             inner = read_until_double_crlf(conn)
-            log("socks5", "listener=%d tunnel-request %s %d bytes" % (listener_port, host, len(inner)))
+            header_hit, cred_hit = tunnel_scan(inner)
+            log("socks5", "listener=%d tunnel-request %s %d bytes auth_header=%d cred_hit=%d" % (
+                listener_port, host, len(inner), header_hit, cred_hit))
             conn.sendall(http_response(VIRTUAL_HOSTS[host]))
             return
         upstream = socket.create_connection((host, port), timeout=10)

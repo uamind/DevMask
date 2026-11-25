@@ -13,7 +13,7 @@ use crate::dto::Warning;
 use crate::egress::file::ProxyDefinition;
 use crate::egress::state::{HealthSnapshot, LastProbe};
 
-/// 脱敏代理摘要：固定 5 个键（契约 §1.3 upstream / proxies[]）。
+/// 脱敏代理摘要：固定 7 个键（契约 §6.2：与 `GET /egress/proxies` 的 items[] 同构）。
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxySummary {
@@ -22,23 +22,35 @@ pub struct ProxySummary {
     /// http | socks5。
     #[serde(rename = "type")]
     pub kind: &'static str,
-    /// 主机。
+    /// 主机（永远是**上游真实地址**；中继地址只在 `localPort`）。
     pub host: String,
-    /// 端口。
+    /// 端口（上游）。
     pub port: u16,
     /// 是否带凭据（永不带值）。
     pub has_credentials: bool,
+    /// 端口表值（server 分配；无分配时为 `null`）。
+    ///
+    /// 契约 §6.2：`[relay].enabled=false` 时回 `null`（端口表在文件里保留但不生效）。
+    pub local_port: Option<u16>,
+    /// 该定义当前是否正在经中继（运行时事实）。
+    pub relay_active: bool,
 }
 
 impl ProxySummary {
-    /// 由定义构造（只取 5 个字段）。
-    pub fn from_definition(proxy: &ProxyDefinition) -> Self {
+    /// 由定义 + 运行时中继状态构造。
+    pub fn from_definition(
+        proxy: &ProxyDefinition,
+        relay_active: &std::collections::BTreeMap<String, bool>,
+        relay_enabled: bool,
+    ) -> Self {
         Self {
             name: proxy.name.clone(),
             kind: proxy.kind.as_str(),
             host: proxy.host.clone(),
             port: proxy.port,
             has_credentials: proxy.has_credentials(),
+            local_port: relay_enabled.then_some(proxy.local_port).flatten(),
+            relay_active: relay_active.get(&proxy.name).copied().unwrap_or(false),
         }
     }
 }
@@ -184,6 +196,8 @@ pub struct EgressStateView {
     pub health: HealthView,
     /// egress.toml 元数据。
     pub egress_file: EgressFileView,
+    /// 设备内认证中继状态（恒存在，契约 §6.1）。
+    pub relay: crate::relay::RelayView,
     /// 警告码。
     pub warnings: Vec<Warning>,
 }
@@ -242,6 +256,10 @@ pub struct ProxyListItem {
     pub port: u16,
     /// 是否带凭据。
     pub has_credentials: bool,
+    /// 端口表值（server 分配；无分配或中继关闭时为 `null`）。
+    pub local_port: Option<u16>,
+    /// 该定义当前是否正在经中继。
+    pub relay_active: bool,
     /// 是否为 [egress].default 指向的定义。
     pub used_as_default: bool,
     /// 引用该定义的包名（按 [[apps]] 顺序）。
@@ -249,14 +267,22 @@ pub struct ProxyListItem {
 }
 
 impl ProxyListItem {
-    /// 由定义 + 引用关系构造。
-    pub fn new(proxy: &ProxyDefinition, used_as_default: bool, apps: Vec<String>) -> Self {
+    /// 由定义 + 引用关系 + 运行时中继状态构造。
+    pub fn new(
+        proxy: &ProxyDefinition,
+        used_as_default: bool,
+        apps: Vec<String>,
+        relay_active: bool,
+        relay_enabled: bool,
+    ) -> Self {
         Self {
             name: proxy.name.clone(),
             kind: proxy.kind.as_str(),
             host: proxy.host.clone(),
             port: proxy.port,
             has_credentials: proxy.has_credentials(),
+            local_port: relay_enabled.then_some(proxy.local_port).flatten(),
+            relay_active,
             used_as_default,
             apps,
         }
@@ -281,7 +307,19 @@ pub struct ProxiesResponse {
     pub warnings: Vec<Warning>,
 }
 
-/// POST /api/v1/egress/probe 响应（契约 §1.6）。
+/// POST /api/v1/egress/relay/restart 响应（契约 §6.3）。
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayRestartResponse {
+    /// 本次重建完成时刻（RFC 3339 UTC）。
+    pub restarted_at: String,
+    /// 重建后的完整 relay 状态。
+    pub relay: crate::relay::RelayView,
+    /// 警告码（§6.4）。
+    pub warnings: Vec<Warning>,
+}
+
+/// POST /api/v1/egress/probe 响应（契约 §1.6 / §3.5）。
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeResponse {
@@ -295,10 +333,12 @@ pub struct ProbeResponse {
     pub checked_at: String,
     /// device | app。
     pub scope: &'static str,
-    /// proxy | direct。
+    /// proxy | direct | relay。
     pub via: &'static str,
     /// 实际使用的代理名。
     pub proxy: Option<String>,
+    /// `via="relay"` 时实际使用的本地中继端口（其余为 `null`，契约 §3.5 第 3 条）。
+    pub relay_port: Option<u16>,
     /// 实际请求的 URL。
     pub url: String,
     /// 上游状态码。

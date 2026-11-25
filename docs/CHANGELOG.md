@@ -1,5 +1,30 @@
 # 📝更新日志
 
+## ⬆️[v1.10.0 → v1.11.0] - 2026-12-02
+
+### 🆕 新功能
+- 🔐 **设备内认证中继（relay）**：带用户名/密码的代理由设备内一个只监听 `127.0.0.1` 的中继转发，替应用补 HTTP Basic / SOCKS5 RFC1929；设备级与应用级都覆盖，应用零改造
+- 🔌 中继端口表：`egress.toml` 新增 `[relay]` 段与只读 `local_port`；区间 17800–17899，设备级占 `base_port`、应用级哈希分配，跨重启稳定
+- 🛡️ uid 防火墙：三条 iptables 链（`DF_EGRESS_RLY` / `_ALLOW` / `_DENY`），只放行授权 uid；重建期间 **fail-closed**（DENY 兜底，不裸奔）
+- 🔁 `POST /api/v1/egress/relay/restart`（`ops`，强制 apply）；`GET /egress` 增 `relay` 对象；`GET /egress/proxies` 增 `localPort` / `relayActive`
+- 🔍 探测新增 `via=relay`（缺省仍 `upstream`）：一次覆盖「本地端口在监听 + 中继转发 + 上游认证 + 目标往返」；新增 `relay_not_listening` / `relay_connect` 两个 reason
+
+### ⚡ 改进
+- 🚫 **注入 fail-closed**：relay 视图非法（host 非回环 / 端口池外 / type 非法）时注入 `127.0.0.1:9` 并 arm replay，而不是「按未配置处理」——应用断网，但不会静默换出口
+- 🧯 回退收窄：只有「中继明确未启用」（`[relay].enabled=false` 或文件未迁移）才回退上游；开启但缺 `local_port` 一律 fail-closed
+- 🧹 凭据边界：v1.2 起**不再把凭据写进应用进程**（≤v1.1 会写 `java.net.socks.username/password`，实测不生效）
+- 📊 Manager：`DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`；`/devices/{id}/egress` 透传 `relay`；`socks5` 探测真连（reqwest `socks` feature）
+- 📚 文档：API.md / openapi.yaml（30 个操作）/ CONFIG.md / SERVER.md / Manager 契约与架构同步；新增 5 个 `egress_relay_*` 警告码（含设备级 socks5 的 `egress_relay_device_socks5_unsupported`）
+
+### ⚠️ 已知限制
+- 中继端口（`127.0.0.1:178xx`）与链名 `DF_EGRESS_RLY` 属**可检出项**；中继出网的是 **root** 进程，会绕过 AFWall+ / NetGuard 等按 uid 的防火墙
+- **设备级依赖中继存活**：listener 挂掉期间整机代理链路不可用；`fail_open=true` 时下一次上游探测失败会**静默直连**（要「绝不直连」请把 `[probe].fail_open` 设为 `false`）
+- 只有**带凭据**的代理才走中继；关闭中继没有 API（编辑 0600 的 `egress.toml` 的 `[relay].enabled` + restart）
+- relay 只覆盖 **Java 层**：native 栈与 WebView 不受 fail-closed 保护
+- 🪜 **分层 uid 策略（可用性与安全的折中）**：应用级端口在 accept 后先判 uid；uid 归属失败时，只有 `relay.firewall.applied=true`（同一次 `iptables -S` 采样确认三链生效）才放行，并记限频日志 `uid_unresolved_firewall_enforced`（≤1 次/秒）；`applied=false` / `firewall=false` 一律 fail-closed。放行前会限频复核 `-S`，规则被手工 `-F` 后 ≤1s 回到 fail-closed；代价是 root-trust（只约束谁能连端口，不约束以谁 uid 出网）
+- ⚠️ **设备级 `default` 只支持 http**：合并后的有效 default 指向非 http 定义时 PUT 直接 `422 invalid_egress_default`（与 `[relay].enabled` / 凭据无关）；已存在的旧配置在 `enabled=true` 时 `settings` 黑洞 `127.0.0.1:9`（fail-closed），`enabled=false` 时按未配置（直连）；两种都**不会**在 `base_port` 建 SOCKS5 listener，且都报 `egress_relay_device_socks5_unsupported`。socks5 定义请只用于 `[[apps]].egress`
+- ⚠️ **本地端口劫持窗口**：listener 释放到重绑之间端口可能被本机进程抢占；检测靠下一次 bind 失败（`addr_in_use`），应用级会重分配并在 `relay.portChanges` / `restartRequiredApps` 提示，设备级则不监听 + `egress_relay_bind_failed`
+
 ## ⬆️[v1.9.0 → v1.10.0] - 2026-12-01
 
 ### 🆕 新功能
@@ -18,7 +43,7 @@
 - 📚 文档：新增 [API.md](API.md) egress 五端点、[CONFIG.md](CONFIG.md)「网络出口」章节、[openapi.yaml](openapi.yaml) 五个操作、Manager 契约与架构同步
 - ⚖️ 应用级注入改为**只对显式写法**生效：只有 `[[apps]].egress` 写了代理名或 `__DIRECT__` 的进程才挂 hook / 起重放线程（设备级默认不再给每个应用加开销）
 - ⚠️ 明确记录重放机制的三条代价：① 显式配置 egress 的进程会保留**常驻模块代码页**（重放线程与 PLT hook 都在 `.so` 里）——但**按名字扫 `/proc/<pid>/maps` 看不到**（Zygisk 用无名/匿名映射，实测 armed 进程 3170 行命中 0），真判断要比匿名可执行段；② 应用运行中修改设备级代理不落在 0–2000ms 重放窗口内，需重启应用；③ `setpriority` hook 未命中时退化为一次性注入（`replay hook unavailable`），注入值可能被框架覆盖
-- ⚠️ **带用户名/密码的代理本期不可用**：SOCKS5 的 `java.net.socks.username/password` 进程内可读，但 libcore 不发送凭据（Android 17 实测代理侧 `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`）；HTTP Basic 未实现（只注入 host/port，记 `unsupported-auth`）。带凭据的代理请用 **IP 白名单**授权，或等 P2「设备内本地认证中继」（尚未实现）
+- ⚠️ **带用户名/密码的代理在 v1.10.0 时不可用**：SOCKS5 的 `java.net.socks.username/password` 进程内可读，但 libcore 不发送凭据（Android 17 实测代理侧 `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`）；HTTP Basic 未实现（只注入 host/port，记 `unsupported-auth`）。带凭据的代理请用 **IP 白名单**授权（v1.11.0 起改为经设备内中继生效，见下方 v1.11.0 分节）
 
 ### 🐛 修复
 - 🔁 修复应用级 HTTP 出口在目标进程内不生效：框架（`ActivityThread.handleBindApplication` → `Proxy.setHttpProxyConfiguration`）会在注入后约 28–95ms 按**设备级**代理整体重写 http/https 属性；现在改由 PLT hook（`setpriority`）在进程过渡完成后拉起重放线程，按 0–2000ms 时间表读回并重写（118 次探针、不早退）

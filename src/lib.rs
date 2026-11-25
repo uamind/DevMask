@@ -448,7 +448,8 @@ fn load_config_for(
     };
 
     // 出口代理小节与机型字段同源：先单独取它，解析失败只丢代理、不影响机型。
-    let egress_proxy = egress::from_spec_doc(&text);
+    // 包名只用于日志（非法 relay 视图的 warn 需要它定位到应用）。
+    let egress_proxy = egress::from_spec_doc(&text, package);
 
     let config = Config::from_toml(&text).map_err(|err| {
         // 契约 §7.1：spec 里可能带出口代理的 password，而 toml 错误的 Display 会附上

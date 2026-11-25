@@ -1,0 +1,28 @@
+# t9 绑定面 / uid / 设备级 —— 2026-11-25T04:07:11Z
+## settings get global http_proxy
+127.0.0.1:17800
+## dumpsys global proxy
+  Global proxy: [127.0.0.1] 17800 xl=
+## ss -ltn 178xx
+LISTEN      0      128    127.0.0.1:17835              0.0.0.0:*                  
+LISTEN      0      128    127.0.0.1:17800              0.0.0.0:*                  
+## ss -ltn6 178xx（期望空）
+(empty)
+## nc ::1 17835
+nc: connect: Connection refused
+rc=1
+## nc 127.0.0.2 17835
+nc: connect: Connection refused
+rc=1
+## nc <LAN_IP> 17835
+nc: connect: Connection refused
+rc=0
+## uid 2000 协议级探测 17835（期望空输出）
+rc=0
+## root 经设备级 17800 请求 app.fixture
+HTTP/1.1 200 OK
+Content-Type: text/plain; charset=utf-8
+Content-Length: 13
+Connection: close
+
+198.51.100.8

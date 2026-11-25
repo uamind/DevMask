@@ -1,0 +1,23 @@
+# 21 手工 -F 两链 → applied=false → restart 修回 —— 2026-11-25T04:41:35Z
+## GET applied after -F
+{"firewall": {"applied": false, "rules": 3, "allowRules": 0, "denyRules": 0, "lastError": {"code": "egress_relay_firewall_failed", "reason": "state_mismatch", "op": "apply", "at": "2026-11-25T04:41:34Z"}}, "listeners": [{"proxy": "dev_http", "port": 17800, "listening": true}, {"proxy": "app_http", "port": 17835, "listening": true}]}
+## 协议级：uid 2000 经 17835（无 05 00 期望）
+## restart
+code=200
+{"firewall": {"applied": true, "rules": 10, "allowRules": 4, "denyRules": 3, "lastError": null}, "listeners": [{"proxy": "dev_http", "port": 17800, "listening": true}, {"proxy": "app_http", "port": 17835, "listening": true}]}
+## -S 三链
+-N DF_EGRESS_RLY
+-A DF_EGRESS_RLY -j DF_EGRESS_RLY_ALLOW
+-A DF_EGRESS_RLY -j DF_EGRESS_RLY_DENY
+-A DF_EGRESS_RLY -j RETURN
+---
+-N DF_EGRESS_RLY_ALLOW
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+---
+-N DF_EGRESS_RLY_DENY
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17864 -j REJECT --reject-with icmp-port-unreachable

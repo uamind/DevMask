@@ -1,0 +1,19 @@
+# F2 应用级 HTTP（firewall.applied=true）—— 2026-11-25T04:37:53Z
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: http.proxyHost=127.0.0.1
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: http.proxyPort=17835
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: socksProxyHost=<null>
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: socksProxyPort=<null>
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:17835
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: fetch.app=status=200 body=198.51.100.8
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: fetch.ip=status=200 body=198.51.100.7
+11-25 12:37:49.520 10899 10899 I EGRESSPROBE: socksdomain=error=UnknownHostException
+## fixture
+2026-11-25T12:37:32+0800 proto=http listener=18080 CONNECT digitalassetlinks.googleapis.com:443 auth=ok digest=7213dc66f53c
+2026-11-25T12:37:37+0800 proto=http listener=18080 CONNECT android.googleapis.com:443 auth=ok digest=7213dc66f53c
+2026-11-25T12:37:44+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=ok digest=7213dc66f53c
+2026-11-25T12:37:44+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=ok digest=7213dc66f53c
+## server.log relay lines
+[2m2026-11-25T04:37:21.774749Z[0m [32m INFO[0m relay firewall [3mapplied[0m[2m=[0mtrue [3mallow_rules[0m[2m=[0m4 [3mdeny_rules[0m[2m=[0m2
+[2m2026-11-25T04:37:21.775333Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mdev_http [3mport[0m[2m=[0m17800 [3mscope[0m[2m=[0m"device" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"all"
+[2m2026-11-25T04:37:21.775498Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
+[2m2026-11-25T04:37:43.690305Z[0m [33m WARN[0m relay uid 归属失败但防火墙已生效：放行（内核层已按 uid 过滤） [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mreason[0m[2m=[0m"uid_unresolved_firewall_enforced"

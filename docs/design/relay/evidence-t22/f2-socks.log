@@ -1,0 +1,11 @@
+# F2 应用级 SOCKS5 + 远程 DNS —— 2026-11-25T04:38:34Z
+11-25 12:38:30.325 11131 11131 I EGRESSPROBE: socksProxyHost=127.0.0.1
+11-25 12:38:30.325 11131 11131 I EGRESSPROBE: socksProxyPort=17864
+11-25 12:38:30.325 11131 11131 I EGRESSPROBE: selector.app.fixture=SOCKS @ 127.0.0.1/<unresolved>:17864
+11-25 12:38:30.325 11131 11131 I EGRESSPROBE: fetch.app=error=UnknownHostException
+11-25 12:38:30.325 11131 11131 I EGRESSPROBE: socksdomain=error=UnknownHostException
+## fixture socks 行
+## server relay lines
+[2m2026-11-25T04:37:21.775498Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
+[2m2026-11-25T04:37:43.690305Z[0m [33m WARN[0m relay uid 归属失败但防火墙已生效：放行（内核层已按 uid 过滤） [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mreason[0m[2m=[0m"uid_unresolved_firewall_enforced"
+[2m2026-11-25T04:38:06.817946Z[0m [32m INFO[0m relay firewall [3mapplied[0m[2m=[0mfalse [3mallow_rules[0m[2m=[0m4 [3mdeny_rules[0m[2m=[0m3

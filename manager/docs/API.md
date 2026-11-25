@@ -1,9 +1,9 @@
 # Device Faker Manager Relay API 契约（/relay/api/v1）
 
 > 状态：**已冻结（contract 里程碑）**
-> 版本：Manager `0.2.0` / API `v1`（egress 增量）
+> 版本：Manager `0.2.0` / API `v1`（egress + relay 增量）
 > 日期：2026-11-24
-> 上游契约：[设备端 /api/v1](../../docs/API.md)（device_faker_server 1.10.0；egress 端点自 1.10.0 起提供）
+> 上游契约：[设备端 /api/v1](../../docs/API.md)（device_faker_server 1.11.0；egress 端点自 1.10.0 起、设备内认证中继 relay 自 1.11.0 起提供）
 > 关联文档：[ARCH.md](ARCH.md)（实现架构与数据模型）、[api-types.ts](api-types.ts)（TypeScript 类型定义）、[../docs/plans/manager-relay-plan.md](../../docs/plans/manager-relay-plan.md)（计划书）
 
 本文是 Manager / Relay 的唯一接口事实来源。`frontend-dev` 按本文 + `api-types.ts` 编码 WebUI，
@@ -30,6 +30,7 @@
 | 审计 | `/audit` 查询添加 / 修改 / 移除 / 同步 / 下发 / 轮换 / 鉴权失败 |
 | 出口代理池（egress） | `/egress-proxies` CRUD（名称唯一、被绑定删除 409）、凭据加密落库、Manager 侧直连探测、最近探测结果 |
 | 出口绑定与下发 | `/devices/{id}/egress` 绑定（整机 / 应用级）、`/devices/egress/apply` 批量下发（job `kind=egress`，含 `probe` 与 `dryRun`） |
+| 设备内认证中继（relay，v1.11.0） | `DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`；`/devices/{id}/egress` 的 `deviceState.relay` 原样透传；Manager 侧探测支持 `socks5` 真连 |
 
 ### 1.2 明确不做（本增量）
 
@@ -47,7 +48,7 @@
 | API 前缀 | `/relay/api/v1`（下称 `BASE`） |
 | `apiVersion` | `v1`（出现在 `/healthz`） |
 | Manager 版本 | `0.2.0` |
-| 设备端最低版本 | `1.9.0`（需要 `/status`、`/overview`、`/config/revision`、`/templates`、`/apps`、`/apps/{pkg}/restart`）；egress 端点需要 `1.10.0`，缺失时下发结果记 `egress_unsupported`（`skipped`） |
+| 设备端最低版本 | `1.9.0`（需要 `/status`、`/overview`、`/config/revision`、`/templates`、`/apps`、`/apps/{pkg}/restart`）；egress 端点需要 `1.10.0`，缺失时下发结果记 `egress_unsupported`（`skipped`）；`relay` 字段需要 `1.11.0`，旧设备的 `DeviceSummary.egress.relay` 为 `null`（不报错、字段只增不改） |
 | 低版本设备 | 允许注册；缺少的字段为 `null`，聚合视图给 `unsupported_device_api` 警告；下发仍按 1.9.0 端点执行，失败按 §7.5 映射 |
 
 兼容规则：
@@ -205,7 +206,6 @@
 | `invalid_egress_name` | 代理名不符合 `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`，或等于保留值 `__DIRECT__` |
 | `invalid_egress_proxy` | `type` 非枚举、`host` 含 scheme/端口或超长、`port` 越界、凭据超长、`enabled` 非布尔 |
 | `invalid_probe_url` | 探测 URL 不以 `http://` 开头、超过 512 字符或含用户信息 |
-| `unsupported_proxy_type` | `POST /egress-proxies/{id}/probe` 对 `socks5` 代理：Manager 侧探测只支持 HTTP 代理 |
 
 ### 2.8 Job 结果码与警告码
 
@@ -267,6 +267,11 @@ Manager 产生的警告码：
 | `egress_perm_fixed` | `{path, mode}` | `egress.toml` 权限被自愈为 0600 |
 | `egress_probe_approximate` | `{package}` | 应用级探测在服务进程内完成 |
 | `egress_probe_scope_app` | 出现在设备端探测 `502` 的 `details.warnings[]` | 应用级探测失败、设备级系统代理保持不变 |
+| `egress_relay_bind_failed` | `{proxy, port, scope, reason}` | 中继端口绑定 / 持久化失败，或 listener 中途退出（`port` 可为 `null`） |
+| `egress_relay_firewall_failed` | `{op, reason, chain, ports, exitCode}` | uid 防火墙未能落地 / 与期望不符 / 清理失败 |
+| `egress_relay_uid_unknown` | `{proxy, port, scope:"app", package, userId, reason}` | 应用级端口的 `pkg@uid` 解析失败，该端口不监听（fail-closed） |
+| `egress_relay_upstream_unreachable` | `{proxy, port, scope, reason, at}` | 数据面最近一次到上游的握手失败 |
+| `egress_relay_device_socks5_unsupported` | `{proxy, scope:"device", reason:"socks5_device_scope_unsupported"}` | 合并后的有效 `default` 指向非 http（socks5）定义：不建 device listener；`enabled=true` 时 `settings` 黑洞化，`enabled=false` 时按未配置；`PUT` 直接 422；与凭据无关 |
 
 > `dry_run` / `diff` 的响应里，代理凭据一律掩码成 `<redacted>`（设备端行为，见 [../../docs/API.md](../../docs/API.md) §5.26）；`settings` 失败只表现为设备端 `503 upstream_unavailable` + `details.component="settings"`，没有单独的错误码。
 
@@ -420,8 +425,8 @@ Manager 产生的警告码：
           "sdk": 37,
           "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys",
           "root": "kernelsu",
-          "moduleVersion": "v1.10.0",
-          "serverVersion": "1.10.0",
+          "moduleVersion": "v1.11.0",
+          "serverVersion": "1.11.0",
           "lastSeen": "2026-11-24T08:12:31Z",
           "lastSyncedAt": "2026-11-24T08:12:31Z",
           "latencyMs": 38,
@@ -521,8 +526,8 @@ Manager 产生的警告码：
       "sdk": 37,
       "fingerprint": "google/tokay/tokay:17/…",
       "root": "kernelsu",
-      "moduleVersion": "v1.10.0",
-      "serverVersion": "1.10.0",
+      "moduleVersion": "v1.11.0",
+      "serverVersion": "1.11.0",
       "lastSeen": "2026-11-24T08:12:31Z",
       "lastSyncedAt": "2026-11-24T08:12:31Z",
       "latencyMs": 38,
@@ -1165,7 +1170,7 @@ Manager 产生的警告码：
 
 错误：401、409 `egress_proxy_exists`、413、415、422（`invalid_egress_name` / `invalid_egress_proxy` / `too_many_items`）、500。
 
-> **认证限制（本期）**：`username` / `password` 可以录入并加密落库，但**设备端应用流量不会发送认证**（SOCKS5：属性可读而 libcore 不发送，实测代理侧 `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`；HTTP Basic 未实现）。因此带凭据的代理请在代理服务端配 **IP 白名单**授权，或等后续「设备内本地认证中继」（P2，尚未实现）。Manager 侧 `POST /egress-proxies/{id}/probe` 只支持 HTTP 代理、不验证 SOCKS5 认证。
+> **认证（v1.11.0）**：`username` / `password` 加密落库并随下发进入设备 0600 的 `egress.toml`；设备内中继（relay）生效时由 root 进程补 HTTP Basic / SOCKS5 RFC1929，应用侧永远看不到凭据。relay 未生效（设备 `[relay].enabled=false` / 文件未迁移）时回退上游 `host:port`，该状态才需要代理侧 **IP 白名单**。Manager 侧 `POST /egress-proxies/{id}/probe` 自 v1.11.0 起 `http` 与 `socks5` 都真连（`socks5h://` + RFC 1929）。设备内中继状态见 `DeviceSummary.egress.relay`。
 
 ### 4.21 `GET /egress-proxies/{id}`
 
@@ -1202,7 +1207,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
 - 用途：**Manager 侧直连探测**，验证代理本身可用（与设备链路无关）。
 - 请求体可省略：`{"url": "http://…"}`；默认 `http://checkip.amazonaws.com/`，只接受 `http://`、≤512 字符。
 - 执行：用该代理的 `type/host/port/凭据`（解密后仅在内存）发一次 GET，5 s 超时；**成功与失败都写** `egress_checks(source="manager")`。
-- 只支持 `http` 代理：`socks5` → `422`（`details.errors[].code="unsupported_proxy_type"`），并写一条 `ok=0, error_code="unsupported_proxy_type"`。
+- 支持 `http` 与 `socks5`：`http` 用 `Proxy-Authorization: Basic`；`socks5` 自 v1.11.0 起真连（reqwest `socks` feature，`socks5h://` 表示 DNS 交给代理解析；有凭据时按 RFC 1929）。失败同样写 `ok=0` + `error_code`。
 
 响应 `200`（成功）：`{proxyId, ok:true, exitIp, latencyMs, checkedAt, url, upstreamStatus, warnings}`——
 `warnings` **恒在**（没东西时是 `[]`）；探测结果没写进 `egress_checks` 时带一条 `egress_check_not_recorded`（`{proxyId, source:"manager"}`），**探测本身仍按真实结果返回 200**。
@@ -1225,7 +1230,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
       ]
     }
 
-`422 unsupported_proxy_type` 仍是**纯信封**（没有顶层 `warnings`）。
+`422`（例如 `invalid_probe_url`）仍是**纯信封**（没有顶层 `warnings`）。`unsupported_proxy_type` 已随 `socks5` 真连落地移除，不再返回。
 
 错误：401、404、422、502、500。审计 `egress.proxy_probe`（`detail={proxyId, name, changed:false}`）。
 
@@ -1257,7 +1262,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
       "warnings": []
     }
 
-- `deviceState` 是设备端 `GET /egress` 的**透传子集**（原样转发，不裁剪 Relay 不认识的字段；遵循 §2.12）。
+- `deviceState` 是设备端 `GET /egress` 的**透传子集**（原样转发，不裁剪 Relay 不认识的字段；遵循 §2.12），含 v1.11.0 的 `relay` 对象（`enabled/basePort/failOpen/listeners/firewall/portChanges/restartRequiredApps`）与 `proxies[].localPort` / `relayActive`。
 - `bindings[].app=""` 表示整机（方案 A）；`mode="direct"` 时 `proxyId`/`proxyName` 为 `null`。
 
 错误：401、404 `device_not_found`、500（离线不报错）。
@@ -1342,14 +1347,14 @@ Merge-Patch 风格，但凭据字段是**双态**：
 | `sdk` | integer | 是 | `device.sdk` |
 | `fingerprint` | string | 是 | `device.fingerprint` |
 | `root` | string | 是 | `root.manager`（`kernelsu` / `magisk` / `apatch`）；无 root 块为 `null` |
-| `moduleVersion` | string | 是 | `module.version`（如 `v1.10.0`） |
-| `serverVersion` | string | 是 | `server.version`（如 `1.10.0`） |
+| `moduleVersion` | string | 是 | `module.version`（如 `v1.11.0`） |
+| `serverVersion` | string | 是 | `server.version`（如 `1.11.0`） |
 | `lastSeen` | string | 是 | 最近一次成功接触（RFC 3339 UTC，秒精度） |
 | `lastSyncedAt` | string | 是 | 最近一次成功拉取 overview 的时间 |
 | `latencyMs` | integer | 是 | 最近一次探测 / 同步耗时（四舍五入，毫秒） |
 | `createdAt` | string | 否 | 注册时间 |
 | `lastError` | `{code, message}` | 是 | 最近一次失败；成功后清空 |
-| `egress` | `DeviceEgressSummary` \| null | 是 | 设备级出口摘要（只增不改）：`{mode, proxyId, proxyName, exitIp, checkedAt, ok, errorCode}`；没有任何绑定时为 `null` |
+| `egress` | `DeviceEgressSummary` \| null | 是 | 设备级出口摘要（只增不改）：`{mode, proxyId, proxyName, exitIp, checkedAt, ok, errorCode, relay}`；没有任何绑定时为 `null`。`relay`（v1.11.0）= `{enabled, active, listeners, firewallApplied}`，设备离线 / 旧设备（无 `relay` 字段）/ 未绑定时为 `null` |
 
 `baseUrl` 在校验阶段拒绝：非 `http`/`https`、含 `@`（userinfo）、含 `?` / `#`、空 host、
 以及 `file:` / `ftp:` 等 scheme。查询参数与片段一律不允许（设备端 API 不需要）。
@@ -1618,7 +1623,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
 | `ok` | boolean | 否 | 探测是否成功 |
 | `exitIp` | string | 是 | 出口 IP |
 | `latencyMs` | integer | 是 | 毫秒 |
-| `errorCode` | string | 是 | 失败码（如 `egress.probe_failed` / `unsupported_proxy_type`） |
+| `errorCode` | string | 是 | 失败码（如 `egress.probe_failed` / `invalid_probe_url`） |
 | `checkedAt` | string | 否 | RFC 3339 UTC |
 
 ### 5.13 `DeviceEgressBinding`
@@ -1888,7 +1893,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
 | 2 | 组装期望态 | — | 只组装 **Manager 拥有的三样**：`default`、`apps`、`proxies`（含凭据）。`failOpen` / `probeUrl` / `probeTimeoutSeconds` / `exclusionList` **不进请求体**（属设备端 `egress.toml` / settings，Manager 不下发、不重置）。凭据字段总是显式（未设置即 `null`）；零应用级绑定时发 `apps: null` |
 | 3 | 下发（**总是 PUT，不做本地比较**） | `PUT /api/v1/egress` + `If-Match: <步骤 1 的 egress revision>` | 412 → 重取 revision 重试**一次**（`attempts=2`）；仍 412 → `failed config_revision_mismatch`；403 → `forbidden_scope`；422 → `validation_failed`（保留 `details.errors`）；503 → `upstream_unavailable`。内容一致也会真写一次，**没有本地跳过** |
 | 4 | 读 `changed` 落步骤 | — | 设备 `changed:true` → 步骤 `egress_put` 记 `ok`；`changed:false` → 步骤 `egress_put` 记 `status:"skipped"` + `code:"egress_unchanged"`，**结果行仍是 `ok`**、`code="egress_unchanged"`（全部 `skipped` 会把 job 算成 `partial`）。`JobResult.revision` 取设备返回的 `revision` |
-| 5 | 探测（仅 `probe=true`，步骤 3 成功后；含 `changed:false`） | `POST /api/v1/egress/probe` | 任何失败 → 追加 `egress_probe_failed` 警告（`details{deviceId, app, reason}`），**不改结果状态**；成功则写 `egress_checks(source="device")` |
+| 5 | 探测（仅 `probe=true`，步骤 3 成功后；含 `changed:false`） | `POST /api/v1/egress/probe`（不传 `via`，设备按缺省 `upstream` 探测；中继健康由 `deviceState.relay` 反映） | 任何失败 → 追加 `egress_probe_failed` 警告（`details{deviceId, app, reason}`），**不改结果状态**；成功则写 `egress_checks(source="device")` |
 | 6 | 收尾 | — | 更新 `device.lastSeen` / `online`；写 `job_results`（`app=""` 表示整机）；累加计数；全部完成后写审计 `egress.apply` |
 
 语义要点（与 [ARCH.md §10.7](ARCH.md) 同一口径）：
@@ -1896,8 +1901,8 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
 - **总是 PUT**：每次 apply 都会写一次设备（需要设备 Token 的 `write` 作用域），换来凭据轮换、设备侧漂移都能被下一次 apply 收敛；Manager 不存「已下发指纹」。
 - **幂等判定权在设备**：`changed:false` 由设备端算（期望态 == 现状），Manager 只把它转写成 `egress_unchanged`（结果 `ok`）。
 - **Manager 只下发三样**：`default` / `apps` / `proxies`；`failOpen`、`probeUrl`、`probeTimeoutSeconds`、`exclusionList` 保持设备现值，Manager 不比较也不重置。
-- **Manager 侧探测只支持 HTTP 代理**（`socks5` → `422 unsupported_proxy_type`），只用于验证代理本身可用。
-- **固有代价：凭据随请求下发**。「总是 PUT」意味着每次 apply 都会把**解密后的** `username`/`password` 放进 `PUT /api/v1/egress` 请求体，走与设备 Token 相同的通道（默认 loopback 明文 HTTP + Bearer；局域网无 TLS）。这是「总是 PUT」的代价而非缺陷：不先解密就推不动轮换后的凭据。明文只在请求内存里（`Zeroizing`），不落 Manager 日志、不进审计、不回响应；更强隔离用代理侧 IP 白名单或等 P2 本地认证中继。
+- **Manager 侧探测支持 `http` 与 `socks5`**（v1.11.0 起 `socks` feature 真连，`socks5h://` + RFC 1929），只用于验证代理本身可用，与设备链路无关。
+- **固有代价：凭据随请求下发**。「总是 PUT」意味着每次 apply 都会把**解密后的** `username`/`password` 放进 `PUT /api/v1/egress` 请求体，走与设备 Token 相同的通道（默认 loopback 明文 HTTP + Bearer；局域网无 TLS）。这是「总是 PUT」的代价而非缺陷：不先解密就推不动轮换后的凭据。明文只在请求内存里（`Zeroizing`），不落 Manager 日志、不进审计、不回响应；更强隔离用代理侧 IP 白名单；设备内中继（v1.11.0）已承担应用侧认证。
 
 结果码映射（`JobResult.code`）：
 
@@ -2204,7 +2209,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
       "$BASE/egress-proxies" | jq -r .id)
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress-proxies/$PID" | jq '{name, hasCredentials, boundDevices, lastCheck}'
 
-    # 2) Manager 侧直连探测（验证代理本身；socks5 会 422 unsupported_proxy_type）
+    # 2) Manager 侧直连探测（验证代理本身；v1.11.0 起 http / socks5 都真连）
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
       -d '{"url":"http://checkip.example.com/"}' "$BASE/egress-proxies/$PID/probe" | jq .
 

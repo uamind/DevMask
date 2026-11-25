@@ -160,7 +160,11 @@ fn render_doc(
 }
 
 /// 把所有配置包渲染成 `pkg → TOML` 的内存表。
-fn render_map(config: &Config) -> HashMap<String, String> {
+///
+/// `egress_file` 由调用方读一次（[egress::load_egress]）后传进来：代理定义只解析一遍，
+/// 「带凭据 → 本地中继 / fail-closed 哨兵」的改写（[egress::spec_proxies]）也只算一遍，
+/// 因此回退与 fail-closed 的告警每次重渲染只出现一次（而不是每个包一条）。
+fn render_map(config: &Config, egress_file: &egress::EgressFile) -> HashMap<String, String> {
     let mut packages: Vec<String> = config.apps.iter().map(|app| app.package.clone()).collect();
     for template in config.templates.values() {
         packages.extend(template.packages.iter().cloned());
@@ -168,14 +172,18 @@ fn render_map(config: &Config) -> HashMap<String, String> {
     packages.sort();
     packages.dedup();
 
-    // 代理定义只读一次（egress.toml 是 0600，只有 companion 所在的 root 域读得到；
-    // 模块进程不碰这个文件，见 egress 模块的文档）。
-    let proxies = egress::load_proxies();
+    // 代理视图（含 relay 改写与降级日志）只算一次：egress.toml 是 0600，只有 companion
+    // 所在的 root 域读得到；模块进程不碰这个文件，见 egress 模块的文档。
+    let view = egress::spec_proxies(egress_file);
+    for line in &view.warnings {
+        // 只报代理名与上游地址，不含凭据（契约 §3.3 日志边界）。
+        warn!("{line}");
+    }
 
     let mut table = HashMap::with_capacity(packages.len());
     for package in packages {
         if let Some(merged) = config.get_merged_config(&package) {
-            let proxy = egress::resolve_for_package(config, &proxies, &package);
+            let proxy = egress::resolve_for_package(config, &view.proxies, &package);
             table.insert(
                 package.clone(),
                 render_doc(config, &merged, &package, proxy.as_ref()),
@@ -221,7 +229,8 @@ pub fn maybe_render() {
 
     match crate::load_config() {
         Ok(Some(config)) => {
-            let table = render_map(&config);
+            let egress_file = egress::load_egress();
+            let table = render_map(&config, &egress_file);
             let count = table.len();
             let mut guard = SPECS
                 .lock()
@@ -290,5 +299,416 @@ fn watch_config_events() {
             break;
         }
         maybe_render();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::egress::{EgressFile, EgressProxy, EgressType, RelaySettings};
+
+    /// 固定配置：一个 `__DIRECT__`、一个未配置、一个带凭据中继、一个无凭据上游、
+    /// 一个「带凭据但缺 local_port」（中继开着 → fail-closed 哨兵）。
+    const CONFIG_TOML: &str = r#"
+debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.direct"
+model = "Pixel 9"
+brand = "google"
+egress = "__DIRECT__"
+
+[[apps]]
+package = "com.example.unconfigured"
+model = "Pixel 9"
+
+[[apps]]
+package = "com.example.relay"
+model = "Pixel 9"
+egress = "hk_resi"
+
+[[apps]]
+package = "com.example.plain"
+model = "Pixel 9"
+egress = "us_la"
+
+[[apps]]
+package = "com.example.legacy"
+model = "Pixel 9"
+egress = "hk_legacy"
+"#;
+
+    // DIRECT_SPEC / UNCONFIGURED_SPEC / PLAIN_UPSTREAM_SPEC 是 **v1.10.0 实测输出**
+    //（改动前用同一份配置从 render_doc 导出）：无 [egress_proxy] 的两种情形与无凭据上游，
+    // 一个字节都不许变。
+    //
+    // 带凭据的上游**不再**有 v1.10.0 基线：v1.2 起 spec 里根本不写 username/password
+    //（§9.2 B13），回退窗口的输出与 v1.10.0 有意不同——「凭据不进应用进程」优先于兼容。
+    const DIRECT_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.direct"
+brand = "google"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+
+[egress_proxy]
+type = "direct"
+"#;
+
+    const UNCONFIGURED_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.unconfigured"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+"#;
+
+    const PLAIN_UPSTREAM_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.plain"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+
+[egress_proxy]
+type = "socks5"
+host = "198.51.100.7"
+port = 1080
+"#;
+
+    /// relay **明确关闭**时的回退：上游 host/port，且**不带**凭据载体（v1.2，§9.2 B13）。
+    const UPSTREAM_NO_CREDS_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.relay"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+
+[egress_proxy]
+type = "http"
+host = "203.0.113.10"
+port = 8080
+"#;
+
+    /// relay 开着、文件已迁移、却缺 local_port → fail-closed 哨兵（R13）。
+    const FAIL_CLOSED_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.legacy"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+
+[egress_proxy]
+type = "http"
+host = "127.0.0.1"
+port = 9
+relay = true
+"#;
+
+    /// 中继生效时的 spec（契约 §3.3 字段表：只留 type/host/port + `relay = true`）。
+    const RELAY_SPEC: &str = r#"debug = false
+default_force_denylist_unmount = true
+default_hide_maps = ["/data/local/tmp/df"]
+
+[[apps]]
+package = "com.example.relay"
+model = "Pixel 9"
+force_denylist_unmount = true
+hide_maps = ["/data/local/tmp/df"]
+companion_resetprop = false
+
+[egress_proxy]
+type = "http"
+host = "127.0.0.1"
+port = 17800
+relay = true
+"#;
+
+    fn config() -> Config {
+        Config::from_toml(CONFIG_TOML).expect("test config parses")
+    }
+
+    fn credential_proxy(
+        kind: EgressType,
+        host: &str,
+        port: u16,
+        local_port: Option<u16>,
+    ) -> EgressProxy {
+        let mut proxy = EgressProxy::endpoint_proxy(kind, host, port);
+        proxy.username = Some("relay-user".to_string());
+        proxy.password = Some("relay-secret".to_string());
+        proxy.local_port = local_port;
+        proxy
+    }
+
+    fn egress_file(enabled: bool) -> EgressFile {
+        let mut proxies = HashMap::new();
+        proxies.insert(
+            "hk_resi".to_string(),
+            credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+        );
+        proxies.insert(
+            "us_la".to_string(),
+            EgressProxy::endpoint_proxy(EgressType::Socks5, "198.51.100.7", 1080),
+        );
+        proxies.insert(
+            "hk_legacy".to_string(),
+            credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+        );
+        EgressFile {
+            relay: RelaySettings { enabled },
+            relay_present: true,
+            proxies,
+        }
+    }
+
+    /// v1.10.0 的老文件：既没有 `[relay]` 键，也没有任何 `local_port`。
+    fn unmigrated_file() -> EgressFile {
+        let mut proxies = HashMap::new();
+        proxies.insert(
+            "hk_resi".to_string(),
+            credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+        );
+        EgressFile {
+            relay: RelaySettings::default(),
+            relay_present: false,
+            proxies,
+        }
+    }
+
+    fn render(file: &EgressFile, package: &str) -> String {
+        render_map(&config(), file)
+            .remove(package)
+            .unwrap_or_else(|| panic!("no spec rendered for {package}"))
+    }
+
+    #[test]
+    fn direct_and_unconfigured_specs_are_byte_identical_to_v1_10_0() {
+        // relay 开着也不影响：__DIRECT__ 永远直连，未配置永远没有 [egress_proxy]。
+        let file = egress_file(true);
+        assert_eq!(render(&file, "com.example.direct"), DIRECT_SPEC);
+        assert_eq!(render(&file, "com.example.unconfigured"), UNCONFIGURED_SPEC);
+
+        // relay 关掉之后同样逐字节一致（两种 relay 状态都不改变这两类包的输出）。
+        let off = egress_file(false);
+        assert_eq!(render(&off, "com.example.direct"), DIRECT_SPEC);
+        assert_eq!(render(&off, "com.example.unconfigured"), UNCONFIGURED_SPEC);
+    }
+
+    #[test]
+    fn credentialed_proxy_is_rewritten_to_the_local_relay_spec() {
+        let document = render(&egress_file(true), "com.example.relay");
+
+        assert_eq!(document, RELAY_SPEC);
+        // 三项硬要求：回环 host、local_port、relay 标记
+        assert!(document.contains("host = \"127.0.0.1\""), "{document}");
+        assert!(document.contains("port = 17800"), "{document}");
+        assert!(document.contains("relay = true"), "{document}");
+        // 凭据与上游地址一个字节都不许出现在 spec 里
+        assert!(!document.contains("relay-user"), "{document}");
+        assert!(!document.contains("relay-secret"), "{document}");
+        assert!(!document.contains("203.0.113.10"), "{document}");
+        assert!(!document.contains("127.0.0.1:0"), "{document}");
+
+        // 带 relay 的 spec 仍然是合法 Config（模块侧 Config::from_toml 要能解析）
+        let parsed = Config::from_toml(&document).expect("relay spec still parses as Config");
+        assert_eq!(parsed.apps.len(), 1);
+        assert_eq!(parsed.apps[0].package, "com.example.relay");
+    }
+
+    #[test]
+    fn proxy_without_credentials_keeps_the_upstream_address() {
+        let document = render(&egress_file(true), "com.example.plain");
+        assert_eq!(
+            document, PLAIN_UPSTREAM_SPEC,
+            "无凭据必须与 v1.10.0 逐字节一致"
+        );
+        assert!(!document.contains("relay"), "{document}");
+        assert!(!document.contains("127.0.0.1"), "{document}");
+
+        // relay 关闭时输出不变（无凭据从来不参与中继）
+        assert_eq!(
+            render(&egress_file(false), "com.example.plain"),
+            PLAIN_UPSTREAM_SPEC
+        );
+    }
+
+    #[test]
+    fn local_port_missing_while_relay_enabled_fails_closed() {
+        // R13：中继开着、文件已迁移（本 fixture 有 [relay]），缺 local_port = 故障。
+        let file = egress_file(true);
+        let document = render(&file, "com.example.legacy");
+
+        assert_eq!(document, FAIL_CLOSED_SPEC);
+        assert!(document.contains("host = \"127.0.0.1\""), "{document}");
+        assert!(document.contains("port = 9"), "{document}");
+        assert!(document.contains("relay = true"), "{document}");
+        // 绝不回退上游、也绝不写 0 端口
+        assert!(!document.contains("203.0.113.10"), "{document}");
+        assert!(!document.contains("127.0.0.1:0"), "{document}");
+
+        // 必须留一行 warn，且不含凭据原文
+        let view = egress::spec_proxies(&file);
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        let line = &view.warnings[0];
+        assert!(line.contains("fail-closed"), "{line}");
+        assert!(line.contains("port_missing"), "{line}");
+        assert!(line.contains("hk_legacy"), "{line}");
+        assert!(!line.contains("203.0.113.10"), "{line}");
+        assert!(!line.contains("relay-secret"), "{line}");
+        assert!(!line.contains("relay-user"), "{line}");
+    }
+
+    #[test]
+    fn relay_disabled_falls_back_upstream_without_credentials() {
+        // 同一条带凭据定义：relay 明确关掉 → 回退上游，且**不写凭据载体**（v1.2，§9.2 B13）。
+        let document = render(&egress_file(false), "com.example.relay");
+        assert_eq!(document, UPSTREAM_NO_CREDS_SPEC);
+        assert!(!document.contains("relay = true"), "{document}");
+        assert!(!document.contains("username"), "{document}");
+        assert!(!document.contains("password"), "{document}");
+        assert!(!document.contains("relay-user"), "{document}");
+        assert!(!document.contains("relay-secret"), "{document}");
+    }
+
+    #[test]
+    fn unmigrated_egress_file_falls_back_upstream_without_credentials() {
+        // v1.10.0 的老文件（无 [relay]、无 local_port）：中继视为明确未启用 → 回退上游。
+        // 这是 R13 唯一保留的可用性窗口；且同样不写凭据载体。
+        let file = unmigrated_file();
+        let document = render(&file, "com.example.relay");
+        assert_eq!(document, UPSTREAM_NO_CREDS_SPEC);
+        assert!(!document.contains("relay = true"), "{document}");
+        assert!(!document.contains("username"), "{document}");
+
+        let view = egress::spec_proxies(&file);
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        assert!(
+            view.warnings[0].contains("not migrated"),
+            "{:?}",
+            view.warnings
+        );
+        // 未迁移不是故障：绝不能断网
+        assert!(!document.contains("port = 9"), "{document}");
+    }
+
+    #[test]
+    fn relay_never_rewrites_direct_or_undefined_proxies() {
+        // 未定义代理名：不注入、也没有 [egress_proxy]（既有语义）
+        let config = Config::from_toml(
+            r#"
+            [[apps]]
+            package = "com.example.missing"
+            egress = "nope_proxy"
+            "#,
+        )
+        .expect("config");
+        let specs = render_map(&config, &egress_file(true));
+        let document = &specs["com.example.missing"];
+        assert!(!document.contains("[egress_proxy]"), "{document}");
+    }
+
+    #[test]
+    fn contract_sample_egress_toml_drives_the_spec_end_to_end() {
+        // 直接吃契约 §2.1 的样例文件：解析 → spec 视图 → 渲染，验证 local_port 真的
+        // 决定了注入地址（不是只测内部视图）。
+        let file = egress::parse_egress(
+            r#"
+version = 1
+
+[relay]
+enabled                  = true
+base_port                = 17800
+firewall                 = true
+max_connections          = 256
+max_connections_per_uid  = 64
+
+[proxies.hk_resi]
+type       = "http"
+host       = "203.0.113.10"
+port       = 8080
+username   = "user"
+password   = "<PASSWORD>"
+local_port = 17800
+
+[proxies.jp_socks]
+type       = "socks5"
+host       = "198.51.100.20"
+port       = 1080
+username   = "u2"
+password   = "p2"
+local_port = 17831
+
+[proxies.us_la_01]
+type = "http"
+host = "203.0.113.10"
+port = 1080
+"#,
+        );
+        assert!(file.relay.enabled);
+
+        let config = Config::from_toml(
+            r#"
+            [[apps]]
+            package = "com.example.hk"
+            egress = "hk_resi"
+
+            [[apps]]
+            package = "com.example.jp"
+            egress = "jp_socks"
+
+            [[apps]]
+            package = "com.example.us"
+            egress = "us_la_01"
+            "#,
+        )
+        .expect("config");
+        let specs = render_map(&config, &file);
+
+        // http 定义 → 本地 HTTP 中继端口，凭据与上游地址都不出现
+        let http = &specs["com.example.hk"];
+        assert!(http.contains("host = \"127.0.0.1\""), "{http}");
+        assert!(http.contains("port = 17800"), "{http}");
+        assert!(http.contains("relay = true"), "{http}");
+        assert!(!http.contains("<PASSWORD>"), "{http}");
+        assert!(!http.contains("203.0.113.10"), "{http}");
+
+        // socks5 定义 → 该定义自己的 local_port（17831，不是 base_port）
+        let socks = &specs["com.example.jp"];
+        assert!(socks.contains("type = \"socks5\""), "{socks}");
+        assert!(socks.contains("host = \"127.0.0.1\""), "{socks}");
+        assert!(socks.contains("port = 17831"), "{socks}");
+        assert!(socks.contains("relay = true"), "{socks}");
+        assert!(!socks.contains("198.51.100.20"), "{socks}");
+
+        // 无凭据定义 → 上游直连，**不**因为文件里有 relay 段就被改写
+        let plain = &specs["com.example.us"];
+        assert!(plain.contains("host = \"203.0.113.10\""), "{plain}");
+        assert!(plain.contains("port = 1080"), "{plain}");
+        assert!(!plain.contains("127.0.0.1"), "{plain}");
+        assert!(!plain.contains("relay = true"), "{plain}");
     }
 }

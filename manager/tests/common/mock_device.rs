@@ -22,7 +22,11 @@ use axum::{
     routing::{any, get, post, put},
 };
 use serde_json::{Value, json};
-use tokio::task::JoinHandle;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    task::JoinHandle,
+};
 
 /// Mock 模板。
 #[derive(Debug, Clone)]
@@ -79,6 +83,8 @@ pub struct MockOptions {
     pub egress_probe_status: Option<u16>,
     /// PUT /api/v1/egress 固定失败状态码。
     pub egress_put_status: Option<u16>,
+    /// `GET /api/v1/egress` 的 `relay` 对象；`None` = 旧设备（响应里没有该字段）。
+    pub egress_relay: Option<Value>,
 }
 
 impl Default for MockOptions {
@@ -122,6 +128,7 @@ impl Default for MockOptions {
             egress_probe_exit_ip: "203.0.113.7".to_string(),
             egress_probe_status: None,
             egress_put_status: None,
+            egress_relay: None,
         }
     }
 }
@@ -308,6 +315,11 @@ impl MockDevice {
             .lock()
             .expect("Mock egress 锁")
             .clone()
+    }
+
+    /// 运行中切换设备端 relay 状态（`None` = 旧设备，响应里没有 relay 字段）。
+    pub fn set_egress_relay(&self, relay: Option<Value>) {
+        self.options_mut(|options| options.egress_relay = relay);
     }
 
     /// 设备端当前 egress revision。
@@ -612,7 +624,29 @@ async fn get_egress(State(state): State<Arc<MockState>>, headers: HeaderMap) -> 
     let apps = state.egress_apps.lock().expect("Mock egress 锁").clone();
     let proxies = state.egress_proxies.lock().expect("Mock egress 锁").clone();
 
-    Json(json!({
+    let relay = options.egress_relay.clone();
+    let listeners: HashMap<String, Value> = relay
+        .as_ref()
+        .and_then(|relay| relay.get("listeners"))
+        .and_then(Value::as_array)
+        .map(|listeners| {
+            listeners
+                .iter()
+                .filter_map(|listener| {
+                    let name = listener.get("proxy").and_then(Value::as_str)?;
+                    Some((name.to_string(), listener.clone()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let relay_enabled = relay
+        .as_ref()
+        .and_then(|relay| relay.get("enabled"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let proxies = egress_proxies_with_relay(proxies, &listeners, relay_enabled, relay.is_some());
+
+    let mut body = json!({
         "revision": egress_revision,
         "configRevision": current_revision(&state),
         "configured": default.is_some() || !apps.is_empty(),
@@ -644,8 +678,59 @@ async fn get_egress(State(state): State<Arc<MockState>>, headers: HeaderMap) -> 
         "health": { "degraded": false, "degradedSince": null, "degradedReason": null, "lastProbe": null },
         "egressFile": { "exists": true, "size": 128, "mtime": "2026-11-24T11:58:03Z" },
         "warnings": [],
-    }))
-    .into_response()
+    });
+    if let Some(relay) = relay {
+        body["relay"] = relay;
+    }
+    Json(body).into_response()
+}
+
+/// 给代理定义补上中继端口（契约 §6.2 的 `localPort` / `relayActive`）。
+///
+/// `relay` 缺失（旧设备）时原样返回。listener 指向但存根里没有的定义也补一条：
+/// 真实设备里 listener 必然来自定义表，这里只是让用例不必先 PUT 一遍。
+fn egress_proxies_with_relay(
+    proxies: Vec<Value>,
+    listeners: &HashMap<String, Value>,
+    relay_enabled: bool,
+    has_relay: bool,
+) -> Vec<Value> {
+    if !has_relay {
+        return proxies;
+    }
+    let mut enriched = proxies;
+    for name in listeners.keys() {
+        let known = enriched
+            .iter()
+            .any(|proxy| proxy.get("name").and_then(Value::as_str) == Some(name.as_str()));
+        if !known {
+            enriched.push(json!({
+                "name": name,
+                "type": Value::Null,
+                "host": Value::Null,
+                "port": Value::Null,
+                "hasCredentials": true,
+            }));
+        }
+    }
+    for proxy in enriched.iter_mut() {
+        let name = proxy
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let listener = listeners.get(&name);
+        let listening = listener
+            .and_then(|listener| listener.get("listening"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        proxy["localPort"] = listener
+            .and_then(|listener| listener.get("port"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        proxy["relayActive"] = json!(relay_enabled && listening);
+    }
+    enriched
 }
 
 /// 规范化一条代理定义（只保留脱敏字段，用于 changed 比较与 GET 回显）。
@@ -999,6 +1084,189 @@ impl Drop for MockProxy {
     fn drop(&mut self) {
         self.handle.abort();
     }
+}
+
+/// 极简 SOCKS5 服务端（RFC 1928 + RFC 1929）：握手成功后按明文 HTTP 回固定出口 IP。
+///
+/// 用于 Manager 侧 socks5 探测用例：既证明请求真的走了 socks5 隧道与用户名/密码认证，
+/// 也证明凭据没有以 `Proxy-Authorization` 的形式漏给目标站点。
+pub struct MockSocks5 {
+    pub host: String,
+    pub port: u16,
+    exchanges: Arc<Mutex<Vec<Value>>>,
+    handle: JoinHandle<()>,
+}
+
+impl MockSocks5 {
+    /// `credentials` 为 Some 时只接受用户名/密码认证（RFC 1929，method 0x02）。
+    pub async fn start(exit_ip: &str, credentials: Option<(&str, &str)>) -> Self {
+        let exchanges: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&exchanges);
+        let exit_ip = exit_ip.to_string();
+        let credentials = credentials.map(|(user, pass)| (user.to_string(), pass.to_string()));
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("绑定 Mock SOCKS5");
+        let address = listener.local_addr().expect("Mock SOCKS5 地址");
+        let handle = tokio::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let recorded = Arc::clone(&recorded);
+                let exit_ip = exit_ip.clone();
+                let credentials = credentials.clone();
+                tokio::spawn(async move {
+                    let _ = socks5_session(stream, recorded, exit_ip, credentials).await;
+                });
+            }
+        });
+
+        Self {
+            host: address.ip().to_string(),
+            port: address.port(),
+            exchanges,
+            handle,
+        }
+    }
+
+    /// 每次握手的记录（认证方法 / 用户名密码 / 目标 / 隧道内请求行与代理认证头）。
+    pub fn exchanges(&self) -> Vec<Value> {
+        self.exchanges.lock().expect("Mock SOCKS5 锁").clone()
+    }
+
+    pub fn stop(&self) {
+        self.handle.abort();
+    }
+}
+
+impl Drop for MockSocks5 {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+async fn socks5_session(
+    mut stream: TcpStream,
+    recorded: Arc<Mutex<Vec<Value>>>,
+    exit_ip: String,
+    credentials: Option<(String, String)>,
+) -> std::io::Result<()> {
+    let mut head = [0u8; 2];
+    stream.read_exact(&mut head).await?;
+    if head[0] != 0x05 {
+        return Ok(());
+    }
+    let mut methods = vec![0u8; head[1] as usize];
+    stream.read_exact(&mut methods).await?;
+    let method = if credentials.is_some() { 0x02 } else { 0x00 };
+    if !methods.contains(&method) {
+        stream.write_all(&[0x05, 0xff]).await?;
+        return Ok(());
+    }
+    stream.write_all(&[0x05, method]).await?;
+
+    let mut username = Value::Null;
+    let mut password = Value::Null;
+    if credentials.is_some() {
+        let mut ver = [0u8; 2];
+        stream.read_exact(&mut ver).await?;
+        let mut name = vec![0u8; ver[1] as usize];
+        stream.read_exact(&mut name).await?;
+        let mut plen = [0u8; 1];
+        stream.read_exact(&mut plen).await?;
+        let mut pass = vec![0u8; plen[0] as usize];
+        stream.read_exact(&mut pass).await?;
+        let name = String::from_utf8_lossy(&name).into_owned();
+        let pass = String::from_utf8_lossy(&pass).into_owned();
+        let accepted = credentials
+            .as_ref()
+            .is_some_and(|(user, secret)| *user == name && *secret == pass);
+        username = json!(name);
+        password = json!(pass);
+        stream
+            .write_all(&[0x01, if accepted { 0x00 } else { 0x01 }])
+            .await?;
+        if !accepted {
+            recorded.lock().expect("Mock SOCKS5 锁").push(json!({
+                "method": method,
+                "username": username,
+                "password": password,
+                "accepted": false,
+                "target": Value::Null,
+            }));
+            return Ok(());
+        }
+    }
+
+    let mut request = [0u8; 4];
+    stream.read_exact(&mut request).await?;
+    let host = match request[3] {
+        0x01 => {
+            let mut address = [0u8; 4];
+            stream.read_exact(&mut address).await?;
+            std::net::Ipv4Addr::from(address).to_string()
+        }
+        0x03 => {
+            let mut len = [0u8; 1];
+            stream.read_exact(&mut len).await?;
+            let mut name = vec![0u8; len[0] as usize];
+            stream.read_exact(&mut name).await?;
+            String::from_utf8_lossy(&name).into_owned()
+        }
+        0x04 => {
+            let mut address = [0u8; 16];
+            stream.read_exact(&mut address).await?;
+            std::net::Ipv6Addr::from(address).to_string()
+        }
+        _ => return Ok(()),
+    };
+    let mut port = [0u8; 2];
+    stream.read_exact(&mut port).await?;
+    let target = format!("{host}:{}", u16::from_be_bytes(port));
+    // 成功应答：BND.ADDR/PORT 只是形式，客户端不会再用它去连目标。
+    stream
+        .write_all(&[0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])
+        .await?;
+
+    let head = read_http_head(&mut stream).await?;
+    let lowered = head.to_ascii_lowercase();
+    recorded.lock().expect("Mock SOCKS5 锁").push(json!({
+        "method": method,
+        "username": username,
+        "password": password,
+        "accepted": true,
+        "target": target,
+        "requestLine": head.lines().next().unwrap_or_default(),
+        "proxyAuthorization": lowered.contains("proxy-authorization:"),
+        "authorization": lowered.contains("authorization:")
+            && !lowered.contains("proxy-authorization:"),
+    }));
+
+    let body = format!("{exit_ip}\n");
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream.write_all(response.as_bytes()).await?;
+    let _ = stream.shutdown().await;
+    Ok(())
+}
+
+/// 读到 HTTP 头结束（\r\n\r\n），上限 8 KiB。
+async fn read_http_head(stream: &mut TcpStream) -> std::io::Result<String> {
+    let mut buffer = Vec::new();
+    let mut byte = [0u8; 1];
+    while buffer.len() < 8 * 1024 {
+        stream.read_exact(&mut byte).await?;
+        buffer.push(byte[0]);
+        if buffer.ends_with(b"\r\n\r\n") {
+            break;
+        }
+    }
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
 }
 
 /// 取一个「刚刚还被占用、现在已经关闭」的本地端口（用于不可达代理测试）。

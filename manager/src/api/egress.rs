@@ -9,11 +9,19 @@
 //! 2) 密码复用 DeviceKey（AES-256-GCM），AAD 绑定 proxy id 与字段名；
 //! 3) 探测 URL 只允许 http://（与设备端一致，避免引入 TLS 语义）。
 //!
-//! Manager 侧探测 URL 的默认值来自常量 DEFAULT_PROBE_URL，可被请求体的 url 覆盖。
+//! Manager 侧探测 URL 的默认值来自常量 DEFAULT_PROBE_URL，可被请求体的 url 覆盖；
+//! 探测支持 `http`（Proxy-Authorization）与 `socks5`（`socks5h://` + RFC 1929，
+//! 凭据不进任何请求头）。
+//!
+//! 设备内中继（relay）状态按 docs/plans/relay-contract.md §6.1 / §6.2 从设备
+//! `GET /egress` 透传：设备摘要带 `relay`，代理池带 `relayActive`。
+//! 取不到就是 null——离线 / 旧设备（无 `relay` 字段）/ 设备不可达都不猜、不缓存。
 
 use std::{
+    collections::{HashMap, HashSet},
     net::IpAddr,
     str::FromStr,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -24,12 +32,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde_json::{Value, json};
+use tokio::{sync::Semaphore, task::JoinSet};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
     api::{
         apply::is_valid_package,
-        dto::Warning,
+        dto::{DeviceRelaySummary, Warning},
         egress_dto::{
             CreateEgressProxyRequest, DeviceEgressBindingDto, DeviceEgressBindingInput,
             DeviceEgressPutRequest, DeviceEgressPutResponse, DeviceEgressResponse,
@@ -68,6 +77,10 @@ const MAX_TAGS: usize = 16;
 const MAX_TAG_LEN: usize = 32;
 /// 审计里 devices / apps 明细的截断长度。
 const DETAIL_LIMIT: usize = 20;
+/// 拉取设备 relay 快照的并发上限。
+const RELAY_FETCH_CONCURRENCY: usize = 8;
+/// 单台设备 relay 快照的超时上限（列表页不被单台慢设备拖住）。
+const RELAY_FETCH_TIMEOUT_MS: u64 = 2_000;
 
 /// 一个待下发目标：(device, app) 对；app 为空字符串表示整机。
 #[derive(Debug, Clone)]
@@ -307,13 +320,17 @@ pub async fn list_proxies(
         .collect();
 
     let total = filtered.len();
+    // relayActive 是设备端运行时事实：按「绑定设备 + 设备在线」聚合一次，取不到就是 null。
+    let relay_states = proxy_relay_states(&state, &filtered).await?;
     let items: Vec<EgressProxyDto> = filtered
         .into_iter()
         .skip(page.offset)
         .take(page.limit)
         .map(|record| {
             let id = record.id.clone();
-            proxy_dto(record, usage.get(&id), checks.get(&id).cloned())
+            let mut dto = proxy_dto(record, usage.get(&id), checks.get(&id).cloned());
+            dto.relay_active = relay_states.get(&id).copied().flatten();
+            dto
         })
         .collect();
     let next_cursor = paging::next_cursor(total, page.offset, items.len());
@@ -455,6 +472,7 @@ pub async fn get_proxy(
     State(state): State<AppState>,
 ) -> Result<Json<EgressProxyDetailResponse>, ApiError> {
     let record = load_proxy(&state, &proxy_id).await?;
+    let relay_states = proxy_relay_states(&state, std::slice::from_ref(&record)).await?;
     let bindings = state
         .db
         .egress_proxy_bindings(&proxy_id)
@@ -472,7 +490,8 @@ pub async fn get_proxy(
         .map_err(|error| internal("egress.checks", error))?;
 
     let last_check = checks.first().cloned();
-    let proxy = proxy_dto(record, usage.get(&proxy_id), last_check);
+    let mut proxy = proxy_dto(record, usage.get(&proxy_id), last_check);
+    proxy.relay_active = relay_states.get(&proxy_id).copied().flatten();
     Ok(Json(EgressProxyDetailResponse {
         proxy,
         bindings: bindings
@@ -912,29 +931,6 @@ pub async fn probe_proxy(
     }
 
     let checked_at = ids::now_rfc3339();
-    if record.kind != "http" {
-        write_check(
-            &state,
-            NewEgressCheck {
-                source: "manager".to_string(),
-                device_id: None,
-                app: String::new(),
-                scope: "device".to_string(),
-                proxy_id: Some(record.id.clone()),
-                exit_ip: None,
-                latency_ms: None,
-                ok: false,
-                error_code: Some("unsupported_proxy_type".to_string()),
-                checked_at,
-            },
-        )
-        .await;
-        return Err(ApiError::validation(vec![ValidationError::new(
-            "proxyId",
-            "unsupported_proxy_type",
-            "Manager 侧探测只支持 HTTP 代理",
-        )]));
-    }
 
     let username = decrypt_credential(&state, &record, EgressField::Username)?;
     let password = decrypt_credential(&state, &record, EgressField::Password)?;
@@ -1113,20 +1109,45 @@ fn decrypt_credential(
         })
 }
 
-/// 经 HTTP 代理发一次 GET，返回 (出口 IP, 上游状态码)。
+/// 代理地址的 authority；IPv6 字面量必须加方括号（host 校验保证只有 IPv6 才含 ':'）。
+fn proxy_authority(host: &str, port: i64) -> String {
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+/// 经代理发一次 GET，返回 (出口 IP, 上游状态码)。
+///
+/// - `type="http"`：HTTP 代理 + 预置 `Proxy-Authorization`（基本认证）。
+/// - `type="socks5"`：`socks5h://`（DNS 交给代理解析）+ RFC 1929 用户名/密码。
+///   这条链路**不带** `Proxy-Authorization`——否则凭据会跟着请求到达目标站点。
 async fn probe_through_proxy(
     record: &EgressProxyRecord,
     url: &str,
     username: Option<&str>,
     password: Option<&str>,
 ) -> Result<(String, Option<u16>), ProbeFailure> {
-    let proxy_url = format!("http://{}:{}", record.host, record.port);
-    let mut proxy = reqwest::Proxy::http(&proxy_url).map_err(|error| ProbeFailure {
+    let is_socks = record.kind == "socks5";
+    let authority = proxy_authority(&record.host, record.port);
+    let proxy_url = if is_socks {
+        format!("socks5h://{authority}")
+    } else {
+        format!("http://{authority}")
+    };
+    let mut proxy = if is_socks {
+        reqwest::Proxy::all(&proxy_url)
+    } else {
+        reqwest::Proxy::http(&proxy_url)
+    }
+    .map_err(|error| ProbeFailure {
         reason: "connect",
         upstream_status: None,
         detail: error.to_string(),
     })?;
     if let (Some(username), Some(password)) = (username, password) {
+        // socks5 的 basic_auth 落到代理 URL 的 userinfo（RFC 1929），不发任何头。
         proxy = proxy.basic_auth(username, password);
     }
     let client = reqwest::Client::builder()
@@ -1145,7 +1166,7 @@ async fn probe_through_proxy(
     let mut request = client
         .get(url)
         .header(reqwest::header::ACCEPT, "text/plain, application/json");
-    if let (Some(username), Some(password)) = (username, password) {
+    if !is_socks && let (Some(username), Some(password)) = (username, password) {
         // reqwest 的 basic_auth 只在收到 407 后才附带凭据；这里主动预置代理认证头。
         request = request.header("proxy-authorization", basic_auth_header(username, password));
     }
@@ -1255,10 +1276,214 @@ struct ProbeFailure {
     detail: String,
 }
 
+// ── 设备内中继（relay）状态 ──────────────────────────────────────────────
+
+/// 单台设备 `GET /egress` 的中继投影。
+#[derive(Debug, Clone, Default)]
+pub struct RelaySnapshot {
+    /// 设备 `relay` 对象；旧设备（响应里没有该字段）时为 None。
+    pub relay: Option<DeviceRelaySummary>,
+    /// 设备侧代理定义名 → 中继端口状态（只收有 `localPort` 的定义）。
+    pub proxies: HashMap<String, ProxyRelay>,
+}
+
+/// 设备侧某个代理定义的中继端口状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProxyRelay {
+    pub local_port: i64,
+    pub relay_active: bool,
+}
+
+impl RelaySnapshot {
+    /// 从设备 `GET /egress` 响应里取 relay 与逐定义端口：
+    /// 没有 `relay` 字段就是旧设备，两者都留空。
+    pub fn parse(value: &Value) -> Self {
+        Self {
+            relay: relay_summary(value),
+            proxies: proxy_relays(value),
+        }
+    }
+}
+
+/// `relay` 对象 → 摘要；缺字段 / 类型不对时视为「设备没有 relay 状态」。
+fn relay_summary(value: &Value) -> Option<DeviceRelaySummary> {
+    let relay = value.get("relay").filter(|relay| relay.is_object())?;
+    let enabled = relay.get("enabled").and_then(Value::as_bool)?;
+    let listeners = relay
+        .get("listeners")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter(|item| item.get("listening").and_then(Value::as_bool) == Some(true))
+                .count()
+        })
+        .unwrap_or(0);
+    Some(DeviceRelaySummary {
+        enabled,
+        active: enabled && listeners > 0,
+        listeners,
+        firewall_applied: relay
+            .pointer("/firewall/applied")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// `proxies[]` → 有 `localPort` 的定义（没有端口 = 该定义在设备上没有中继）。
+fn proxy_relays(value: &Value) -> HashMap<String, ProxyRelay> {
+    let mut relays = HashMap::new();
+    let Some(items) = value.get("proxies").and_then(Value::as_array) else {
+        return relays;
+    };
+    for item in items {
+        let Some(name) = item.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(local_port) = item.get("localPort").and_then(Value::as_i64) else {
+            continue;
+        };
+        if local_port <= 0 {
+            continue;
+        }
+        relays.insert(
+            name.to_string(),
+            ProxyRelay {
+                local_port,
+                relay_active: item
+                    .get("relayActive")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            },
+        );
+    }
+    relays
+}
+
+/// 并发拉取多台设备的 relay 快照。
+///
+/// 离线 / 不可达 / Token 解不开 / 旧设备都不会出现在结果里——调用方据此保持 null。
+/// 只服务列表与详情这类「装饰性」读取：并发上限 [RELAY_FETCH_CONCURRENCY]，
+/// 单台超时为配置读超时与 [RELAY_FETCH_TIMEOUT_MS] 的较小值。
+pub async fn relay_snapshots(
+    state: &AppState,
+    device_ids: &[String],
+) -> HashMap<String, RelaySnapshot> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let wanted: Vec<String> = device_ids
+        .iter()
+        .filter(|device_id| seen.insert((*device_id).clone()))
+        .cloned()
+        .collect();
+    if wanted.is_empty() {
+        return HashMap::new();
+    }
+
+    let permits = Arc::new(Semaphore::new(RELAY_FETCH_CONCURRENCY));
+    let mut tasks = JoinSet::new();
+    for device_id in wanted {
+        let state = state.clone();
+        let permits = Arc::clone(&permits);
+        tasks.spawn(async move {
+            let permit = permits.acquire_owned().await.ok()?;
+            let snapshot = relay_snapshot(&state, &device_id).await;
+            drop(permit);
+            snapshot.map(|snapshot| (device_id, snapshot))
+        });
+    }
+
+    let mut snapshots = HashMap::new();
+    while let Some(joined) = tasks.join_next().await {
+        if let Ok(Some((device_id, snapshot))) = joined {
+            snapshots.insert(device_id, snapshot);
+        }
+    }
+    snapshots
+}
+
+/// 单台设备的 relay 快照；离线 / 任何失败一律 None（展示为 null）。
+async fn relay_snapshot(state: &AppState, device_id: &str) -> Option<RelaySnapshot> {
+    let device = state.db.get_device(device_id).await.ok().flatten()?;
+    if !device.online {
+        return None;
+    }
+    let token = state.key.decrypt(device_id, &device.token_cipher).ok()?;
+    let timeout = Duration::from_millis(state.cfg.request_timeout_ms.min(RELAY_FETCH_TIMEOUT_MS));
+    let value = state
+        .http
+        .get_egress(&device.base_url, token.as_str(), timeout, None)
+        .await
+        .ok()?;
+    Some(RelaySnapshot::parse(&value))
+}
+
+/// 代理池 → `relayActive` 聚合。
+///
+/// 只看「Manager 侧有绑定」的定义：任一绑定设备报告 active → `true`；
+/// 否则只要有设备给出了 `localPort` → `false`；
+/// 都没有（没有在线绑定设备 / 设备没分配端口 / 旧设备）→ `None`。
+async fn proxy_relay_states(
+    state: &AppState,
+    proxies: &[EgressProxyRecord],
+) -> Result<HashMap<String, Option<bool>>, ApiError> {
+    if proxies.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let bindings = state
+        .db
+        .list_all_device_egress()
+        .await
+        .map_err(|error| internal("egress.relay_bindings", error))?;
+
+    let mut name_by_id: HashMap<&str, &str> = HashMap::new();
+    let mut id_by_name: HashMap<&str, &str> = HashMap::new();
+    for proxy in proxies {
+        name_by_id.insert(proxy.id.as_str(), proxy.name.as_str());
+        id_by_name.insert(proxy.name.as_str(), proxy.id.as_str());
+    }
+
+    let mut names_by_device: HashMap<String, Vec<&str>> = HashMap::new();
+    for binding in &bindings {
+        let Some(proxy_id) = binding.proxy_id.as_deref() else {
+            continue;
+        };
+        let Some(name) = name_by_id.get(proxy_id).copied() else {
+            continue;
+        };
+        names_by_device
+            .entry(binding.device_id.clone())
+            .or_default()
+            .push(name);
+    }
+
+    let device_ids: Vec<String> = names_by_device.keys().cloned().collect();
+    let mut states: HashMap<String, Option<bool>> = HashMap::new();
+    for (device_id, snapshot) in relay_snapshots(state, &device_ids).await {
+        let Some(names) = names_by_device.get(&device_id) else {
+            continue;
+        };
+        for name in names.iter().copied() {
+            let Some(entry) = snapshot.proxies.get(name) else {
+                continue;
+            };
+            let Some(proxy_id) = id_by_name.get(name).copied() else {
+                continue;
+            };
+            let slot = states.entry(proxy_id.to_string()).or_insert(None);
+            if entry.relay_active {
+                *slot = Some(true);
+            } else if slot.is_none() {
+                *slot = Some(false);
+            }
+        }
+    }
+    Ok(states)
+}
+
 /// 设备级出口摘要（设备列表 / 详情 / 总览用）。
 pub async fn device_egress_summaries(
     state: &AppState,
-) -> Result<std::collections::HashMap<String, crate::api::dto::DeviceEgressSummary>, ApiError> {
+) -> Result<HashMap<String, crate::api::dto::DeviceEgressSummary>, ApiError> {
     let bindings = state
         .db
         .list_all_device_egress()
@@ -1269,7 +1494,15 @@ pub async fn device_egress_summaries(
         .latest_device_egress_checks()
         .await
         .map_err(|error| internal("egress.summaries", error))?;
-    Ok(crate::api::dto::device_egress_summaries(&bindings, &checks))
+    let mut summaries = crate::api::dto::device_egress_summaries(&bindings, &checks);
+    // relay 是设备端运行时事实：只对已有出口摘要的设备拉一次快照，取不到就保持 null。
+    let device_ids: Vec<String> = summaries.keys().cloned().collect();
+    for (device_id, snapshot) in relay_snapshots(state, &device_ids).await {
+        if let Some(summary) = summaries.get_mut(&device_id) {
+            summary.relay = snapshot.relay;
+        }
+    }
+    Ok(summaries)
 }
 
 // ── 设备绑定 ─────────────────────────────────────────────────────────────
@@ -2067,5 +2300,63 @@ mod tests {
         assert!(is_valid_proxy_type("http"));
         assert!(is_valid_proxy_type("socks5"));
         assert!(!is_valid_proxy_type("socks4"));
+    }
+
+    #[test]
+    fn builds_proxy_authorities() {
+        assert_eq!(proxy_authority("127.0.0.1", 1080), "127.0.0.1:1080");
+        assert_eq!(
+            proxy_authority("proxy.example.com", 3128),
+            "proxy.example.com:3128"
+        );
+        // IPv6 字面量必须加方括号，否则 URL 解析不出端口。
+        assert_eq!(proxy_authority("2001:db8::1", 1080), "[2001:db8::1]:1080");
+    }
+
+    #[test]
+    fn parses_relay_state_and_ports() {
+        // 在线设备：relay 对象 + 逐定义端口。
+        let value = json!({
+            "relay": {
+                "enabled": true,
+                "basePort": 17800,
+                "listeners": [
+                    { "proxy": "us_la_01", "port": 17800, "listening": true },
+                    { "proxy": "jp_socks", "port": 17831, "listening": false },
+                ],
+                "firewall": { "applied": true, "rules": 14, "lastError": null },
+            },
+            "proxies": [
+                { "name": "us_la_01", "localPort": 17800, "relayActive": true },
+                { "name": "jp_socks", "localPort": 17831, "relayActive": false },
+                { "name": "hk_resi", "localPort": null, "relayActive": false },
+            ],
+        });
+        let snapshot = RelaySnapshot::parse(&value);
+        let relay = snapshot.relay.expect("relay");
+        assert!(relay.enabled);
+        assert!(relay.active);
+        assert_eq!(relay.listeners, 1);
+        assert!(relay.firewall_applied);
+        // 没有 localPort 的定义不进表（设备没给它分配中继端口）。
+        assert_eq!(snapshot.proxies.len(), 2);
+        assert_eq!(snapshot.proxies["us_la_01"].local_port, 17800);
+        assert!(snapshot.proxies["us_la_01"].relay_active);
+        assert!(!snapshot.proxies["jp_socks"].relay_active);
+
+        // relay 关闭：端口保留但不算活跃。
+        let disabled = RelaySnapshot::parse(&json!({
+            "relay": { "enabled": false, "listeners": [{ "listening": true }] },
+        }));
+        let relay = disabled.relay.expect("relay");
+        assert!(!relay.enabled);
+        assert!(!relay.active);
+        assert_eq!(relay.listeners, 1);
+        assert!(!relay.firewall_applied);
+
+        // 旧设备：没有 relay 字段 → None（列表里展示为 null）。
+        let legacy = RelaySnapshot::parse(&json!({ "proxies": [] }));
+        assert!(legacy.relay.is_none());
+        assert!(legacy.proxies.is_empty());
     }
 }

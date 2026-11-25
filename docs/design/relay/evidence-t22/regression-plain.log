@@ -1,0 +1,4 @@
+11-25 12:46:29.552 14255 14255 I EGRESSPROBE: http.proxyHost=192.168.30.149
+11-25 12:46:29.552 14255 14255 I EGRESSPROBE: http.proxyPort=18080
+11-25 12:46:29.552 14255 14255 I EGRESSPROBE: selector.app.fixture=HTTP @ 192.168.30.149/<unresolved>:18080
+11-25 12:46:29.552 14255 14255 I EGRESSPROBE: fetch.app=status=407 body=proxy authentication required

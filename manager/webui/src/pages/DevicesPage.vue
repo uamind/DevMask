@@ -125,6 +125,20 @@
           </span>
         </div>
 
+        <div class="egress-line">
+          <span class="egress-line-label">设备中继</span>
+          <span
+            :class="relayTagClass(device.egress?.relay)"
+            :title="relayTitle(device.egress?.relay)"
+            data-testid="device-relay-badge"
+          >
+            {{ relayLabel(device.egress?.relay) }}
+          </span>
+          <span v-if="(device.egress?.relay?.listeners ?? 0) > 0" class="relay-meta">
+            {{ device.egress?.relay?.listeners }} 端口
+          </span>
+        </div>
+
         <div class="mini-stats">
           <div class="mini-stat">
             <span>应用配置</span>
@@ -335,6 +349,59 @@
                 </div>
               </div>
 
+              <div class="drawer-section" style="margin: 14px 0 0">
+                <h3>设备内中继</h3>
+                <div class="info-grid">
+                  <div class="info-box">
+                    <span>中继状态</span>
+                    <strong :class="relayToneClass(relaySummary)" :title="relayTitle(relaySummary)" data-testid="detail-relay-state">
+                      {{ relayLabel(relaySummary) }}
+                    </strong>
+                  </div>
+                  <div class="info-box" :title="relayDetail(relaySummary)">
+                    <span>监听中端口</span>
+                    <strong>{{ relaySummary?.listeners ?? 0 }} 个</strong>
+                  </div>
+                  <div class="info-box">
+                    <span>uid 防火墙</span>
+                    <strong :class="relayFirewallTone">{{ relayFirewallLabel }}</strong>
+                  </div>
+                  <div class="info-box">
+                    <span>端口范围</span>
+                    <strong style="font-size: 11px">127.0.0.1:17800–17899</strong>
+                  </div>
+                </div>
+
+                <div
+                  v-if="relaySummary?.enabled && relaySummary.listeners === 0"
+                  class="inline-alert is-warn"
+                  style="margin-top: 10px"
+                >
+                  <el-icon><Warning /></el-icon>
+                  <span>
+                    已启用中继但没有任何 listener 在 accept：带凭据代理会退回直连（fail-open），
+                    先确认端口没被占用、uid 防火墙是否落地。
+                  </span>
+                </div>
+                <div v-else-if="relayListeners.length" class="target-list" style="margin-top: 10px">
+                  <div v-for="listener in relayListeners" :key="listener.key" class="info-box">
+                    <span>{{ listener.name }}{{ listener.scope ? ' · ' + listener.scope : '' }}</span>
+                    <strong style="font-size: 11px">{{ listener.endpoint }}</strong>
+                    <span :class="['relay-listener-state', listener.listening ? 'is-ok' : 'is-warn']">
+                      {{ listener.listening ? '监听中 · ' + listener.connections + ' 连接' : (listener.error ?? '未监听') }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="inline-alert is-muted" style="margin-top: 10px">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>
+                    带凭据代理只经设备内本地中继转发：应用连 127.0.0.1:localPort，凭据由中继持有，
+                    既不写进应用配置，也不下发给应用。
+                  </span>
+                </div>
+              </div>
+
               <div v-if="egressLoading" class="inline-alert is-muted" style="margin-top: 10px">
                 <el-icon class="is-loading"><Loading /></el-icon>
                 <span>正在加载 GET /devices/{{ selectedDevice.id }}/egress…</span>
@@ -359,6 +426,9 @@
                     <strong>
                       {{ binding.mode === 'direct' ? '强制直连' : (binding.proxyName ?? '代理已不存在') }}
                     </strong>
+                    <span v-if="bindingRelayEndpoint(binding)" class="relay-meta">
+                      本地中继 {{ bindingRelayEndpoint(binding) }}
+                    </span>
                   </div>
                 </div>
                 <div v-else class="inline-alert is-muted" style="margin-top: 10px">
@@ -532,7 +602,9 @@ import { describeError, egressRevisionFor } from '../api/client'
 import type {
   DeviceAppSummary,
   DeviceDetail,
+  DeviceEgressBinding,
   DeviceEgressResponse,
+  DeviceRelaySummary,
   TemplateSummary,
   Warning as ApiWarning,
 } from '../api/types'
@@ -540,6 +612,15 @@ import { appDefFor } from '../appCatalog'
 import { useManagerStore } from '../stores/manager'
 import { copyText } from '../utils/clipboard'
 import { relativeTime, truncate } from '../utils/format'
+import {
+  localRelayEndpoint,
+  relayDetail,
+  relayLabel,
+  relaySummaryForDevice,
+  relayTagClass,
+  relayTitle,
+  relayToneClass,
+} from '../utils/relay'
 import type { AppDef } from '../types'
 
 const route = useRoute()
@@ -646,6 +727,51 @@ const egressHealth = computed(() => egressState.value?.health ?? null)
 const egressWarnings = computed(() =>
   (deviceEgress.value?.warnings ?? []).map((warning) => warning.message || warning.code)
 )
+
+/**
+ * 设备内中继摘要：优先本次 GET /devices/{id}/egress 的设备端原始 relay 对象，
+ * 退回到 GET /devices 里的 DeviceSummary.egress.relay；两者都没有 = 设备没上报。
+ */
+const relaySummary = computed<DeviceRelaySummary | null>(() =>
+  relaySummaryForDevice(egressState.value, selectedDevice.value?.egress?.relay)
+)
+
+/**
+ * 设备端每个中继 listener 的端点（含期望监听但失败的，失败项要显示 lastError 的 code · reason）。
+ * 字段口径严格按契约 §6.1：`proxy` / `scope` / `listening` / `activeConnections` / `lastError`。
+ */
+const relayListeners = computed(() =>
+  (egressState.value?.relay?.listeners ?? []).map((listener, index) => ({
+    key: `${listener.proxy ?? 'listener'}-${listener.port ?? index}`,
+    name: listener.proxy ?? 'listener',
+    scope: listener.scope === 'device' ? '整机' : listener.scope === 'app' ? '应用级' : '',
+    endpoint: localRelayEndpoint(listener.port) ?? '--',
+    listening: listener.listening === true,
+    connections: listener.activeConnections ?? 0,
+    error: listener.lastError
+      ? [listener.lastError.code, listener.lastError.reason].filter(Boolean).join(' · ') || null
+      : null,
+  }))
+)
+
+/** uid 防火墙：null 一律 '--'，不要显示成「未生效」。 */
+const relayFirewallLabel = computed(() => {
+  if (!relaySummary.value) return '--'
+  return relaySummary.value.firewallApplied ? '已生效' : '未生效'
+})
+
+const relayFirewallTone = computed(() => {
+  if (!relaySummary.value) return 'relay-muted'
+  return relaySummary.value.firewallApplied ? 'relay-ok' : 'relay-warn'
+})
+
+/** 绑定行在设备上的本地中继端口（离线 / 没有 localPort 时为 null）。 */
+function bindingRelayEndpoint(binding: DeviceEgressBinding): string | null {
+  const name = binding.proxyName
+  if (!name) return null
+  const state = egressState.value?.proxies?.find((item) => item.name === name)
+  return localRelayEndpoint(state?.localPort)
+}
 
 /**
  * egress revision：只用 X-DF-Egress-Revision（client.ts 采集）或响应体的 revision。

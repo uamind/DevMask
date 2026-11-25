@@ -505,6 +505,8 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 - WebUI 只在添加设备表单里**输入** Token，从不读取展示；列表 / 详情无 Token 字段。
 - egress 代理凭据沿用同一把 `manager.key`：DTO **没有** `username` / `password` 字段（唯一信号 `hasCredentials`），
   审计 `detail` 只允许 `{proxyId, name, deviceId, app, changed}`，日志不打印解密后的值，错误 message 不回显凭据。
+- 设备内认证中继（relay，设备端 v1.11.0）：`DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`（`active = enabled && 至少一个 listener listening`，来源设备 `GET /egress` 的 `relay`；设备离线 / 旧设备为 `null`）；`/devices/{id}/egress` 的 `deviceState` **原样透传** `relay` 与 `proxies[].localPort` / `relayActive`，不重算。
+- Manager 侧探测自 v1.11.0 开启 reqwest 的 `socks` feature：`socks5` 代理用 `socks5h://`（DNS 交给代理解析）+ RFC 1929 真连，不再返回 `unsupported_proxy_type`。
 
 密钥丢失 = 所有设备 Token 不可解密：只能删除并重新添加设备（文档明示，不做「找回」）。
 
@@ -857,7 +859,7 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 - **探测结果写入失败不静默**：`egress_checks` 写失败时 job 结果追加 warning `egress_check_not_recorded`；
   `POST /egress-proxies/{id}/probe` 的响应体同样带该 warning。
 - **egress_checks 清理**：`prune()` 每个 `(device_id, app)` 只保留最近 500 条（`checked_at DESC, id DESC`）。
-- **Manager 侧探测只支持 HTTP 代理**：`socks5` 返回 `422 unsupported_proxy_type` 并落一条 `ok=0`
+- **Manager 侧探测自 v1.11.0 支持 `http` 与 `socks5`**：`socks5` 用 `socks5h://` + RFC 1929 真连（reqwest `socks` feature），失败同样落一条 `ok=0`
   记录（reqwest 未启用 socks feature）；probe URL 必须是 `http://`。
 
 ---

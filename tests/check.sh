@@ -150,8 +150,8 @@ else:
 
 module_prop = read("module", "module.prop")
 check("id=device_faker" in module_prop, "module.prop 缺少 id=device_faker")
-check("version=v1.10.0" in module_prop, "module.prop 缺少 version=v1.10.0")
-check("versionCode=20261201" in module_prop, "module.prop 缺少 versionCode")
+check("version=v1.11.0" in module_prop, "module.prop 缺少 version=v1.11.0")
+check("versionCode=20261202" in module_prop, "module.prop 缺少 versionCode")
 
 pm_lines = read("android", "pm-list-packages.txt").strip().splitlines()
 check(len(pm_lines) >= 5, "pm-list-packages.txt 行数过少")

@@ -48,7 +48,8 @@ export const MAX_PROBE_URL_LENGTH = 512
 export type EgressProxyType = 'http' | 'socks5'
 export type EgressMode = 'proxy' | 'direct'
 export type EgressProbeScope = 'device' | 'app'
-export type EgressProbeVia = 'proxy' | 'direct'
+/** relay = 经设备内本地中继（契约 §3.5 第 3 条），旧服务端只会回 proxy / direct。 */
+export type EgressProbeVia = 'proxy' | 'direct' | 'relay'
 
 /** 脱敏代理摘要（GET /egress 的 proxies[] / upstream）。 */
 export interface EgressProxySummary {
@@ -58,6 +59,91 @@ export interface EgressProxySummary {
   port: number
   /** 唯一的凭据信号；值永远不会出现。 */
   hasCredentials: boolean
+  /**
+   * 端口表里的本地中继端口（server 分配；无分配或 [relay].enabled=false 时为 null）。
+   * 旧服务端没有该字段 → normalize 成 null，界面按「没有中继」处理。
+   */
+  localPort: number | null
+  /** 该定义当前是否正在经本地中继（运行时事实；旧服务端一律 false）。 */
+  relayActive: boolean
+}
+
+/** relay.listeners[] 的 lastError / firewall.lastError。 */
+export interface EgressRelayError {
+  /** relay 警告码（egress_relay_bind_failed / egress_relay_firewall_failed / ...）。 */
+  code: string
+  /** 该码 details.reason 的值（如 listener_exited / addr_in_use / state_mismatch）。 */
+  reason: string
+  at: string
+}
+
+/** relay.listeners[]：每个「应该监听」的中继端口一条（契约 §6.1）。 */
+export interface EgressRelayListener {
+  /** 代理名（定义表名）。 */
+  proxy: string
+  /** 实际监听端口（等于该定义的 localPort）。 */
+  port: number
+  /** device = 设备级端口；app = 应用级端口。 */
+  scope: EgressProbeScope
+  /** true = 正在 accept；false = 期望监听但失败（原因见 lastError）。 */
+  listening: boolean
+  /** device 恒为 all；app 恒为 restricted。 */
+  uidPolicy: 'all' | 'restricted'
+  /** restricted 时解析出的 uid（升序，含 0）。 */
+  allowedUids: number[]
+  /** 当前连接数（含握手中）。 */
+  activeConnections: number
+  lastError: EgressRelayError | null
+}
+
+/** relay.firewall：uid 防火墙（iptables 链 DF_EGRESS_RLY）的落地状态。 */
+export interface EgressRelayFirewall {
+  applied: boolean
+  rules: number
+  allowRules: number
+  denyRules: number
+  lastError: EgressRelayError | null
+}
+
+/** relay.portChanges[]：写入 / 重启时发生的端口变化。 */
+export interface EgressRelayPortChange {
+  proxy: string
+  /** 变化前的端口；null = 首次分配。 */
+  from: number | null
+  /** 变化后的端口；null = 释放。 */
+  to: number | null
+  /** initial / collision / out_of_range / addr_in_use / role_change / credentials_change。 */
+  reason: string
+}
+
+/**
+ * GET /egress 的 relay 对象（契约 §6.1）。
+ *
+ * 旧服务端没有这个字段 → EgressSnapshot.relay = null，界面整块隐藏（不报错、不猜）。
+ */
+export interface EgressRelayView {
+  /** [relay].enabled 的实际生效值。 */
+  enabled: boolean
+  /** 实际生效的 basePort：设备级端口等于它，应用级在 17800–17899 内按哈希取。 */
+  basePort: number
+  /** [probe].fail_open 的实际生效值。 */
+  failOpen: boolean
+  /** 本快照时刻（RFC 3339 UTC）。 */
+  at: string
+  limits: { maxConnections: number; maxConnectionsPerUid: number }
+  listeners: EgressRelayListener[]
+  firewall: EgressRelayFirewall
+  portChanges: EgressRelayPortChange[]
+  /** 端口变化后必须重启才能拿到新注入值的应用（GET 恒空数组）。 */
+  restartRequiredApps: string[]
+}
+
+/** POST /egress/relay/restart 响应（契约 §6.3）。 */
+export interface EgressRelayRestartResult {
+  restartedAt: string
+  /** 重建后的完整 relay 状态；响应异常时为 null。 */
+  relay: EgressRelayView | null
+  warnings: EgressWarning[]
 }
 
 /** 应用级覆盖（只含显式写了 egress 的 [[apps]]）。 */
@@ -133,6 +219,11 @@ export interface EgressSnapshot {
   readback: EgressReadback
   health: EgressHealth
   egressFile: EgressFileInfo
+  /**
+   * 设备内认证中继状态（契约 §6.1）。
+   * null = 服务端没有回报 relay 字段（旧版本 / 管理器模式）：界面整块隐藏。
+   */
+  relay: EgressRelayView | null
   warnings: EgressWarning[]
   /** false = 该运行时拿不到合成 revision（管理器模式）。 */
   revisionAvailable: boolean
@@ -157,6 +248,8 @@ export interface EgressProbeResult {
   scope: EgressProbeScope
   via: EgressProbeVia
   proxy: string | null
+  /** via=relay 时实际使用的本地中继端口（其余为 null）。 */
+  relayPort: number | null
   url: string
   upstreamStatus: number | null
   /** 应用级探测恒 true：服务进程内的链路，不代表目标应用进程。 */
@@ -200,6 +293,8 @@ export interface EgressWriteResult {
   upstream: EgressProxySummary | null
   readback: EgressReadback
   health: EgressHealth
+  /** 写响应同样带 relay（含 portChanges / restartRequiredApps）；旧服务端为 null。 */
+  relay: EgressRelayView | null
   warnings: EgressWarning[]
   revisionAvailable: boolean
 }
@@ -714,7 +809,29 @@ function asProxySummary(value: unknown): EgressProxySummary | null {
     host,
     port,
     hasCredentials: value.hasCredentials === true,
+    // 旧服务端没有这两个字段：按「没有中继」处理，不能编一个端口出来。
+    localPort: asNumber(value.localPort),
+    relayActive: value.relayActive === true,
   }
+}
+
+/** 把 relay 端点的展示形式固定成 127.0.0.1:port（只用于界面，不写回配置）。 */
+export function relayEndpoint(port: number | null): string {
+  return port === null ? '' : `127.0.0.1:${String(port)}`
+}
+
+/** 一条代理定义实际走的链路（界面标注用）。 */
+export type EgressProxyPath = 'relay' | 'upstream' | 'credentials-inactive'
+
+/**
+ * 代理定义走哪条链路：
+ * - 无凭据 → 直接连上游（中继只为凭据存在，契约 §1.3）；
+ * - 有凭据且正在中继 → 经本机中继 127.0.0.1:localPort；
+ * - 有凭据但没在监听（relay 关闭 / bind 失败 / 旧服务端）→ 凭据不生效。
+ */
+export function egressProxyPath(proxy: EgressProxySummary): EgressProxyPath {
+  if (!proxy.hasCredentials) return 'upstream'
+  return proxy.relayActive && proxy.localPort !== null ? 'relay' : 'credentials-inactive'
 }
 
 function asAppView(value: unknown): EgressAppView | null {
@@ -758,11 +875,17 @@ function asLastProbe(value: unknown): EgressLastProbe | null {
     latencyMs: asNumber(value.latencyMs) ?? 0,
     checkedAt: asString(value.checkedAt) ?? '',
     scope: value.scope === 'app' ? 'app' : 'device',
-    via: value.via === 'direct' ? 'direct' : 'proxy',
+    via: asEgressProbeVia(value.via),
     proxy: asString(value.proxy),
     upstreamStatus: asNumber(value.upstreamStatus),
     errorCode: asString(value.errorCode),
   }
+}
+
+/** 探测链路：relay 是 t2 新增的第三态，旧服务端只有 proxy / direct。 */
+function asEgressProbeVia(value: unknown): EgressProbeVia {
+  if (value === 'relay') return 'relay'
+  return value === 'direct' ? 'direct' : 'proxy'
 }
 
 function asHealth(value: unknown): EgressHealth {
@@ -782,6 +905,94 @@ function asFileInfo(value: unknown): EgressFileInfo {
     exists: record.exists === true,
     size: asNumber(record.size) ?? 0,
     mtime: asString(record.mtime),
+  }
+}
+
+function asRelayError(value: unknown): EgressRelayError | null {
+  if (!isRecord(value)) return null
+  const code = asString(value.code)
+  if (!code) return null
+  return {
+    code,
+    reason: asString(value.reason) ?? '',
+    at: asString(value.at) ?? '',
+  }
+}
+
+function asRelayListener(value: unknown): EgressRelayListener | null {
+  if (!isRecord(value)) return null
+  const proxy = asString(value.proxy)
+  const port = asNumber(value.port)
+  // 没有代理名或端口的 listener 无法定位，直接丢弃（界面不显示半条记录）。
+  if (!proxy || port === null) return null
+  const allowedUids = Array.isArray(value.allowedUids)
+    ? value.allowedUids.filter(
+        (item): item is number => typeof item === 'number' && Number.isInteger(item)
+      )
+    : []
+  return {
+    proxy,
+    port,
+    scope: value.scope === 'app' ? 'app' : 'device',
+    listening: value.listening === true,
+    uidPolicy: value.uidPolicy === 'restricted' ? 'restricted' : 'all',
+    allowedUids,
+    activeConnections: asNumber(value.activeConnections) ?? 0,
+    lastError: asRelayError(value.lastError),
+  }
+}
+
+function asPortChange(value: unknown): EgressRelayPortChange | null {
+  if (!isRecord(value)) return null
+  const proxy = asString(value.proxy)
+  if (!proxy) return null
+  return {
+    proxy,
+    from: asNumber(value.from),
+    to: asNumber(value.to),
+    reason: asString(value.reason) ?? '',
+  }
+}
+
+/**
+ * GET /egress 的 relay 对象 → 界面模型。
+ *
+ * 返回 null 的唯一条件是「没有 relay 对象」：旧服务端 / 管理器模式。
+ * 只要对象存在，即使 [relay].enabled=false 也返回完整视图（界面要显示「已关闭」而不是隐藏）。
+ */
+export function normalizeEgressRelay(value: unknown): EgressRelayView | null {
+  if (!isRecord(value)) return null
+  const limits = isRecord(value.limits) ? value.limits : {}
+  const firewall = isRecord(value.firewall) ? value.firewall : {}
+  return {
+    enabled: value.enabled === true,
+    basePort: asNumber(value.basePort) ?? 0,
+    failOpen: value.failOpen !== false,
+    at: asString(value.at) ?? '',
+    limits: {
+      maxConnections: asNumber(limits.maxConnections) ?? 0,
+      maxConnectionsPerUid: asNumber(limits.maxConnectionsPerUid) ?? 0,
+    },
+    listeners: Array.isArray(value.listeners)
+      ? value.listeners.flatMap((item) => {
+          const listener = asRelayListener(item)
+          return listener ? [listener] : []
+        })
+      : [],
+    firewall: {
+      applied: firewall.applied === true,
+      rules: asNumber(firewall.rules) ?? 0,
+      allowRules: asNumber(firewall.allowRules) ?? 0,
+      denyRules: asNumber(firewall.denyRules) ?? 0,
+      lastError: asRelayError(firewall.lastError),
+    },
+    portChanges: Array.isArray(value.portChanges)
+      ? value.portChanges.flatMap((item) => {
+          const change = asPortChange(item)
+          return change ? [change] : []
+        })
+      : [],
+    restartRequiredApps: asStringArray(value.restartRequiredApps),
   }
 }
 
@@ -820,6 +1031,8 @@ export function normalizeEgressSnapshot(payload: unknown): EgressSnapshot {
     readback,
     health: asHealth(record.health),
     egressFile: asFileInfo(record.egressFile),
+    // 没有 relay 字段 = 旧服务端：保持 null，界面整块隐藏。
+    relay: normalizeEgressRelay(record.relay),
     warnings: asWarnings(record.warnings),
     revisionAvailable: true,
     readbackAvailable: true,
@@ -843,6 +1056,7 @@ export function normalizeEgressWriteResult(payload: unknown): EgressWriteResult 
     upstream: asProxySummary(record.upstream),
     readback: asReadback(record.readback),
     health: asHealth(record.health),
+    relay: normalizeEgressRelay(record.relay),
     warnings: asWarnings(record.warnings),
     revisionAvailable: true,
   }
@@ -857,11 +1071,22 @@ export function normalizeEgressProbeResult(payload: unknown): EgressProbeResult 
     latencyMs: asNumber(record.latencyMs) ?? 0,
     checkedAt: asString(record.checkedAt) ?? '',
     scope: record.scope === 'app' ? 'app' : 'device',
-    via: record.via === 'direct' ? 'direct' : 'proxy',
+    via: asEgressProbeVia(record.via),
     proxy: asString(record.proxy),
+    relayPort: asNumber(record.relayPort),
     url: asString(record.url) ?? '',
     upstreamStatus: asNumber(record.upstreamStatus),
     approximate: record.approximate === true,
+    warnings: asWarnings(record.warnings),
+  }
+}
+
+/** POST /egress/relay/restart 响应 → 界面模型。 */
+export function normalizeEgressRelayRestart(payload: unknown): EgressRelayRestartResult {
+  const record = isRecord(payload) ? payload : {}
+  return {
+    restartedAt: asString(record.restartedAt) ?? '',
+    relay: normalizeEgressRelay(record.relay),
     warnings: asWarnings(record.warnings),
   }
 }

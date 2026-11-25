@@ -34,15 +34,19 @@ use crate::dto::Warning;
 use crate::egress::dto::{
     AppEgressView, EgressFileView, EgressResponse, EgressStateView, EgressWriteResult, HealthView,
     ProbeResponse, ProxiesResponse, ProxyListItem, ProxySummary, ReadbackView,
+    RelayRestartResponse,
 };
 use crate::egress::file::{self, EgressFile, EgressSnapshot};
 use crate::egress::probe::{self, Channel};
 use crate::egress::request::{self as egress_request, AppUpdates, EgressUpdateRequest};
 use crate::egress::state::{self as egress_state, LastProbe};
 use crate::egress::system::{self as egress_system, Expected, Readback, SystemProxy};
-use crate::egress::{CONFIG_FILE_MODE, default_proxy, egress_revision, expected_for};
+use crate::egress::{
+    CONFIG_FILE_MODE, default_proxy, egress_revision, expected_for, expected_for_relay,
+};
 use crate::error::ApiError;
 use crate::params::{self, Params};
+use crate::relay::{self, RelayView};
 use crate::requests::RequestId;
 use crate::store;
 
@@ -104,7 +108,9 @@ fn load_situation(state: &AppState, request_id: &str) -> Result<Situation, ApiEr
             Some(json!({ "fields": egress.model.unknown_fields })),
         ));
     }
-    warnings.extend(reference_warnings(&config, &egress.model));
+    // 契约 §9.1 K3：`egress_credentials_ignored` 收窄为「relay 关闭时的设备级带凭据」。
+    let relay_effective = state.relay().effective_enabled(&egress.model);
+    warnings.extend(reference_warnings(&config, &egress.model, relay_effective));
     Ok(Situation {
         config_snapshot,
         config,
@@ -115,7 +121,7 @@ fn load_situation(state: &AppState, request_id: &str) -> Result<Situation, ApiEr
 }
 
 /// 引用类警告：代理名未定义 / 设备级带凭据被忽略 / 内联覆盖模板。
-fn reference_warnings(config: &Config, model: &EgressFile) -> Vec<Warning> {
+fn reference_warnings(config: &Config, model: &EgressFile, relay_effective: bool) -> Vec<Warning> {
     let mut warnings = Vec::new();
     let default = config
         .egress
@@ -130,11 +136,15 @@ fn reference_warnings(config: &Config, model: &EgressFile) -> Vec<Warning> {
                 format!("设备级默认代理 {name} 未在 egress.toml 定义，当前按直连处理"),
                 Some(json!({ "name": name, "scope": "device" })),
             )),
-            Some(proxy) if proxy.has_credentials() => warnings.push(Warning::new(
-                "egress_credentials_ignored",
-                "设备级代理带凭据：方案 A 只写 host:port，不承载认证（需要认证请用应用级）",
-                Some(json!({ "name": name })),
-            )),
+            // 契约 §9.1 K3：relay 生效时设备级**承载认证**，不再报「凭据被忽略」；
+            // 只有中继关闭（配置选择）时才回到 v1.10.0 的语义。
+            Some(proxy) if proxy.has_credentials() && !relay_effective => {
+                warnings.push(Warning::new(
+                    "egress_credentials_ignored",
+                    "设备级代理带凭据且中继未启用：方案 A 只写 host:port，不承载认证",
+                    Some(json!({ "name": name })),
+                ))
+            }
             Some(_) => {}
         }
     }
@@ -204,14 +214,56 @@ fn auth_warning(scope: &str, proxy: &str, field: &str) -> Warning {
     )
 }
 
-/// 生效代理（设备级 default + 应用级覆盖）里带凭据的那些各给一条提醒。
-fn auth_warnings(config: &Config, model: &EgressFile) -> Vec<Warning> {
+/// 生效代理（设备级 default + 应用级覆盖）里带凭据、且**中继未生效**的那些各给一条提醒。
+///
+/// 契约 §9.1 K1：relay 生效时凭据由中继承担，应用侧不需要也不该看到凭据，
+/// 因此 `egress_auth_unsupported` 收窄为「relay 未生效且带凭据才报」。
+/// default 指向带凭据的 socks5 时给一条明确告警。
+///
+/// 设备级 scope 只对 http 成立（settings 的 http_proxy 只能承载 HTTP 代理语义），
+/// socks5 只会按 app scope 生效；如果用户把它设成 default，中继不会建 listener，
+/// 必须让 UI 看到「这条配置不会以设备级方式生效」，而不是静默无效。
+fn device_socks5_warning(config: &Config, model: &EgressFile) -> Option<Warning> {
+    // 条件与 expected_for_relay 的黑洞判定严格一致：default 不是 http 就告警，
+    // 与 relay 是否启用、是否带凭据都无关（启用 → 黑洞；未启用 → 按未配置处理，仍要告警）。
+    let name = crate::relay::port::device_default_name(config)?;
+    let proxy = model.proxy(name)?;
+    if proxy.kind == crate::egress::file::ProxyType::Http {
+        return None;
+    }
+    Some(Warning::new(
+        "egress_relay_device_socks5_unsupported",
+        format!(
+            "代理 {name} 是 socks5：设备级中继只支持 http，该定义不会以设备级方式监听（可绑定到应用按 app scope 使用）"
+        ),
+        Some(serde_json::json!({
+            "proxy": name,
+            "scope": "device",
+            "reason": "socks5_device_scope_unsupported",
+        })),
+    ))
+}
+
+fn auth_warnings(
+    config: &Config,
+    model: &EgressFile,
+    relay_active: &std::collections::BTreeMap<String, bool>,
+    relay_enabled: bool,
+) -> Vec<Warning> {
+    // 契约 §9.1 K1：relay 生效时凭据由中继承载，**不要**再报「凭据不生效」，
+    // 否则 UI 会误显示（t9 blocker F3）。
+    if relay_enabled {
+        return Vec::new();
+    }
     let mut warnings = Vec::new();
     let mut seen: Vec<String> = Vec::new();
     let mut push = |scope: &str, proxy: &crate::egress::ProxyDefinition| {
         let Some(field) = credential_field(&proxy.username, &proxy.password) else {
             return;
         };
+        if relay_active.get(&proxy.name).copied().unwrap_or(false) {
+            return;
+        }
         if seen.iter().any(|name| name == &proxy.name) {
             return;
         }
@@ -302,9 +354,19 @@ fn empty_readback() -> Readback {
 }
 
 /// 组装状态块（GET 与写端点响应共用）。
-fn state_view(state: &AppState, situation: &Situation) -> EgressStateView {
+fn state_view(
+    state: &AppState,
+    situation: &Situation,
+    relay_override: Option<RelayView>,
+) -> EgressStateView {
     let model = &situation.egress.model;
-    let expected = expected_for(&situation.config, model);
+    // 中继生效时设备级期望值是 127.0.0.1:<base_port>（契约 §3.1 规则 4）；
+    // 绑定失败 → 清直连（规则 6），读回比较随之变成 :0。
+    let relay_status = state.relay().device_status(model);
+    let expected = expected_for_relay(&situation.config, model, Some(&relay_status));
+    let relay_view = relay_override.unwrap_or_else(|| state.relay().view(model));
+    let relay_active = state.relay().relay_active(model);
+    let relay_enabled = state.relay().effective_enabled(model);
     let system = SystemProxy::new(state.commands());
     let readback = system.readback().unwrap_or_else(|_| empty_readback());
     let matched = egress_system::matches(&expected, &readback);
@@ -312,8 +374,20 @@ fn state_view(state: &AppState, situation: &Situation) -> EgressStateView {
     let health = state.egress().runtime().snapshot();
 
     let mut warnings = situation.warnings.clone();
-    // 带凭据的生效代理：凭据目前不生效，必须在状态里显式可见（t20）
-    warnings.extend(auth_warnings(&situation.config, model));
+    // relay 运行态告警（4 个码里的 3 个在 t2；firewall 由 t3 接管）。
+    warnings.extend(relay::dto::relay_warnings(&relay_view));
+    // 设备级中继只承载 http：default 指向带凭据的 socks5 时不会建 listener，
+    // 必须显式告警，不能静默「配了但不可用」（t25 F1）。
+    if let Some(warning) = device_socks5_warning(&situation.config, model) {
+        warnings.push(warning);
+    }
+    // 带凭据的生效代理：**只在中继未生效时**才报「凭据不生效」（契约 §9.1 K1 收窄）。
+    warnings.extend(auth_warnings(
+        &situation.config,
+        model,
+        &relay_active,
+        relay_enabled,
+    ));
     if !readback.available {
         // settings 命令不可用：读回不可信，明确告知原因（t11 F6）
         warnings.push(Warning::new(
@@ -366,17 +440,19 @@ fn state_view(state: &AppState, situation: &Situation) -> EgressStateView {
         probe_url: model.probe.url.clone(),
         probe_timeout_seconds: model.probe.timeout_seconds,
         exclusion_list: exclusions,
-        upstream: default_proxy(&situation.config, model).map(ProxySummary::from_definition),
+        upstream: default_proxy(&situation.config, model)
+            .map(|proxy| ProxySummary::from_definition(proxy, &relay_active, relay_enabled)),
         proxies: model
             .proxies
             .iter()
-            .map(ProxySummary::from_definition)
+            .map(|proxy| ProxySummary::from_definition(proxy, &relay_active, relay_enabled))
             .collect(),
         apps: app_views(&situation.config, model),
         applied: matched,
         readback: readback_view(&readback, matched),
         health: HealthView::from_snapshot(&health),
         egress_file: file_view(&situation.egress),
+        relay: relay_view,
         warnings,
     }
 }
@@ -441,13 +517,106 @@ fn resolve_channel(
     Ok((Channel::Direct, scope))
 }
 
+/// 解析 `via="relay"` 的通道：按 package（或设备级默认）选中定义的中继端口。
+///
+/// 契约 §3.5 第 1–4 条：没有可用中继端口 → `409 egress.not_configured`（details 带
+/// `via:"relay"`）；端口在端口表里但 listener 没在监听 → `502 egress.probe_failed`
+/// （`reason="relay_not_listening"`）。
+fn resolve_relay_channel(
+    state: &AppState,
+    situation: &Situation,
+    package: Option<&str>,
+    url: &str,
+    timeout_ms: u64,
+    request_id: &str,
+) -> Result<(Channel, &'static str), ApiError> {
+    let scope = if package.is_some() { "app" } else { "device" };
+    let model = &situation.egress.model;
+    let not_configured = || {
+        ApiError::egress_not_configured(request_id, scope, package).with_details(json!({
+            "scope": scope,
+            "package": package,
+            "via": "relay",
+        }))
+    };
+    let name = match package {
+        Some(package) => {
+            let base = crate::packages::base_package(package);
+            let app = situation
+                .config
+                .apps
+                .iter()
+                .find(|app| app.package == package)
+                .or_else(|| {
+                    situation
+                        .config
+                        .apps
+                        .iter()
+                        .find(|app| crate::packages::base_package(&app.package) == base)
+                });
+            match app
+                .and_then(|app| app.egress.as_deref())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                Some(DIRECT_MARKER) => return Err(not_configured()),
+                Some(name) => Some(name.to_owned()),
+                None => {
+                    crate::relay::port::device_default_name(&situation.config).map(str::to_owned)
+                }
+            }
+        }
+        None => crate::relay::port::device_default_name(&situation.config).map(str::to_owned),
+    };
+    let Some(name) = name else {
+        return Err(not_configured());
+    };
+    let Some(proxy) = model.proxy(&name) else {
+        return Err(not_configured());
+    };
+    // 判定顺序（评审口径）：先判「中继到底有没有启用」，再判「端口在不在监听」。
+    // 把「中继根本没启用」报成「端口没监听」会误导排障。
+    if !model.relay.enabled || !proxy.has_credentials() {
+        return Err(not_configured());
+    }
+    let Some(port) = proxy.local_port else {
+        return Err(not_configured());
+    };
+    let active = state
+        .relay()
+        .relay_active(model)
+        .get(&name)
+        .copied()
+        .unwrap_or(false);
+    if !active {
+        return Err(ApiError::egress_probe_failed(
+            request_id,
+            url,
+            "relay_not_listening",
+            timeout_ms,
+            None,
+        )
+        .with_details(json!({
+            "url": url,
+            "reason": "relay_not_listening",
+            "timeoutMs": timeout_ms,
+            "upstreamStatus": null,
+            "scope": scope,
+            "via": "relay",
+            "relayPort": port,
+            "warnings": [],
+        })));
+    }
+    Ok((Channel::Relay { name, port }, scope))
+}
+
 /// GET /api/v1/egress（read 作用域）。
 pub async fn get_egress(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
 ) -> Result<Response, ApiError> {
     let situation = load_situation(&state, request_id.as_str())?;
-    let mut view = state_view(&state, &situation);
+    let mut view = state_view(&state, &situation, None);
     for app in &view.apps {
         let installed = state
             .packages()
@@ -484,6 +653,8 @@ pub async fn list_proxies(
         .as_ref()
         .and_then(|section| section.default.as_deref())
         .map(str::trim);
+    let relay_active = state.relay().relay_active(model);
+    let relay_enabled = state.relay().effective_enabled(model);
     let items: Vec<ProxyListItem> = model
         .proxies
         .iter()
@@ -495,7 +666,13 @@ pub async fn list_proxies(
                 .filter(|app| app.egress.as_deref().map(str::trim) == Some(proxy.name.as_str()))
                 .map(|app| app.package.clone())
                 .collect();
-            ProxyListItem::new(proxy, default == Some(proxy.name.as_str()), apps)
+            ProxyListItem::new(
+                proxy,
+                default == Some(proxy.name.as_str()),
+                apps,
+                relay_active.get(&proxy.name).copied().unwrap_or(false),
+                relay_enabled,
+            )
         })
         .collect();
     let body = ProxiesResponse {
@@ -534,6 +711,38 @@ fn clear_app_egress_except(document: &mut DocumentMut, keep: &[&str]) -> usize {
         }
     }
     changed
+}
+
+/// 契约 §6.5：`localPort`/`local_port` 由 server 分配，客户端只读。
+///
+/// 必须在 serde 反序列化**之前**拦：`ProxyInput` 的 `deny_unknown_fields` 只会给出
+/// `invalid_type`，而契约要求 `unknown_field` + 固定 message。
+fn reject_readonly_fields(
+    map: &serde_json::Map<String, Value>,
+    request_id: &str,
+) -> Result<(), ApiError> {
+    let mut errors = Vec::new();
+    if let Some(Value::Array(proxies)) = map.get("proxies") {
+        for (index, item) in proxies.iter().enumerate() {
+            let Some(object) = item.as_object() else {
+                continue;
+            };
+            for key in ["localPort", "local_port"] {
+                if object.contains_key(key) {
+                    errors.push(crate::dto::ValidationError::new(
+                        format!("proxies[{index}].{key}"),
+                        "unknown_field",
+                        "localPort 由服务端分配，客户端只读",
+                    ));
+                }
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(params::validation_failed(request_id, errors))
+    }
 }
 
 fn is_known_update_key(key: &str) -> bool {
@@ -656,6 +865,8 @@ pub async fn put_egress(
         ));
     };
     params::reject_unknown_keys(map, is_known_update_key, "", &request_id)?;
+    // relay：localPort / local_port / relay* 属 server 拥有字段，客户端只读（契约 §6.5）。
+    reject_readonly_fields(map, &request_id)?;
     let request: EgressUpdateRequest = params::typed(&value, &request_id)?;
     let errors = egress_request::validate(&request);
     if !errors.is_empty() {
@@ -744,6 +955,13 @@ pub async fn put_egress(
             format!("配置解析失败: {}", crate::util::parse_error_message(&error)),
         )
     })?;
+    // 设备级中继只支持 http：按**合并后的有效 default** 校验（t30 L1）。
+    let effective_default = crate::relay::port::device_default_name(&parsed).map(str::to_owned);
+    let scope_errors =
+        egress_request::validate_default_scope(&merged, effective_default.as_deref());
+    if !scope_errors.is_empty() {
+        return Err(params::validation_failed(&request_id, scope_errors));
+    }
     let limit_errors = crate::dto::limit_issues(&parsed);
     if !limit_errors.is_empty() {
         return Err(params::validation_failed(&request_id, limit_errors));
@@ -812,11 +1030,33 @@ pub async fn put_egress(
             })?;
         }
     }
+    drop(egress_lock);
+    drop(config_lock);
+
+    // relay 重建必须在释放文件锁之后：activate 会回写端口表（同一个 egress store），
+    // 持锁调用会自我死锁。
+    let mut relay_view: Option<RelayView> = None;
+    if changed && !dry_run {
+        match relay::prepare_from_disk(&state, false).await {
+            Ok((rebuild, persisted)) => {
+                relay_view = Some(state.relay().activate(rebuild, persisted).await);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "PUT 后重建中继失败（定义已写入，可用 POST /egress/relay/restart 修复）"
+                );
+            }
+        }
+    }
+
+    // settings 只在 relay 重建**之后**写一次（t30 H1）：重建前 device_status 还是旧的，
+    // 首次 PUT 会算出 Direct 并写 http_proxy=:0，窗口覆盖 bind + pkg@uid 解析 + iptables
+    // apply —— 这段时间全设备直连，等于出口泄漏。exclusionList 必须在这一次里带上。
     if !dry_run {
-        // settings 的读回/补写与文件是否变化无关（t11 F8）：文件没写也要保证「设备实际态」
-        // 回到期望态；一致时 apply 只读回、write_count=0。
-        let expected = expected_for(&parsed, &merged);
-        // 省略 = 不动排除列表；null = 写空串清除；给了数组 = 整体替换。
+        let fresh = load_situation(&state, &request_id)?;
+        let status = state.relay().device_status(&fresh.egress.model);
+        let expected = expected_for_relay(&fresh.config, &fresh.egress.model, Some(&status));
         let exclusions: Option<Vec<String>> = match &request.exclusion_list {
             None => None,
             Some(None) => Some(Vec::new()),
@@ -828,7 +1068,7 @@ pub async fn put_egress(
             .map_err(|error| settings_api_error(&request_id, &error))?;
         if outcome.matches {
             state.egress().runtime().recover();
-        } else if merged.probe.fail_open {
+        } else if fresh.egress.model.probe.fail_open {
             egress_state::degrade_to_direct(&state, "settings_mismatch");
         } else {
             state.egress().runtime().degrade("settings_mismatch", false);
@@ -839,11 +1079,9 @@ pub async fn put_egress(
             );
         }
     }
-    drop(egress_lock);
-    drop(config_lock);
 
     let situation = load_situation(&state, &request_id)?;
-    let view = state_view(&state, &situation);
+    let view = state_view(&state, &situation, relay_view);
     let diff = if want_diff || dry_run {
         Some(combined_diff(
             &old_config_text,
@@ -876,7 +1114,6 @@ pub async fn put_egress(
     ))
 }
 
-/// DELETE /api/v1/egress（write 作用域，If-Match + confirm=true 必填）。
 pub async fn delete_egress(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
@@ -1009,8 +1246,24 @@ pub async fn delete_egress(
     drop(egress_lock);
     drop(config_lock);
 
+    // 端口表随 proxies 一起被清掉：重建中继（释放 listener、写回端口表、撤链）。
+    let mut relay_view: Option<RelayView> = None;
+    if changed {
+        match relay::prepare_from_disk(&state, false).await {
+            Ok((rebuild, persisted)) => {
+                relay_view = Some(state.relay().activate(rebuild, persisted).await);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "DELETE 后重建中继失败（已清配置，可用 restart 修复）"
+                );
+            }
+        }
+    }
+
     let situation = load_situation(&state, &request_id)?;
-    let view = state_view(&state, &situation);
+    let view = state_view(&state, &situation, relay_view);
     let body = EgressWriteResult {
         revision: situation.revision.clone(),
         previous_revision: (egress.exists || config_snapshot.exists).then_some(current_revision),
@@ -1050,7 +1303,36 @@ pub async fn probe_egress(
             "请求体必须是 JSON 对象",
         ));
     };
-    params::reject_unknown_keys(map, |key| matches!(key, "package" | "url"), "", &request_id)?;
+    params::reject_unknown_keys(
+        map,
+        |key| matches!(key, "package" | "url" | "via"),
+        "",
+        &request_id,
+    )?;
+    // 契约 §3.5：`via` 缺省 = "upstream"（逐字节兼容 v1.10.0），"relay" = 经设备内中继。
+    let via_relay = match map.get("via") {
+        None | Some(Value::Null) => false,
+        Some(Value::String(via)) => match via.trim() {
+            "upstream" => false,
+            "relay" => true,
+            other => {
+                return Err(params::field_error(
+                    &request_id,
+                    "via",
+                    "invalid_value",
+                    format!("via 只接受 upstream 或 relay，收到 {other:?}"),
+                ));
+            }
+        },
+        Some(_) => {
+            return Err(params::field_error(
+                &request_id,
+                "via",
+                "invalid_type",
+                "via 必须是字符串或 null",
+            ));
+        }
+    };
     let package = match map.get("package") {
         None | Some(Value::Null) => None,
         Some(Value::String(package)) => {
@@ -1087,12 +1369,23 @@ pub async fn probe_egress(
     let url = probe::parse_url(&probe_settings.url).map_err(|error| {
         params::field_error(&request_id, "url", "invalid_probe_url", error.message())
     })?;
-    let (channel, scope) = resolve_channel(
-        &situation.config,
-        &situation.egress.model,
-        package,
-        &request_id,
-    )?;
+    let (channel, scope) = if via_relay {
+        resolve_relay_channel(
+            &state,
+            &situation,
+            package,
+            &url.raw,
+            probe_settings.timeout_seconds * 1000,
+            &request_id,
+        )?
+    } else {
+        resolve_channel(
+            &situation.config,
+            &situation.egress.model,
+            package,
+            &request_id,
+        )?
+    };
     let timeout_ms = probe_settings.timeout_seconds * 1000;
 
     match probe::probe(&url, &channel, probe_settings.timeout_seconds).await {
@@ -1153,6 +1446,7 @@ pub async fn probe_egress(
                 scope,
                 via: channel.via(),
                 proxy: channel.name().map(str::to_owned),
+                relay_port: channel.relay_port(),
                 url: url.raw.clone(),
                 upstream_status: success.upstream_status,
                 approximate: scope == "app",
@@ -1178,7 +1472,10 @@ pub async fn probe_egress(
             // 只有设备级链路（channel 来自 [egress].default）才允许 fail-open 切直连；
             // 应用级探测失败只记 lastProbe + 在 details.warnings 里说明，不动设备级 settings（t11 F2）。
             let mut notes: Vec<Value> = Vec::new();
-            if failure.triggers_fail_open() {
+            // 契约 §3.5 第 5 条（安全关键）：只有 via="upstream" 的失败才允许触发 fail-open。
+            // via="relay" 的失败一律不动 settings——否则「中继死 → 探测红 → 清系统代理」
+            // 会把 fail-closed 变成 IP 泄漏。
+            if failure.triggers_fail_open() && !via_relay {
                 if scope == "device" {
                     if situation.egress.model.probe.fail_open {
                         let cleared = egress_state::degrade_to_direct(&state, "probe_failed");
@@ -1230,11 +1527,95 @@ pub async fn probe_egress(
                 "timeoutMs": timeout_ms,
                 "upstreamStatus": failure.upstream_status(),
                 "scope": scope,
+                "via": channel.via(),
+                "relayPort": channel.relay_port(),
                 "warnings": notes,
             }));
             Err(error)
         }
     }
+}
+
+/// POST /api/v1/egress/relay/restart（ops 作用域；无 If-Match、不支持 Idempotency-Key）。
+///
+/// 契约 §6.3：**强制**重建（memo R14：不被幂等短路吃掉，手工清掉规则后 restart 必须能修好），
+/// 端口与 uid 集合未变的 listener 不关闭、不中断连接；并重放设备级 `settings`。
+pub async fn restart_relay(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, ApiError> {
+    let request_id = request_id.as_str().to_owned();
+    if !body.is_empty() {
+        params::require_json(&headers, &request_id)?;
+        let value = params::parse_json(&body, &request_id)?;
+        let Value::Object(map) = &value else {
+            return Err(params::field_error(
+                &request_id,
+                "$",
+                "invalid_type",
+                "请求体必须是 JSON 对象",
+            ));
+        };
+        if let Some(key) = map.keys().next() {
+            return Err(params::field_error(
+                &request_id,
+                key,
+                "unknown_field",
+                format!("未知字段 {key}（本端点不接受任何字段）"),
+            ));
+        }
+    }
+
+    let rebuild = match relay::prepare_from_disk(&state, true).await {
+        Ok((rebuild, persisted)) => (rebuild, persisted),
+        Err(error) => {
+            return Err(ApiError::internal_error(
+                &request_id,
+                "egress.toml 无法解析，无法重建中继",
+            )
+            .with_details(json!({ "op": "egress_parse", "message": error })));
+        }
+    };
+    let (rebuild, persisted) = rebuild;
+    let relay_view = state.relay().activate(rebuild, persisted).await;
+
+    // 重放设备级 settings（不清配置）；设备级走中继时 settings 不可用 → 503。
+    let situation = load_situation(&state, &request_id)?;
+    let relay_status = state.relay().device_status(&situation.egress.model);
+    let expected = expected_for_relay(
+        &situation.config,
+        &situation.egress.model,
+        Some(&relay_status),
+    );
+    let system = SystemProxy::new(state.commands());
+    if let Err(error) = system.apply(&expected, None) {
+        return Err(settings_api_error(&request_id, &error));
+    }
+
+    let listening = relay_view
+        .listeners
+        .iter()
+        .filter(|listener| listener.listening)
+        .count();
+    tracing::info!(listeners = listening, "relay restarted");
+
+    let mut warnings = situation.warnings.clone();
+    warnings.extend(relay::dto::relay_warnings(&relay_view));
+    if let Some(warning) = device_socks5_warning(&situation.config, &situation.egress.model) {
+        warnings.push(warning);
+    }
+    let restarted_at = relay_view.at.clone();
+    let body = RelayRestartResponse {
+        restarted_at,
+        relay: relay_view,
+        warnings,
+    };
+    Ok(api::with_egress_revision(
+        json_response(StatusCode::OK, body),
+        &situation.revision,
+    ))
 }
 
 #[cfg(test)]

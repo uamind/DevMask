@@ -1,0 +1,4 @@
+# fixture 启动 2026-11-25T04:57:19Z
+ports_http=18080,18082 socks=18081 log=/tmp/t9-run/fixture.log
+凭证摘要 http=7213dc66f53c socks=c71343023d5c
+# 明文凭据只存在于调用方环境，不进任何 fixture 输出

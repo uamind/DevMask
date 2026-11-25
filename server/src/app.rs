@@ -34,9 +34,10 @@ use crate::{
     auth::{self, Scope, ScopeGuard},
     commands::{CommandRunner, SystemRunner},
     device::DeviceSummary,
-    egress::{EgressService, spawn_startup_reconcile},
+    egress::EgressService,
     idempotency::{self, IdempotencyStore},
     packages::PackageService,
+    relay::{self, RelayService},
     requests,
     settings::Settings,
     static_files::{self, StaticSite},
@@ -57,6 +58,7 @@ struct Inner {
     audit: AuditLog,
     idempotency: IdempotencyStore,
     egress: EgressService,
+    relay: RelayService,
 }
 
 /// 共享应用状态（内部 Arc，clone 很便宜）。
@@ -68,15 +70,45 @@ pub struct AppState {
 impl AppState {
     /// 生产构造：系统命令执行器。
     pub fn new(settings: Settings, bind: String, device: DeviceSummary) -> Self {
-        Self::with_runner(settings, bind, device, Arc::new(SystemRunner::default()))
+        Self::build(
+            settings,
+            bind,
+            device,
+            Arc::new(SystemRunner::default()),
+            true,
+        )
     }
 
     /// 指定命令执行器（host 测试注入 fixture）。
+    ///
+    /// **不自动起 relay listener**：host 测试默认不开监听（避免并行测试抢占
+    /// 17800–17899 与真实 settings）；需要真实 listener 的测试用
+    /// [`Self::with_runner_and_relay`]。生产走 [`Self::new`]，自动起。
     pub fn with_runner(
         settings: Settings,
         bind: String,
         device: DeviceSummary,
         commands: Arc<dyn CommandRunner>,
+    ) -> Self {
+        Self::build(settings, bind, device, commands, false)
+    }
+
+    /// 指定命令执行器，并允许 relay 自动起监听（host 测试用）。
+    pub fn with_runner_and_relay(
+        settings: Settings,
+        bind: String,
+        device: DeviceSummary,
+        commands: Arc<dyn CommandRunner>,
+    ) -> Self {
+        Self::build(settings, bind, device, commands, true)
+    }
+
+    fn build(
+        settings: Settings,
+        bind: String,
+        device: DeviceSummary,
+        commands: Arc<dyn CommandRunner>,
+        relay_binding: bool,
     ) -> Self {
         let mut options = StoreOptions::default();
         if let Some(backup_dir) = &settings.backup_dir {
@@ -88,6 +120,8 @@ impl AppState {
         let packages = Arc::new(PackageService::new(commands.clone()));
         // egress.toml 与 config.toml 同目录（0600）；备份目录沿用 server.toml 的配置。
         let egress = EgressService::new(&settings.config_path, settings.backup_dir.clone());
+        // 中继也要用同一个命令执行器（iptables -S/-A 走它），因此先 clone 好再 move。
+        let relay = RelayService::with_runner(relay_binding, Arc::clone(&commands));
         Self {
             inner: Arc::new(Inner {
                 settings,
@@ -103,6 +137,7 @@ impl AppState {
                 audit,
                 idempotency: IdempotencyStore::default(),
                 egress,
+                relay,
             }),
         }
     }
@@ -170,6 +205,11 @@ impl AppState {
     /// 出口代理（egress.toml 存储 + 运行时健康状态）。
     pub fn egress(&self) -> &EgressService {
         &self.inner.egress
+    }
+
+    /// 设备内认证中继（listener 运行时状态）。
+    pub fn relay(&self) -> &RelayService {
+        &self.inner.relay
     }
 }
 
@@ -248,9 +288,12 @@ pub fn router(state: AppState) -> Router {
 
     // POST /egress/probe 是 ops 作用域，但**不挂** Idempotency-Key：
     // 探测每次都要真发请求（而且可能触发 fail-open），本身不是幂等操作（契约 §1.6）。
+    // POST /egress/probe 与 POST /egress/relay/restart 是动作而不是配置写入：
+    // **不挂** Idempotency-Key（契约 §6.3：它与 probe 同口径）。
     let egress_ops_routes = guarded(
         Router::new()
             .route("/egress/probe", post(api::egress::probe_egress))
+            .route("/egress/relay/restart", post(api::egress::restart_relay))
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 audit::middleware,
@@ -326,10 +369,15 @@ fn compressible(
 /// 端口已经绑定（调用方 bind 过），这里先起一次**异步** egress 自愈再开始服务：
 /// 自愈跑在 blocking 线程池里，不阻塞 healthz，也不阻塞监听（契约 §3.4）。
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> std::io::Result<()> {
-    spawn_startup_reconcile(state.clone());
-    axum::serve(listener, router(state))
+    // 中继先起来（绑定 listener），再让 egress 自愈去写 settings：
+    // 反序会让 settings 短暂指向还没人监听的端口（契约 §7.1）。
+    relay::spawn_startup(state.clone());
+    let result = axum::serve(listener, router(state.clone()))
         .with_graceful_shutdown(shutdown_signal())
-        .await
+        .await;
+    // 优雅停止：关闭全部 relay listener（不动 settings，契约 §5.6）。
+    state.relay().shutdown().await;
+    result
 }
 
 async fn shutdown_signal() {

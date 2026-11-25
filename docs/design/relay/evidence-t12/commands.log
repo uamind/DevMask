@@ -1,0 +1,1114 @@
+===== fmt =====
+$ cargo fmt --check
+EXIT=0 DURATION=1s
+===== clippy =====
+$ cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings
+    Checking device_faker_server v1.10.0 (/Users/crymang/Works/device_faker/server)
+    Checking reqwest v0.12.28
+    Checking device_faker_module_tests v1.10.0 (/Users/crymang/Works/device_faker/module-tests)
+    Checking device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.56s
+EXIT=0 DURATION=23s
+===== test =====
+$ cargo test --workspace --exclude device_faker
+   Compiling device_faker_server v1.10.0 (/Users/crymang/Works/device_faker/server)
+   Compiling reqwest v0.12.28
+   Compiling device_faker_module_tests v1.10.0 (/Users/crymang/Works/device_faker/module-tests)
+   Compiling device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 32.50s
+     Running unittests src/lib.rs (target/debug/deps/device_faker_core-fa5de236a5bdc27b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/config_semantics.rs (target/debug/deps/config_semantics-f45c7c8346876e69)
+
+running 10 tests
+test patch_only_keys_follow_rom_availability ... ok
+test delete_markers_become_delete_lists ... ok
+test out_of_range_dpi_is_ignored_on_merge ... ok
+test number_setting_parses_int_and_delete_marker ... ok
+test template_lookup_uses_written_order ... ok
+test fingerprint_fills_only_missing_fields ... ok
+test property_families_are_expanded ... ok
+test direct_app_config_wins_over_template ... ok
+test json_roundtrip_keeps_semantics ... ok
+test custom_props_expand_but_stay_explicit ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/edit_document.rs (target/debug/deps/edit_document-752393937d677ab3)
+
+running 19 tests
+test delete_template_keeps_unknown_fields_and_is_idempotent ... ok
+test invalid_toml_is_reported ... ok
+test bind_missing_template_reports_not_found ... ok
+test inline_apps_array_is_converted_to_array_of_tables ... ok
+test bind_package_creates_array_when_missing ... ok
+test creates_entries_in_empty_document ... ok
+test delete_app_removes_matching_entry ... ok
+test custom_props_section_keeps_comments_and_order ... ok
+test custom_props_created_as_inline_table ... ok
+test set_app_appends_new_entry ... ok
+test template_name_with_dot_stays_single_key ... ok
+test upsert_quoted_template_key_stays_quoted ... ok
+test upsert_replaces_known_fields_and_drops_missing_ones ... ok
+test upsert_existing_template_preserves_key_order_and_inline_comment ... ok
+test set_app_updates_in_place ... ok
+test unbind_package_removes_all_occurrences ... ok
+test upsert_new_template_keeps_comments_and_unknown_fields ... ok
+test bind_package_is_idempotent_and_keeps_indent ... ok
+test module_config_rewrite_is_byte_identical ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/egress_config.rs (target/debug/deps/egress_config-72fc69eafeed3b15)
+
+running 14 tests
+test parses_device_and_app_egress ... ok
+test invalid_device_default_distinguishes_codes ... ok
+test invalid_app_names_report_invalid_egress_name ... ok
+test set_egress_rejects_non_table_values ... ok
+test set_egress_keeps_unknown_keys_and_comments ... ok
+test none_empty_and_direct_are_distinct ... ok
+test egress_keys_are_known_and_unknown_keys_are_reported ... ok
+test other_edits_keep_egress_intact ... ok
+test rewriting_parsed_document_is_byte_identical ... ok
+test toml_and_json_roundtrip_are_lossless ... ok
+test valid_names_and_direct_marker_produce_no_issues ... ok
+test schema_bundle_exposes_egress ... ok
+test set_app_writes_and_clears_egress_byte_exactly ... ok
+test set_egress_creates_updates_and_clears_the_section ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/real_config.rs (target/debug/deps/real_config-b6586a55b02763e4)
+
+running 2 tests
+test real_config_store_roundtrip_creates_backup_and_keeps_tail ... ok
+test real_config_roundtrip_is_byte_identical ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/store.rs (target/debug/deps/store-343582bc8e35a37c)
+
+running 11 tests
+test utc_stamp_is_compact_and_monotonic ... ok
+test sha256_matches_known_vector ... ok
+test missing_file_reads_as_empty_snapshot ... ok
+test atomic_write_creates_private_temp_and_final_mode ... ok
+test identical_write_is_noop_and_creates_no_backup ... ok
+test update_creates_missing_file ... ok
+test update_is_idempotent ... ok
+test if_match_mismatch_is_rejected ... ok
+test write_creates_file_backup_and_644_mode ... ok
+test concurrent_updates_do_not_lose_writes ... ok
+test backups_rotate_to_keep_limit ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/validate_schema.rs (target/debug/deps/validate_schema-8d200ed393793c7f)
+
+running 9 tests
+test app_validation_requires_package ... ok
+test dpi_and_sdk_and_android_version_rules ... ok
+test custom_props_whitelist_and_lengths ... ok
+test package_name_rules ... ok
+test validate_document_reports_parse_errors ... ok
+test duplicate_packages_follow_configured_severity ... ok
+test app_overrides_template_is_reported ... ok
+test unknown_fields_are_detected_but_kept ... ok
+test config_schema_describes_toml_shape ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-7aef5f612c990079)
+
+running 73 tests
+test api::apply::tests::validates_template_names ... ok
+test api::egress::tests::validates_hosts_and_types ... ok
+test api::apply::tests::error_payload_shape ... ok
+test api::apply::tests::validates_package_names ... ok
+test api::apply::tests::validates_idempotency_keys ... ok
+test api::egress::tests::builds_proxy_authorities ... ok
+test api::egress::tests::parses_exit_ips ... ok
+test api::egress::tests::rejects_colon_text_unless_ipv6_literal ... ok
+test api::aggregate::tests::aggregate_revision_changes_with_device_set ... ok
+test api::egress::tests::parses_relay_state_and_ports ... ok
+test api::egress::tests::validates_idempotency_keys ... ok
+test api::egress::tests::validates_probe_urls ... ok
+test api::egress::tests::validates_proxy_names ... ok
+test api::egress::tests::zeroizes_request_credentials_after_encryption ... ok
+test api::job_dto::tests::accepted_response_exposes_queued ... ok
+test api::job_dto::tests::job_response_includes_duration_and_results ... ok
+test api::proxy::tests::rejects_traversal_segments ... ok
+test api::query::tests::missing_values_are_none ... ok
+test api::proxy::tests::extracts_upstream_error_code ... ok
+test api::query::tests::parses_repeated_and_typed_values ... ok
+test api::query::tests::rejects_invalid_booleans_and_numbers ... ok
+test api::token::tests::validates_custom_tokens ... ok
+test api::token::tests::generated_token_has_contract_shape ... ok
+test args::tests::help_text_mentions_defaults ... ok
+test args::tests::rejects_missing_value ... ok
+test args::tests::rejects_unknown_flag ... ok
+test args::tests::parses_flags_and_values ... ok
+test auth::tests::constant_time_comparison_matches_equality ... ok
+test auth::tests::parses_bearer_header ... ok
+test config::tests::allows_default_token_on_loopback ... ok
+test config::tests::rejects_default_token_on_non_loopback ... ok
+test config::tests::concurrency_range_is_enforced ... ok
+test config::tests::token_precedence_is_cli_env_file_config_default ... ok
+test config::tests::token_file_missing_is_none_but_unreadable_is_error ... ok
+test crypto::tests::egress_credentials_roundtrip_and_bind_identity ... ok
+test crypto::tests::debug_does_not_leak_key_material ... ok
+test db::tests::device_crud_roundtrip ... ok
+test db::tests::egress_checks_latest_per_proxy_and_device ... ok
+test config::tests::static_site_requires_index ... ok
+test crypto::tests::encrypts_and_decrypts_roundtrip ... ok
+test crypto::tests::key_file_is_32_bytes_and_reloaded ... ok
+test db::tests::egress_proxy_and_binding_roundtrip ... ok
+test crypto::tests::rejects_bad_key_length ... ok
+test crypto::tests::wrong_device_id_fails ... ok
+test crypto::tests::tampered_ciphertext_fails ... ok
+test db::tests::migration_errors_carry_op_and_versions ... ok
+test crypto::tests::rejects_unknown_prefix ... ok
+test device_client::tests::maps_probe_failures ... ok
+test device_client::tests::joins_api_paths ... ok
+test device_client::tests::normalizes_base_urls ... ok
+test device_client::tests::rejects_invalid_base_urls ... ok
+test device_client::tests::rejects_overview_without_device ... ok
+test ids::tests::request_and_job_ids_have_expected_shape ... ok
+test ids::tests::slug_falls_back_for_non_ascii_names ... ok
+test ids::tests::slugifies_names ... ok
+test ids::tests::timestamp_is_rfc3339_z ... ok
+test ids::tests::validates_request_ids ... ok
+test ids::tests::validates_device_ids ... ok
+test paging::tests::cursor_roundtrip ... ok
+test jobs::tests::egress_check_not_recorded_warning_shape ... ok
+test paging::tests::resolves_defaults_and_ranges ... ok
+test state::tests::token_state_debug_redacts_secret ... ok
+test static_files::tests::maps_content_types ... ok
+test static_files::tests::asset_cache_is_immutable ... ok
+test static_files::tests::safe_relative_rejects_traversal ... ok
+test static_files::tests::resolves_first_candidate_with_index ... ok
+test db::tests::recovers_interrupted_jobs ... ok
+test db::tests::foreign_key_violation_is_detected_on_restrict_delete ... ok
+test db::tests::overview_cache_roundtrip ... ok
+test db::tests::migrates_and_reports_health ... ok
+test db::tests::writes_audit_rows ... ok
+test db::tests::upgrades_v1_database_without_data_loss ... ok
+test db::tests::prune_keeps_latest_500_checks_per_device_and_app ... ok
+
+test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/main.rs (target/debug/deps/device_faker_manager-34ac0ee045597f5d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/apply_flow.rs (target/debug/deps/apply_flow-e3bf10b39d63b9c5)
+
+running 14 tests
+test concurrent_same_idempotency_key_returns_same_job ... ok
+test restart_forbidden_only_warns ... ok
+test package_not_installed_is_skipped ... ok
+test expired_idempotency_key_replays_instead_of_500 ... ok
+test idempotency_key_replays_same_job ... ok
+test assignments_support_per_device_templates ... ok
+test missing_template_name_is_skipped ... ok
+test bulk_apply_creates_template_then_binds ... ok
+test unknown_job_and_unknown_device_are_rejected ... ok
+test revision_conflict_refetches_and_retries_once ... ok
+test apply_writes_bulk_and_assignment_audits ... ok
+test offline_device_is_skipped_without_failing_request ... ok
+test template_object_overwrites_and_warns ... ok
+test template_object_preserves_existing_packages ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/devices_flow.rs (target/debug/deps/devices_flow-fbb502f6cabc2b8f)
+
+running 14 tests
+test apps_without_devices_returns_empty_matrix_with_warning ... ok
+test delete_removes_device_from_list_and_matrix ... ok
+test duplicate_base_url_and_id_conflict ... ok
+test add_device_persists_metadata_and_never_returns_token ... ok
+test device_detail_and_overview_endpoints ... ok
+test apps_matrix_flags_drift_and_aggregates_revision ... ok
+test list_filters_and_pagination ... ok
+test patch_updates_metadata_and_rejects_bad_token ... ok
+test unknown_fields_are_rejected ... ok
+test probe_failures_return_422_without_persisting ... ok
+test offline_device_is_marked_but_aggregation_still_works ... ok
+test sync_refreshes_model_and_cache ... ok
+test request_timeout_marks_device_offline ... ok
+test oversized_device_overview_is_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests/e2e_flow.rs (target/debug/deps/e2e_flow-5f17ab54dce44a9a)
+
+running 4 tests
+test apply_validation_rejects_empty_duplicate_and_unknown_targets ... ok
+test device_token_mismatch_is_remapped_by_proxy ... ok
+test offline_device_degrades_to_502_but_keeps_cache_readable ... ok
+test full_lifecycle_covers_all_relay_endpoints ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/egress_flow.rs (target/debug/deps/egress_flow-4f7d89f1d948ac26)
+
+running 17 tests
+test invalid_idempotency_key_is_rejected_before_any_write ... ok
+test dry_run_assignments_have_no_side_effects ... ok
+test device_binding_put_get_roundtrip_and_device_state ... ok
+test device_token_decrypt_failure_has_own_code ... ok
+test job_probe_failure_reports_check_not_recorded_when_write_fails ... ok
+test credential_decrypt_failure_is_its_own_result_code ... ok
+test device_token_invalid_on_both_get_and_job_paths ... ok
+test concurrent_same_idempotency_key_yields_one_job ... ok
+test probe_failure_response_reports_check_not_recorded_when_write_fails ... ok
+test apply_pushes_egress_and_records_per_device_results ... ok
+test credential_rotation_and_clear_reach_device ... ok
+test probe_through_proxy_records_check_and_failure_is_structured ... ok
+test probe_check_proxy_id_only_for_proxy_rows ... ok
+test proxy_crud_is_secret_free_and_blocks_bound_delete ... ok
+test unbinding_apps_clears_device_state_and_sends_null ... ok
+test repeated_apply_is_idempotent_and_reports_unchanged ... ok
+test not_configured_and_revision_conflict_paths ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/manager_api.rs (target/debug/deps/manager_api-07041befc3420a05)
+
+running 17 tests
+test device_token_encryption_roundtrips_through_state_key ... ok
+test method_not_allowed_returns_envelope ... ok
+test api_responses_are_no_store_and_root_healthz_is_json_405 ... ok
+test auth_failure_is_audited_without_token ... ok
+test protected_route_without_token_returns_unified_401 ... ok
+test invalid_client_request_id_is_replaced ... ok
+test missing_dist_returns_readable_build_hint ... ok
+test healthz_is_public_and_reports_ok ... ok
+test key_file_is_generated_private ... ok
+test request_id_is_echoed_into_header_and_envelope ... ok
+test root_healthz_alias_works ... ok
+test unknown_api_route_returns_json_404 ... ok
+test valid_token_lists_empty_devices ... ok
+test unknown_device_returns_device_not_found ... ok
+test static_route_rejects_non_get_methods ... ok
+test wrong_token_is_rejected ... ok
+test serves_index_assets_and_spa_fallback ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/ops_endpoints.rs (target/debug/deps/ops_endpoints-4442800ea738bee0)
+
+running 8 tests
+test token_rotate_rejects_cli_or_env_source ... ok
+test audit_supports_action_target_and_cursor_filters ... ok
+test templates_report_conflicts_between_devices ... ok
+test overview_shape_and_fleet_counts ... ok
+test templates_aggregate_shape_filters_and_conflict ... ok
+test token_rotate_persists_and_invalidates_old_token ... ok
+test proxy_forwards_methods_bodies_and_status_codes ... ok
+test jobs_list_supports_pagination_and_filters ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/relay_flow.rs (target/debug/deps/relay_flow-e3a6055ae4bbef10)
+
+running 4 tests
+test socks5_probe_tunnels_with_rfc1929_credentials ... ok
+test socks5_probe_failures_are_structured_and_secret_free ... ok
+test proxy_pool_exposes_relay_active ... ok
+test device_summary_relay_is_three_state ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/review_reverify.rs (target/debug/deps/review_reverify-3740d57fd9fe4f45)
+
+running 15 tests
+test low_proxy_preserves_encoded_question_mark_as_path ... ok
+test r5_malformed_rotate_bodies_never_rotate ... ok
+test r3_concurrent_idempotency_keys_share_one_job ... ok
+test r4_every_api_response_is_no_store ... ok
+test low_template_put_412_retries_once ... ok
+test r2_forced_412_retries_bind_exactly_once ... ok
+test low_bind_404_template_is_skipped ... ok
+test r6_chunked_proxy_response_over_limit_is_too_large ... ok
+test r2_object_template_binds_in_one_attempt ... ok
+test r3_expired_idempotency_key_replays_same_job ... ok
+test r6_chunked_overview_over_limit_aborts_before_full_read ... ok
+test r1_object_template_keeps_other_bindings_and_packages ... ok
+test r8_audit_since_offset_equals_utc ... ok
+test r9_templates_device_filter_returns_that_device_config ... ok
+test r6_oversized_device_reads_are_rejected ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running unittests src/lib.rs (target/debug/deps/device_faker_module_tests-eb34897354253c27)
+
+running 60 tests
+test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
+test egress::tests::direct_plan_sets_no_proxy_property_at_all ... ok
+test egress::tests::armed_outcome_keeps_module_mapped_and_logs_nothing ... ok
+test egress::tests::divergence_describe_shows_got_and_want ... ok
+test egress::tests::commit_failure_degrades_with_the_expected_log ... ok
+test egress::tests::credentialed_fallbacks_are_marked_unsupported_for_both_protocols ... ok
+test egress::tests::debug_switch_outcome_is_logged_and_does_not_keep_the_module ... ok
+test egress::tests::debug_output_redacts_username_and_password ... ok
+test egress::tests::direct_section_round_trips ... ok
+test egress::tests::direct_relay_spec_is_active_direct_not_unconfigured ... ok
+test egress::tests::divergences_detect_framework_overwrite ... ok
+test egress::tests::egress_toml_parses_relay_switch_and_local_port ... ok
+test egress::tests::empty_string_counts_as_absent ... ok
+test egress::tests::fail_closed_log_line_is_frozen_and_never_carries_credentials ... ok
+test egress::tests::fail_closed_port_is_outside_the_pool_and_is_a_valid_target ... ok
+test egress::tests::http_credentials_are_unsupported_and_never_planned_into_properties ... ok
+test egress::tests::http_plan_replay_expectations_are_the_four_proxy_props_plus_clears ... ok
+test egress::tests::http_plan_sets_both_http_and_https_properties ... ok
+test egress::tests::incomplete_plan_is_rejected ... ok
+test egress::tests::local_port_outside_the_relay_pool_is_ignored ... ok
+test egress::tests::invalid_relay_specs_fail_closed_and_are_armed_for_replay ... ok
+test egress::tests::missing_libandroid_runtime_degrades_with_the_expected_log ... ok
+test egress::tests::migration_state_is_relay_key_or_any_local_port ... ok
+test egress::tests::never_fired_report_is_silent_on_the_normal_path ... ok
+test egress::tests::no_egress_configuration_means_no_injection ... ok
+test egress::tests::only_explicit_app_level_egress_is_injected ... ok
+test egress::tests::relay_normalization_classifies_reasons_and_drops_credentials ... ok
+test egress::tests::proxy_table_parsing_validates_port_and_type ... ok
+test egress::tests::relay_spec_round_trips_and_plans_without_credential_carriers ... ok
+test egress::tests::relay_spec_toml_carries_only_type_host_port_and_flag ... ok
+test egress::tests::relay_spec_with_only_extra_credentials_is_stripped_and_injected ... ok
+test egress::tests::relay_switch_defaults_to_enabled_and_degrades_when_mistyped ... ok
+test egress::tests::replay_loop_restores_direct_after_framework_writes_device_proxy ... ok
+test egress::tests::replay_loop_repairs_http_overwrite_at_95ms ... ok
+test egress::tests::replay_loop_keeps_watching_after_the_first_repair ... ok
+test egress::tests::replay_not_fired_line_has_window_wait_and_retention ... ok
+test egress::tests::replay_schedule_is_sorted_dense_early_and_covers_window ... ok
+test egress::tests::socks_plan_expectations_never_carry_credentials ... ok
+test egress::tests::socks_plan_sets_only_socks_properties ... ok
+test egress::tests::socks_proxy_never_gets_credential_carriers ... ok
+test egress::tests::sentinel_relay_spec_stays_fail_closed_for_socks5 ... ok
+test egress::tests::spec_proxies_fails_closed_when_relay_enabled_and_local_port_missing ... ok
+test egress::tests::replay_loop_without_overwrite_stays_clean ... ok
+test egress::tests::spec_proxies_falls_back_upstream_only_before_migration ... ok
+test egress::tests::spec_proxies_rewrites_only_credentialed_proxies_to_the_loopback ... ok
+test egress::tests::spec_proxies_falls_back_upstream_when_relay_is_disabled ... ok
+test egress::tests::spec_section_round_trips_without_credentials ... ok
+test egress::tests::spec_toml_never_carries_credentials_on_any_path ... ok
+test egress::tests::undefined_proxy_name_is_not_injected ... ok
+test egress::tests::spec_document_with_apps_and_egress_round_trips ... ok
+test egress::tests::spec_without_section_means_unconfigured ... ok
+test spec::tests::credentialed_proxy_is_rewritten_to_the_local_relay_spec ... ok
+test spec::tests::local_port_missing_while_relay_enabled_fails_closed ... ok
+test spec::tests::relay_never_rewrites_direct_or_undefined_proxies ... ok
+test spec::tests::contract_sample_egress_toml_drives_the_spec_end_to_end ... ok
+test spec::tests::relay_disabled_falls_back_upstream_without_credentials ... ok
+test spec::tests::proxy_without_credentials_keeps_the_upstream_address ... ok
+test source_guards::credential_carrier_keys_are_absent_from_injection_sources ... ok
+test spec::tests::unmigrated_egress_file_falls_back_upstream_without_credentials ... ok
+test spec::tests::direct_and_unconfigured_specs_are_byte_identical_to_v1_10_0 ... ok
+
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/device_faker_server-df63743e7891bbf7)
+
+running 184 tests
+test api::apps::tests::restart_request_defaults_when_body_missing ... ok
+test api::device::tests::whitelist_covers_contract_prefixes ... ok
+test api::overview::tests::overview_response_serializes_camel_case ... ok
+test api::egress::tests::diff_redaction_replaces_only_credential_values ... ok
+test api::egress::combined_diff_tests::combined_diff_redacts_egress_but_keeps_config_changes ... ok
+test api::templates::tests::packages_must_be_deduped_and_valid ... ok
+test api::templates::tests::merge_patch_rejects_unknown_keys ... ok
+test api::egress::tests::settings_failure_maps_to_503_and_one_warn_line ... ok
+test api::apps::tests::config_package_must_match_path ... ok
+test api::apps::tests::config_package_is_injected_when_absent ... ok
+test api::device::tests::parses_getprop_lines ... ok
+test api::egress::tests::unavailable_settings_logs_without_stderr ... ok
+test api::templates::tests::template_name_rule_matches_contract ... ok
+test api::templates::tests::merge_patch_deletes_null_and_keeps_absent ... ok
+test api::templates::tests::first_conflict_ignores_own_template ... ok
+test args::tests::help_and_version_flags ... ok
+test api::tests::conflicts_count_distinct_packages_declared_twice ... ok
+test api::tests::contract_operations_are_unique ... ok
+test args::tests::missing_value_is_error ... ok
+test args::tests::parses_long_flags_with_space_and_equals ... ok
+test args::tests::unknown_flag_is_error ... ok
+test auth::tests::normalize_hash_strips_optional_prefix ... ok
+test auth::tests::scope_names_round_trip ... ok
+test commands::tests::default_timeout_is_bounded_and_positive ... ok
+test auth::tests::admin_is_superset_but_write_is_not_read ... ok
+test auth::tests::bearer_scheme_is_case_insensitive ... ok
+test auth::tests::authenticate_accepts_only_known_token ... ok
+test commands::tests::fixture_runner_rejects_unknown_iptables_subcommand ... ok
+test commands::tests::fixture_returns_registered_output ... ok
+test commands::tests::fixture_runner_renders_device_style_chain ... ok
+test device::tests::abi_is_never_empty ... ok
+test device::tests::missing_fixture_is_ignored ... ok
+test device::tests::unknown_source_yields_unknown_fields ... ok
+test diff::tests::cap_marks_truncation ... ok
+test diff::tests::identical_text_has_no_diff ... ok
+test diff::tests::single_line_change_has_hunk_header ... ok
+test egress::file::tests::debug_output_never_contains_credentials ... ok
+test device::tests::root_info_without_manager ... ok
+test egress::file::tests::parse_reads_full_document_in_file_order ... ok
+test device::tests::root_info_detects_kernelsu_and_version ... ok
+test egress::file::tests::parse_rejects_bad_version_and_bad_fields ... ok
+test egress::file::tests::relay_section_parses_degrades_and_keeps_local_port ... ok
+test egress::file::tests::render_round_trips_and_preserves_unknown_keys ... ok
+test egress::probe::tests::channel_debug_redacts_credentials ... ok
+test egress::file::tests::too_many_proxies_is_a_parse_error ... ok
+test commands::tests::missing_binary_is_unavailable ... ok
+test egress::probe::tests::failure_reasons_map_to_contract_enum ... ok
+test egress::probe::tests::extract_ip_supports_plain_and_json_bodies ... ok
+test egress::probe::tests::header_and_status_parsing ... ok
+test egress::probe::tests::parse_url_accepts_http_only ... ok
+test egress::probe::tests::request_line_uses_absolute_form_for_http_proxy ... ok
+test egress::request::tests::default_update_normalizes_empty_to_clear ... ok
+test commands::tests::system_runner_returns_output_before_timeout ... ok
+test egress::request::tests::merge_handles_probe_and_apps_three_states ... ok
+test egress::request::tests::omitted_null_and_value_are_distinguished ... ok
+test egress::request::tests::merge_keeps_omitted_proxy_credentials ... ok
+test egress::file::tests::parse_error_is_reported_but_write_falls_back_to_empty_base ... ok
+test egress::request::tests::unknown_fields_are_rejected_by_serde ... ok
+test egress::state::tests::degrade_keeps_first_since_and_recover_clears ... ok
+test egress::state::tests::record_probe_and_reset ... ok
+test egress::request::tests::validation_reports_contract_codes ... ok
+test egress::system::tests::apply_skips_write_when_already_matching ... ok
+test egress::system::tests::apply_writes_once_when_value_differs ... ok
+test egress::system::tests::clear_uses_colon_zero_and_empties_exclusions ... ok
+test egress::system::tests::global_proxy_line_only_matches_prefixed_line ... ok
+test egress::system::tests::parse_helpers_handle_edge_cases ... ok
+test egress::system::tests::settings_failure_keeps_truncated_stderr ... ok
+test egress::system::tests::truth_table_rows_match_contract ... ok
+test egress::system::tests::unavailable_settings_is_reported ... ok
+test egress::tests::app_egress_creates_inline_record_for_unconfigured_package ... ok
+test egress::tests::app_egress_is_set_and_removed_in_place ... ok
+test egress::tests::clear_all_app_egress_only_touches_egress ... ok
+test egress::tests::expected_channel_follows_config_default ... ok
+test egress::tests::revision_is_sha256_of_config_revision_newline_and_bytes ... ok
+test error::tests::egress_error_shapes_match_contract ... ok
+test error::tests::error_code_table_matches_contract ... ok
+test error::tests::envelope_shape ... ok
+test error::tests::retryable_codes_are_only_429_500_502_503 ... ok
+test idempotency::tests::store_replays_first_result ... ok
+test egress::file::tests::store_heals_loose_permissions_on_read ... ok
+test module::tests::malformed_lines_are_ignored ... ok
+test module::tests::missing_file_falls_back ... ok
+test module::tests::serializes_camel_case ... ok
+test module::tests::parses_real_module_prop ... ok
+test packages::tests::index_reports_unavailable_without_pm ... ok
+test packages::tests::parses_package_list_with_version_code ... ok
+test packages::tests::parses_users_with_running_flag ... ok
+test packages::tests::parses_version_name_from_dumpsys ... ok
+test packages::tests::split_user_handles_suffixes ... ok
+test params::tests::content_kind_parses_media_types ... ok
+test params::tests::flags_accept_contract_values ... ok
+test params::tests::page_defaults_and_bounds ... ok
+test params::tests::page_slice_reports_next_cursor ... ok
+test relay::basic::tests::rfc4648_vectors ... ok
+test relay::basic::tests::basic_value_matches_rfc7617_sample ... ok
+test relay::firewall::tests::allow_rules_are_root_then_device_then_uid_ascending ... ok
+test relay::firewall::tests::app_port_only_allows_root_and_bound_uid_everyone_else_hits_deny ... ok
+test relay::firewall::tests::chain_parsing_strips_chain_prefix_and_normalizes ... ok
+test relay::firewall::tests::device_port_allows_every_uid_but_only_towards_loopback ... ok
+test relay::firewall::tests::device_dash_s_is_semantically_equal_to_expected ... ok
+test relay::firewall::tests::apply_is_idempotent_and_clear_removes_the_three_chains ... ok
+test relay::firewall::tests::entry_rules_keep_the_frozen_order ... ok
+test relay::firewall::tests::revalidator_rate_limits_sampling_to_once_per_second ... ok
+test relay::firewall::tests::revalidator_without_applied_spec_falls_back_to_flag ... ok
+test relay::firewall::tests::root_rule_is_emitted_once_even_when_allowed_uids_contain_zero ... ok
+test relay::firewall::tests::released_ports_are_pruned_from_deny_without_flushing_it ... ok
+test relay::firewall::tests::semantic_compare_still_catches_a_real_difference ... ok
+test relay::http::tests::absolute_head_overrides_client_authorization_and_strips_hop_by_hop ... ok
+test relay::firewall::tests::sampling_without_iptables_reports_missing_and_never_panics ... ok
+test relay::http::tests::absolute_head_without_credentials_injects_nothing ... ok
+test relay::http::tests::connect_2xx_does_not_inject_connection_close ... ok
+test relay::http::tests::connect_head_is_exactly_three_lines ... ok
+test relay::http::tests::parses_connect_and_absolute_forms ... ok
+test relay::http::tests::response_head_rewrite_strips_and_forces_close ... ok
+test relay::http::tests::shared_budget_helper_clamps_to_zero ... ok
+test relay::http::tests::rejects_contract_cases ... ok
+test egress::file::tests::store_writes_0600_and_backs_up_with_same_mode ... ok
+test relay::net::tests::remaining_budget_clamps_at_zero ... ok
+test relay::net::tests::local_listener_connects_with_nodelay ... ok
+test relay::pipe::tests::pump_copies_and_closes_on_eof ... ok
+test relay::pipe::tests::pump_shuts_down_the_writer_after_eof ... ok
+test relay::pipe::tests::read_some_handles_pending_then_data ... ok
+test relay::pipe::tests::write_all_maps_zero_write_to_error ... ok
+test relay::pipe::tests::write_all_retries_short_writes ... ok
+test relay::port::tests::candidate_ports_never_return_base_port_and_are_unique ... ok
+test relay::port::tests::collision_walks_to_the_next_candidate ... ok
+test relay::port::tests::contract_hash_samples_are_reproducible ... ok
+test relay::port::tests::needs_relay_requires_enabled_and_credentials_for_both_kinds ... ok
+test relay::port::tests::retention_prefers_previous_value_within_rules ... ok
+test relay::secret::tests::credentials_never_debug_the_plaintext ... ok
+test relay::secret::tests::credentials_require_at_least_one_field ... ok
+test relay::secret::tests::secret_zeroizes_on_request_and_drop ... ok
+test relay::service::tests::bind_loopback_asserts_ipv4_loopback_and_reports_conflicts ... ok
+test relay::socks5::tests::accepts_ipv4_domain_and_ipv6_targets ... ok
+test relay::http::tests::head_reader_rejects_over_limit ... ok
+test relay::socks5::tests::method_negotiation_accepts_only_no_auth ... ok
+test relay::socks5::tests::upstream_negotiation_uses_rfc1929_and_maps_auth_failure ... ok
+test relay::uid::tests::limiter_enforces_global_and_per_uid ... ok
+test relay::uid::tests::package_split_handles_user_suffix ... ok
+test relay::uid::tests::package_uid_output_parsing ... ok
+test relay::uid::tests::parses_device_dash_proc_lines_strictly ... ok
+test relay::uid::tests::parses_tcp6_v4_mapped_loopback ... ok
+test relay::uid::tests::proc_net_tcp_parsing_matches_kernel_columns ... ok
+test relay::socks5::tests::rejects_bind_udp_and_malformed_requests ... ok
+test relay::uid::tests::resolve_package_reports_contract_reasons ... ok
+test relay::uid::tests::resolve_package_uids_covers_every_user_and_dedupes ... ok
+test relay::uid::tests::unlimited_per_uid_when_zero ... ok
+test requests::tests::accepts_valid_client_id ... ok
+test settings::tests::invalid_bind_is_rejected ... ok
+test settings::tests::lan_with_token_and_allow_lan_passes ... ok
+test requests::tests::rejects_invalid_client_id ... ok
+test settings::tests::loopback_detection ... ok
+test settings::tests::non_loopback_without_allow_lan_is_rejected ... ok
+test settings::tests::non_loopback_without_token_is_rejected ... ok
+test settings::tests::parse_tokens_rejects_unknown_scope_and_bad_hash ... ok
+test static_files::tests::assets_get_long_cache_others_no_cache ... ok
+test settings::tests::parse_server_file_accepts_minimal_and_full_documents ... ok
+test static_files::tests::decode_rejects_traversal_and_keeps_plain_paths ... ok
+test static_files::tests::injection_is_idempotent_and_goes_after_head ... ok
+test static_files::tests::injection_without_head_prepends ... ok
+test static_files::tests::mime_table_covers_contract_types ... ok
+test static_files::tests::runtime_script_matches_contract_and_has_no_token ... ok
+test store::tests::if_match_parses_wildcard_and_values ... ok
+test store::tests::normalize_revision_strips_quotes_and_prefix ... ok
+test relay::http::tests::upstream_budget_is_shared_across_dns_and_connects ... ok
+test relay::net::tests::dns_failure_stays_within_the_shared_budget ... ok
+test token::tests::banner_contains_plaintext_once ... ok
+test token::tests::refuses_to_generate_for_non_loopback ... ok
+test token::tests::appends_to_existing_settings_without_losing_them ... ok
+test static_files::tests::resolve_blocks_symlink_escape ... ok
+test util::tests::base64url_matches_rfc4648_vectors ... ok
+test util::tests::base64url_uses_url_safe_alphabet ... ok
+test util::tests::request_id_shape ... ok
+test util::tests::generated_token_shape ... ok
+test util::tests::rfc3339_formats_known_instants ... ok
+test util::tests::sha256_hex_matches_known_digest ... ok
+test token::tests::generates_token_and_persists_only_hash ... ok
+test token::tests::second_run_is_noop ... ok
+test device::tests::getprop_script_is_used_when_configured ... ok
+test device::tests::fixture_overrides_getprop_and_keeps_other_fields ... ok
+test commands::tests::system_runner_times_out_instead_of_blocking_forever ... ok
+test relay::pipe::tests::pump_stops_when_the_writer_never_drains ... ok
+test relay::http::tests::connect_non_2xx_closes_without_forwarding_client_bytes ... ok
+test relay::http::tests::idle_covers_write_direction_and_releases_connection ... ok
+
+test result: ok. 184 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running unittests src/main.rs (target/debug/deps/device_faker_server-6b433a465c4817e0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/apps_api.rs (target/debug/deps/apps_api-c07a3afa6595f411)
+
+running 9 tests
+test restart_requires_ops_scope ... ok
+test list_apps_returns_inline_records_only ... ok
+test get_app_explains_inline_template_and_none ... ok
+test put_app_rejects_bad_shapes_and_missing_template ... ok
+test restart_app_runs_am_and_supports_idempotency ... ok
+test delete_app_requires_confirm_and_supports_detach ... ok
+test restart_app_launch_and_failures ... ok
+test put_app_config_mode_creates_and_updates_inline_record ... ok
+test put_app_template_mode_binds_and_removes_inline ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/config_api.rs (target/debug/deps/config_api-c550053401d23bba)
+
+running 21 tests
+test get_config_toml_returns_raw_text_with_comments ... ok
+test get_config_rejects_unknown_format ... ok
+test oversized_body_returns_413_envelope ... ok
+test config_revision_endpoint_matches_file_sha256 ... ok
+test get_config_returns_document_and_headers ... ok
+test missing_config_reports_exists_false_and_null_mtime ... ok
+test put_config_dry_run_does_not_write ... ok
+test put_config_rejects_nested_unknown_and_duplicate_apps ... ok
+test put_config_if_match_star_creates_missing_file ... ok
+test put_config_accepts_toml_text_and_keeps_comments ... ok
+test put_config_rejects_unsupported_media_type ... ok
+test schema_and_config_require_authentication ... ok
+test validate_json_document_accepts_object_and_string ... ok
+test put_config_requires_if_match ... ok
+test put_config_rejects_stale_revision ... ok
+test put_config_rejects_unknown_fields_and_bad_types ... ok
+test validate_rejects_bad_format_and_missing_content ... ok
+test schema_config_is_core_generated_draft07 ... ok
+test put_config_replaces_document_and_creates_backup ... ok
+test validate_toml_returns_200_with_errors ... ok
+test write_paths_enforce_contract_size_limits ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.74s
+
+     Running tests/contract.rs (target/debug/deps/contract-924b87ab385c8638)
+
+running 3 tests
+test unimplemented_openapi_json_stays_404 ... ok
+test contract_table_matches_openapi ... ok
+test every_documented_operation_is_routed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/egress_api.rs (target/debug/deps/egress_api-c5b65027456407b8)
+
+running 45 tests
+test clearing_the_system_proxy_has_a_single_implementation ... ok
+test config_parse_errors_hide_source_lines ... ok
+test config_write_passes_egress_validation_codes_through ... ok
+test apps_array_replaces_unlisted_overrides ... ok
+test apps_empty_array_clears_all_overrides ... ok
+test app_scope_probe_failure_does_not_degrade_device_proxy ... ok
+test broken_egress_toml_fails_closed_and_is_repairable ... ok
+test device_level_ipv6_literal_is_rejected ... ok
+test credentialed_http_device_proxy_reports_auth_unsupported_once ... ok
+test apps_null_and_omitted_follow_contract ... ok
+test backup_id_matches_contract_shape ... ok
+test credentialed_socks5_app_proxy_reports_auth_unsupported ... ok
+test diff_rotation_does_not_echo_old_or_new_password ... ok
+test dry_run_removal_diff_does_not_echo_stored_credentials ... ok
+test fail_closed_probe_failure_does_not_touch_settings ... ok
+test delete_clears_system_proxy_with_colon_zero ... ok
+test fail_closed_does_not_clear_settings ... ok
+test egress_section_credential_keys_are_upgraded_to_422_unknown_field ... ok
+test probe_app_scope_is_marked_approximate ... ok
+test egress_toml_is_0600_self_healing_with_0600_backups ... ok
+test if_match_is_required_and_compared_against_egress_revision ... ok
+test plain_proxy_has_no_auth_unsupported_warning ... ok
+test probe_without_any_egress_is_409 ... ok
+test probe_url_must_be_plain_http ... ok
+test probe_reports_exit_ip_and_requires_ops_scope ... ok
+test probe_reports_auth_unsupported_for_credentialed_proxy ... ok
+test probe_failure_is_502_and_connect_failure_triggers_fail_open ... ok
+test probe_success_does_not_recover_when_reapply_fails ... ok
+test proxies_endpoint_is_masked_and_shows_references ... ok
+test startup_reconcile_runs_after_binding_and_off_the_runtime ... ok
+test put_replays_through_idempotency_cache_but_probe_never_does ... ok
+test put_applies_system_proxy_and_get_reports_applied ... ok
+test tracing_never_formats_credentials ... ok
+test same_value_put_does_not_write_settings_twice ... ok
+test settings_failure_returns_503_and_keeps_files ... ok
+test replay_reapplies_settings_when_readback_drifted ... ok
+test settings_timeout_is_normalized_to_503 ... ok
+test settings_zero_but_dumpsys_still_proxy_is_a_mismatch ... ok
+test settings_unavailable_returns_503_but_writes_files ... ok
+test validation_errors_never_echo_credentials ... ok
+test stubborn_settings_report_actual_mode_and_need_real_clear ... ok
+test undefined_app_proxy_falls_back_to_device_mode ... ok
+test truth_table_rows_are_evaluated_from_readback ... ok
+test startup_reconcile_skips_on_parse_error_and_fixes_mismatch ... ok
+test reconcile_waits_for_the_write_lock ... ok
+
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests/overview_api.rs (target/debug/deps/overview_api-2e50edac453adbff)
+
+running 3 tests
+test overview_requires_read_scope ... ok
+test overview_is_listed_in_capabilities ... ok
+test overview_returns_device_templates_and_apps ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/packages_device_api.rs (target/debug/deps/packages_device_api-67cb0afd4c705403)
+
+running 9 tests
+test device_props_returns_503_without_getprop ... ok
+test packages_and_device_require_read_scope ... ok
+test packages_unavailable_without_pm ... ok
+test device_props_respects_whitelist_and_reports_missing ... ok
+test device_users_reports_current_user ... ok
+test packages_lists_pm_index_with_users_and_versions ... ok
+test packages_user_filter_and_pagination ... ok
+test packages_names_filter_enriches_and_reports_missing ... ok
+test device_reports_module_device_server_and_root ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/relay_api.rs (target/debug/deps/relay_api-1393d85aa00c411a)
+
+running 33 tests
+test device_bind_failure_never_leaves_settings_on_that_port ... ok
+test changing_existing_default_to_socks5_is_rejected ... ok
+test colliding_port_is_reallocated_and_reports_changes ... ok
+test bind_failure_skips_settings_and_warns ... ok
+test connect_form_tunnels_bytes ... ok
+test credentials_never_reach_logs_or_responses ... ok
+test app_scoped_uid_failure_is_fail_closed ... ok
+test app_scoped_listener_resolves_uids_and_requires_restart ... ok
+test duplicate_local_ports_are_reallocated_with_collision_reason ... ok
+test delete_releases_the_local_port_and_reallocation_listens ... ok
+test put_actually_writes_the_egress_file ... ok
+test firewall_applied_comes_from_live_snapshot_and_restart_repairs ... ok
+test put_preserves_relay_section_and_local_ports ... ok
+test firewall_failure_blocks_app_ports_but_keeps_device ... ok
+test put_rejects_read_only_local_port ... ok
+test get_during_restart_never_reports_a_false_applied_window ... ok
+test legacy_socks5_default_fails_closed_to_blackhole ... ok
+test listener_starts_on_local_port_and_injects_basic ... ok
+test manual_flush_makes_unknown_uid_connections_fail_closed ... ok
+test multi_user_package_resolves_each_user_uid ... ok
+test oversized_header_is_rejected_with_400 ... ok
+test probe_via_relay_uses_the_local_port_and_never_fails_open ... ok
+test put_never_writes_direct_proxy_while_activating_relay ... ok
+test relay_disabled_keeps_legacy_reference_behaviour ... ok
+test restart_is_idempotent_and_keeps_listening ... ok
+test socks5_default_with_relay_disabled_warns_and_goes_direct ... ok
+test socks5_default_without_credentials_still_warns_and_blackholes ... ok
+test socks5_device_default_is_rejected_by_put ... ok
+test socks5_listener_forwards_with_rfc1929_and_remote_dns ... ok
+test socks5_rejects_bind_udp_and_bad_methods ... ok
+test socks5_upstream_auth_failure_maps_to_rep_01_and_warns ... ok
+test socks5_upstream_unreachable_maps_to_rep_01 ... ok
+test upstream_unreachable_maps_to_502_and_warns ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.07s
+
+     Running tests/skeleton.rs (target/debug/deps/skeleton-9ff54962a8d8561f)
+
+running 15 tests
+test healthz_is_public_and_no_store ... ok
+test healthz_rejects_other_methods_with_envelope ... ok
+test client_request_id_is_echoed_on_success_and_error ... ok
+test status_rejects_other_methods_with_envelope ... ok
+test api_prefix_without_v1_stays_an_api_error_not_spa ... ok
+test openapi_json_is_next_increment_and_returns_404 ... ok
+test status_with_admin_token_is_allowed ... ok
+test missing_config_file_still_reports_status ... ok
+test invalid_config_yields_internal_error_envelope ... ok
+test status_response_is_json_not_html ... ok
+test unknown_api_path_returns_404_envelope_not_html ... ok
+test status_with_write_only_token_is_403 ... ok
+test status_without_token_is_401 ... ok
+test status_with_unknown_token_is_401 ... ok
+test status_with_read_token_returns_snapshot ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/static_site.rs (target/debug/deps/static_site-11ff4dee9789c20b)
+
+running 8 tests
+test missing_asset_with_extension_is_plain_404 ... ok
+test extensionless_paths_fall_back_to_spa ... ok
+test root_serves_index_with_runtime_injection ... ok
+test assets_are_long_cached_with_mime ... ok
+test missing_static_dir_still_serves_api ... ok
+test path_traversal_is_blocked ... ok
+test head_requests_have_empty_body ... ok
+test already_injected_index_is_not_double_injected ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/templates_api.rs (target/debug/deps/templates_api-65ff7eea6b1a6211)
+
+running 13 tests
+test list_templates_keeps_order_and_fields_set ... ok
+test list_templates_filters_by_package_and_paginates ... ok
+test get_template_returns_wrapper_without_template_name_inside ... ok
+test bind_packages_rejects_bad_mode_and_missing_template ... ok
+test delete_template_requires_confirm_and_if_match ... ok
+test patch_template_merges_and_deletes_null ... ok
+test bind_packages_append_and_replace ... ok
+test put_template_validates_name_unknown_fields_and_duplicates ... ok
+test template_writes_require_write_scope_and_if_match ... ok
+test put_template_creates_then_updates_and_preserves_comments ... ok
+test package_path_accepts_percent_encoded_user_suffix ... ok
+test put_template_without_packages_warns_empty ... ok
+test unbind_package_removes_exact_entry ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/write_semantics.rs (target/debug/deps/write_semantics-076c75883bde7d09)
+
+running 9 tests
+test method_not_allowed_on_write_paths_uses_envelope ... ok
+test stale_if_match_returns_412_with_current_revision ... ok
+test template_dry_run_reports_diff_without_writing ... ok
+test every_write_endpoint_requires_if_match ... ok
+test concurrent_writes_with_same_revision_leave_one_winner ... ok
+test write_response_revision_header_matches_file ... ok
+test idempotency_key_replays_without_second_write ... ok
+test audit_log_records_writes_without_secrets ... ok
+test if_match_accepts_quoted_unquoted_prefixed_and_star ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/main.rs (target/debug/deps/xtask-cac129d3c49e70bd)
+
+running 3 tests
+test tests::zip_entry_mode_marks_directories_executable ... ok
+test tests::server_bin_path_points_at_ndk_output ... ok
+test tests::zip_entry_mode_marks_scripts_and_bin_executable ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests device_faker_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests device_faker_manager
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests device_faker_module_tests
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests device_faker_server
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0 DURATION=115s
+===== check_android =====
+$ cargo check -p device_faker --target aarch64-linux-android
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.50s
+EXIT=0 DURATION=0s
+===== module_tests =====
+$ cargo test -p device_faker_module_tests
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/debug/deps/device_faker_module_tests-d3d311fe51b8444b)
+
+running 60 tests
+test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
+test egress::tests::armed_outcome_keeps_module_mapped_and_logs_nothing ... ok
+test egress::tests::direct_plan_sets_no_proxy_property_at_all ... ok
+test egress::tests::divergence_describe_shows_got_and_want ... ok
+test egress::tests::credentialed_fallbacks_are_marked_unsupported_for_both_protocols ... ok
+test egress::tests::debug_output_redacts_username_and_password ... ok
+test egress::tests::commit_failure_degrades_with_the_expected_log ... ok
+test egress::tests::debug_switch_outcome_is_logged_and_does_not_keep_the_module ... ok
+test egress::tests::fail_closed_log_line_is_frozen_and_never_carries_credentials ... ok
+test egress::tests::direct_section_round_trips ... ok
+test egress::tests::fail_closed_port_is_outside_the_pool_and_is_a_valid_target ... ok
+test egress::tests::direct_relay_spec_is_active_direct_not_unconfigured ... ok
+test egress::tests::empty_string_counts_as_absent ... ok
+test egress::tests::http_credentials_are_unsupported_and_never_planned_into_properties ... ok
+test egress::tests::divergences_detect_framework_overwrite ... ok
+test egress::tests::egress_toml_parses_relay_switch_and_local_port ... ok
+test egress::tests::http_plan_replay_expectations_are_the_four_proxy_props_plus_clears ... ok
+test egress::tests::http_plan_sets_both_http_and_https_properties ... ok
+test egress::tests::incomplete_plan_is_rejected ... ok
+test egress::tests::missing_libandroid_runtime_degrades_with_the_expected_log ... ok
+test egress::tests::never_fired_report_is_silent_on_the_normal_path ... ok
+test egress::tests::migration_state_is_relay_key_or_any_local_port ... ok
+test egress::tests::invalid_relay_specs_fail_closed_and_are_armed_for_replay ... ok
+test egress::tests::relay_normalization_classifies_reasons_and_drops_credentials ... ok
+test egress::tests::local_port_outside_the_relay_pool_is_ignored ... ok
+test egress::tests::proxy_table_parsing_validates_port_and_type ... ok
+test egress::tests::relay_spec_toml_carries_only_type_host_port_and_flag ... ok
+test egress::tests::relay_spec_round_trips_and_plans_without_credential_carriers ... ok
+test egress::tests::no_egress_configuration_means_no_injection ... ok
+test egress::tests::relay_spec_with_only_extra_credentials_is_stripped_and_injected ... ok
+test egress::tests::only_explicit_app_level_egress_is_injected ... ok
+test egress::tests::relay_switch_defaults_to_enabled_and_degrades_when_mistyped ... ok
+test egress::tests::replay_loop_restores_direct_after_framework_writes_device_proxy ... ok
+test egress::tests::replay_not_fired_line_has_window_wait_and_retention ... ok
+test egress::tests::replay_schedule_is_sorted_dense_early_and_covers_window ... ok
+test egress::tests::socks_plan_expectations_never_carry_credentials ... ok
+test egress::tests::sentinel_relay_spec_stays_fail_closed_for_socks5 ... ok
+test egress::tests::socks_plan_sets_only_socks_properties ... ok
+test egress::tests::socks_proxy_never_gets_credential_carriers ... ok
+test egress::tests::replay_loop_keeps_watching_after_the_first_repair ... ok
+test egress::tests::replay_loop_repairs_http_overwrite_at_95ms ... ok
+test egress::tests::spec_proxies_fails_closed_when_relay_enabled_and_local_port_missing ... ok
+test egress::tests::spec_proxies_falls_back_upstream_only_before_migration ... ok
+test egress::tests::replay_loop_without_overwrite_stays_clean ... ok
+test egress::tests::spec_document_with_apps_and_egress_round_trips ... ok
+test egress::tests::spec_proxies_falls_back_upstream_when_relay_is_disabled ... ok
+test egress::tests::spec_proxies_rewrites_only_credentialed_proxies_to_the_loopback ... ok
+test egress::tests::spec_section_round_trips_without_credentials ... ok
+test egress::tests::spec_without_section_means_unconfigured ... ok
+test egress::tests::spec_toml_never_carries_credentials_on_any_path ... ok
+test egress::tests::undefined_proxy_name_is_not_injected ... ok
+test spec::tests::relay_never_rewrites_direct_or_undefined_proxies ... ok
+test spec::tests::contract_sample_egress_toml_drives_the_spec_end_to_end ... ok
+test spec::tests::local_port_missing_while_relay_enabled_fails_closed ... ok
+test spec::tests::relay_disabled_falls_back_upstream_without_credentials ... ok
+test spec::tests::credentialed_proxy_is_rewritten_to_the_local_relay_spec ... ok
+test spec::tests::unmigrated_egress_file_falls_back_upstream_without_credentials ... ok
+test spec::tests::proxy_without_credentials_keeps_the_upstream_address ... ok
+test spec::tests::direct_and_unconfigured_specs_are_byte_identical_to_v1_10_0 ... ok
+test source_guards::credential_carrier_keys_are_absent_from_injection_sources ... ok
+
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests device_faker_module_tests
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0 DURATION=1s
+===== webui_build =====
+$ python webui/build_webui.py
+机型伪装 WebUI 构建脚本
+==================================================
+
+=== 执行构建流程 ===
+2026-11-25 14:53:10,861 - INFO - npm 路径: /opt/homebrew/bin/npm
+2026-11-25 14:53:10,861 - INFO - npm 版本: 11.20.0
+2026-11-25 14:53:10,946 - INFO - Node.js 版本: v26.13.1（/opt/homebrew/bin/node）
+2026-11-25 14:53:10,946 - INFO - 开始构建生产版本...
+2026-11-25 14:53:10,946 - INFO - === 依赖一致性检查 (npm ci) ===
+2026-11-25 14:53:10,946 - INFO - 正在执行: npm ci 依赖一致性校验
+
+added 228 packages in 5s
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   fsevents@2.3.3 (install: (install scripts present))
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+2026-11-25 14:53:16,455 - INFO - npm ci 依赖一致性校验 完成
+2026-11-25 14:53:16,455 - INFO - ✅ 依赖一致性检查通过
+2026-11-25 14:53:16,455 - INFO - === TypeScript 类型检查 ===
+2026-11-25 14:53:16,455 - INFO - 正在执行: TypeScript 类型检查
+
+> device-faker-webui@1.7.0 type-check
+> vue-tsc --noEmit
+
+▎ TNB ACTIVE — `typescript` is the tsgo-backed fork
+2026-11-25 14:53:18,357 - INFO - TypeScript 类型检查 完成
+2026-11-25 14:53:18,357 - INFO - ✅ TypeScript 类型检查通过
+2026-11-25 14:53:18,357 - INFO - === 代码检查 ===
+2026-11-25 14:53:18,357 - INFO - 正在执行: 代码检查
+
+> device-faker-webui@1.7.0 lint
+> eslint . --max-warnings 0
+
+2026-11-25 14:53:22,130 - INFO - 代码检查 完成
+2026-11-25 14:53:22,130 - INFO - ✅ 代码检查通过
+2026-11-25 14:53:22,130 - INFO - === 构建生产版本 ===
+2026-11-25 14:53:22,130 - INFO - 正在执行: 构建生产版本
+
+> device-faker-webui@1.7.0 build
+> vite build
+
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 3652 modules transformed.
+rendering chunks...
+computing gzip size...
+../module/webroot/index.html                                    2.93 kB │ gzip:  1.12 kB
+../module/webroot/assets/css-Wv38huFO.css                       0.16 kB │ gzip:  0.13 kB
+../module/webroot/assets/TranslatorsDialog-C2D3TXv5.css         2.23 kB │ gzip:  0.81 kB
+../module/webroot/assets/AppConfigDialog-Do-573JB.css           3.47 kB │ gzip:  0.96 kB
+../module/webroot/assets/css-DUbGnqO_.css                       3.54 kB │ gzip:  0.97 kB
+../module/webroot/assets/FollowDialog-Dq8c4dSK.css              4.19 kB │ gzip:  1.18 kB
+../module/webroot/assets/css-8YzyOmcK.css                       4.72 kB │ gzip:  1.14 kB
+../module/webroot/assets/AppsPage-CiDR8ANV.css                  5.02 kB │ gzip:  1.40 kB
+../module/webroot/assets/css-DOmPaDbh.css                       5.14 kB │ gzip:  1.10 kB
+../module/webroot/assets/TemplateTransferDialog-Cx9s3HbJ.css    5.20 kB │ gzip:  1.23 kB
+../module/webroot/assets/css-DgHkEboq.css                       5.77 kB │ gzip:  0.98 kB
+../module/webroot/assets/css-CzNtyWdF.css                       6.51 kB │ gzip:  1.22 kB
+../module/webroot/assets/TemplateDialog-G9WGdQjg.css            7.30 kB │ gzip:  1.56 kB
+../module/webroot/assets/css-cyJZB4WD.css                       7.85 kB │ gzip:  1.96 kB
+../module/webroot/assets/SettingsPage-DCA08fwf.css             19.08 kB │ gzip:  3.58 kB
+../module/webroot/assets/TemplatePage-B5Eq8Ppa.css             20.03 kB │ gzip:  4.13 kB
+../module/webroot/assets/index-BViPY4qA.css                    23.80 kB │ gzip:  4.93 kB
+../module/webroot/assets/css-CODSuW_b.css                      31.08 kB │ gzip:  3.71 kB
+../module/webroot/assets/DeviceFakerFormFields-BGo_cyFN.css    31.21 kB │ gzip:  4.74 kB
+../module/webroot/assets/css-0elob1iY.js                        0.02 kB │ gzip:  0.03 kB
+../module/webroot/assets/css-CM8IHeeM.js                        0.02 kB │ gzip:  0.03 kB
+../module/webroot/assets/css-Dy6dT7WZ.js                        0.02 kB │ gzip:  0.03 kB
+../module/webroot/assets/css-Bzq3ZXa_.js                        0.07 kB │ gzip:  0.07 kB
+../module/webroot/assets/validator-BV1wcCBT.js                  0.09 kB │ gzip:  0.11 kB
+../module/webroot/assets/check-C1FiPD59.js                      0.14 kB │ gzip:  0.15 kB
+../module/webroot/assets/globe-DYIWh64x.js                      0.26 kB │ gzip:  0.20 kB
+../module/webroot/assets/useModalHistory-DKEHcvYi.js            0.36 kB │ gzip:  0.25 kB
+../module/webroot/assets/trash-DFpE7xak.js                      0.48 kB │ gzip:  0.28 kB
+../module/webroot/assets/event-NBeWb1e4.js                      0.79 kB │ gzip:  0.49 kB
+../module/webroot/assets/use-deprecated-OE3kFOwD.js             0.89 kB │ gzip:  0.60 kB
+../module/webroot/assets/templateTransfer-1ueQ5D8L.js           1.74 kB │ gzip:  0.85 kB
+../module/webroot/assets/createLucideIcon-CFLsljE4.js           2.54 kB │ gzip:  1.28 kB
+../module/webroot/assets/simple-icons-C7OaKysZ.js               2.55 kB │ gzip:  1.30 kB
+../module/webroot/assets/TranslatorsDialog-CF_lNV27.js          2.67 kB │ gzip:  1.33 kB
+../module/webroot/assets/typescript-5HH2cXxA.js                 3.21 kB │ gzip:  1.48 kB
+../module/webroot/assets/propsToTemplate-B1DcUTRU.js            3.99 kB │ gzip:  1.47 kB
+../module/webroot/assets/_baseClone-DtC6nECs.js                 4.63 kB │ gzip:  1.86 kB
+../module/webroot/assets/AppConfigDialog-BSsVs2Nx.js            7.36 kB │ gzip:  2.87 kB
+../module/webroot/assets/message-Dy6P2103.js                    8.20 kB │ gzip:  3.51 kB
+../module/webroot/assets/FollowDialog-u1Ndb6Ne.js               8.29 kB │ gzip:  4.08 kB
+../module/webroot/assets/css-CA0E5JV4.js                        8.89 kB │ gzip:  3.49 kB
+../module/webroot/assets/TemplateTransferDialog-b5_MSyAZ.js     9.54 kB │ gzip:  2.93 kB
+../module/webroot/assets/overlay-DB-zXEA-.js                    9.68 kB │ gzip:  3.93 kB
+../module/webroot/assets/css-moU3dE4g.js                        9.85 kB │ gzip:  3.72 kB
+../module/webroot/assets/AppsPage-CMoV7XMS.js                  11.19 kB │ gzip:  4.37 kB
+../module/webroot/assets/message-box-DPrikXBR.js               11.35 kB │ gzip:  4.25 kB
+../module/webroot/assets/TemplateDialog-KGMmA8k_.js            11.97 kB │ gzip:  4.93 kB
+../module/webroot/assets/css-B29TbClJ.js                       26.90 kB │ gzip:  9.34 kB
+../module/webroot/assets/use-global-config-ROSuoUkC.js         36.65 kB │ gzip: 13.90 kB
+../module/webroot/assets/button-BB_GgZof.js                    37.32 kB │ gzip: 13.51 kB
+../module/webroot/assets/index-TbX4G8jd.js                     52.78 kB │ gzip: 19.38 kB
+../module/webroot/assets/SettingsPage-Bmwm1AVZ.js              59.60 kB │ gzip: 16.33 kB
+../module/webroot/assets/runtime-dom.esm-bundler-Cxi8Nvu1.js   81.49 kB │ gzip: 31.97 kB
+../module/webroot/assets/TemplatePage-CqAifrvo.js              84.26 kB │ gzip: 29.03 kB
+../module/webroot/assets/DeviceFakerFormFields-CTYRDzh4.js    111.32 kB │ gzip: 34.94 kB
+../module/webroot/assets/i18n-C6fteztG.js                     134.72 kB │ gzip: 44.86 kB
+
+✓ built in 849ms
+2026-11-25 14:53:23,997 - INFO - 构建生产版本 完成
+2026-11-25 14:53:24,000 - INFO - 构建完成！输出目录: /Users/crymang/Works/device_faker/webui/../module/webroot
+2026-11-25 14:53:24,000 - INFO - 构建产物大小: 913.4 KB
+
+==================================================
+✅ 构建完成！
+构建产物位于 /Users/crymang/Works/device_faker/webui/../module/webroot 目录
+
+构建产物已集成到模块中
+==================================================
+EXIT=0 DURATION=14s
+===== manager_web_build =====
+$ npm --prefix manager/webui run build
+
+> device-faker-manager-webui@0.1.0 build
+> vite build
+
+vite v8.3.8 building client environment for production...
+transforming...
+✓ 1628 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          0.84 kB │ gzip:  0.49 kB
+dist/assets/index-BV8ta9g3.css         390.69 kB │ gzip: 54.07 kB
+dist/assets/clipboard-9d5XXcrX.js        0.32 kB │ gzip:  0.22 kB
+dist/assets/relay--680WKLh.js            2.15 kB │ gzip:  0.95 kB
+dist/assets/switch-4Bb5LFpz.js           4.95 kB │ gzip:  1.72 kB
+dist/assets/LogsPage-D9ZxmJ68.js         5.04 kB │ gzip:  2.33 kB
+dist/assets/radio-Ds2rQqdO.js            5.11 kB │ gzip:  2.12 kB
+dist/assets/DashboardPage-CdTXganV.js    8.77 kB │ gzip:  3.25 kB
+dist/assets/AppsPage-DLa_PzTP.js         8.97 kB │ gzip:  3.82 kB
+dist/assets/message-box-BtZflQb1.js     11.22 kB │ gzip:  4.18 kB
+dist/assets/RelayPage-g8mRlxZj.js       12.09 kB │ gzip:  4.66 kB
+dist/assets/BatchPage-Tbq-oEOT.js       13.55 kB │ gzip:  4.94 kB
+dist/assets/overlay-DWyOMJ_5.js         17.38 kB │ gzip:  6.38 kB
+dist/assets/validator-iliJVLNM.js       25.01 kB │ gzip:  9.13 kB
+dist/assets/form-Cfg83_9r.js            26.50 kB │ gzip:  9.12 kB
+dist/assets/select-C543HT8K.js          32.61 kB │ gzip: 11.11 kB
+dist/assets/ProxiesPage-BLL9aEPI.js     35.04 kB │ gzip: 12.74 kB
+dist/assets/index-DqEYmEf7.js           46.42 kB │ gzip: 18.22 kB
+dist/assets/tooltip-CfzPN8lq.js         49.02 kB │ gzip: 17.60 kB
+dist/assets/DevicesPage-ChlQOtuw.js     57.78 kB │ gzip: 20.20 kB
+dist/assets/table-m68ar3Mo.js           76.30 kB │ gzip: 26.06 kB
+dist/assets/manager-BhvkfTId.js        193.08 kB │ gzip: 71.57 kB
+
+✓ built in 425ms
+EXIT=0 DURATION=1s

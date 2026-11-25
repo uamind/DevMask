@@ -137,6 +137,14 @@ fn parse_port(raw: &str) -> Result<u16, UrlError> {
 pub enum Channel {
     /// 直连。
     Direct,
+    /// 经**设备内中继**（`via="relay"`）：连 `127.0.0.1:<local_port>`，**不带凭据**
+    /// （凭据由中继注入；探测侧再带一份只会掩盖「中继没带凭据」的真实故障，契约 §3.5）。
+    Relay {
+        /// 代理名（响应里的 `proxy` 字段）。
+        name: String,
+        /// 本地中继端口。
+        port: u16,
+    },
     /// 经代理（含凭据，凭据只用于本次握手）。
     Proxy {
         /// 代理名（响应里的 proxy 字段）。
@@ -158,6 +166,11 @@ impl std::fmt::Debug for Channel {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Channel::Direct => formatter.write_str("Channel::Direct"),
+            Channel::Relay { name, port } => formatter
+                .debug_struct("Channel::Relay")
+                .field("name", name)
+                .field("port", port)
+                .finish(),
             Channel::Proxy {
                 name,
                 kind,
@@ -183,15 +196,24 @@ impl Channel {
     pub fn name(&self) -> Option<&str> {
         match self {
             Channel::Direct => None,
-            Channel::Proxy { name, .. } => Some(name),
+            Channel::Relay { name, .. } | Channel::Proxy { name, .. } => Some(name),
         }
     }
 
-    /// 线上 via 字段。
+    /// 线上 via 字段（`via="relay"` 恒回 `"relay"`，契约 §3.5 第 3 条）。
     pub fn via(&self) -> &'static str {
         match self {
             Channel::Direct => "direct",
+            Channel::Relay { .. } => "relay",
             Channel::Proxy { .. } => "proxy",
+        }
+    }
+
+    /// 本次探测使用的本地中继端口（非 `relay` 为 `None`）。
+    pub fn relay_port(&self) -> Option<u16> {
+        match self {
+            Channel::Relay { port, .. } => Some(*port),
+            _ => None,
         }
     }
 }
@@ -224,6 +246,10 @@ pub enum ProbeFailure {
     HttpStatus(u16),
     /// 2xx 但响应体不可解析或超过 4 KiB。
     InvalidResponse,
+    /// `via="relay"`：连本地中继端口被拒 / 握手失败（契约 §3.5 第 4 条）。
+    RelayConnect,
+    /// `via="relay"`：端口在端口表里但 listener 没在监听（只由 API 层产生）。
+    RelayNotListening,
 }
 
 impl ProbeFailure {
@@ -236,6 +262,8 @@ impl ProbeFailure {
             ProbeFailure::Tls => "tls",
             ProbeFailure::HttpStatus(_) => "http_status",
             ProbeFailure::InvalidResponse => "invalid_response",
+            ProbeFailure::RelayConnect => "relay_connect",
+            ProbeFailure::RelayNotListening => "relay_not_listening",
         }
     }
 
@@ -301,6 +329,12 @@ async fn exchange(url: &ProbeUrl, channel: &Channel) -> Result<(u16, IpAddr), Pr
 async fn connect(channel: &Channel, url: &ProbeUrl) -> Result<TcpStream, ProbeFailure> {
     match channel {
         Channel::Direct => connect_host(&url.host, url.port).await,
+        Channel::Relay { port, .. } => TcpStream::connect(SocketAddr::new(
+            IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            *port,
+        ))
+        .await
+        .map_err(|_| ProbeFailure::RelayConnect),
         Channel::Proxy {
             kind,
             host,
@@ -344,6 +378,8 @@ fn request_text(url: &ProbeUrl, channel: &Channel) -> String {
     // HTTP 代理用 absolute-form；直连与 SOCKS5 隧道内用 origin-form。
     // （只支持 http 目标，因此不需要 CONNECT：CONNECT 是 https 隧道的做法。）
     let target = match channel {
+        // 中继的本地监听就是 HTTP 代理：absolute-form。
+        Channel::Relay { .. } => url.raw.clone(),
         Channel::Proxy {
             kind: ProxyType::Http,
             ..

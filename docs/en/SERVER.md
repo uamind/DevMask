@@ -66,6 +66,11 @@ creates a thread):
 
 - The API, logs, audit and WebUI never contain proxy passwords; the only signal is `hasCredentials`.
 - `dry_run` / `diff` responses mask `username` / `password` values as `<redacted>` (intentional).
-- Authenticated proxies are **not supported** for app traffic in this release (libcore does not send
-  `java.net.socks.*` credentials and HTTP Basic is not implemented): use an IP allow-list, or wait for
-  the P2 in-device authenticated relay.
+- Authenticated proxies work through the **in-device relay** since v1.11.0: the root relay adds HTTP Basic /
+  SOCKS5 RFC1929 and the credentials never enter app processes. Only when the relay is explicitly disabled
+  (or the file is unmigrated) does egress fall back to the upstream `host:port`, where an IP allow-list is
+  the only authentication. The relay uid firewall is layered: an unknown uid is allowed only while
+  `relay.firewall.applied=true` (revalidated at most once per second). The device-wide relay only supports
+  **http** upstreams: a socks5 `default` gets no device listener and is rejected at PUT; an existing one is
+  blackholed as `127.0.0.1:9` only while the relay is enabled (`enabled=false` is treated as unconfigured),
+  and either way `egress_relay_device_socks5_unsupported` is reported.

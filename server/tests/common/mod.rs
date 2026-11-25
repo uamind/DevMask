@@ -107,6 +107,17 @@ pub fn fixture_with_settings(
     build_fixture(config_text, Arc::new(runner), customize)
 }
 
+/// 构造**允许真实绑定 relay 端口**的夹具（host 测试专用）。
+///
+/// 默认夹具不绑定端口（`AppState::with_runner`），避免并行测试抢 17800–17899；
+/// 需要验证 listener / 数据面的测试用这个构造函数，并自行串行化（见 relay_api.rs）。
+pub fn fixture_with_relay_and_runner(
+    config_text: Option<&str>,
+    runner: Arc<dyn CommandRunner>,
+) -> Fixture {
+    build_fixture_with_relay(config_text, runner, true, |_| {})
+}
+
 /// 构造夹具并注入**共享**的命令执行器。
 ///
 /// 测试侧需要知道「写了几次 settings」或模拟读回值时必须拿到同一个 Arc
@@ -121,6 +132,15 @@ pub fn fixture_with_arc_runner(
 fn build_fixture(
     config_text: Option<&str>,
     runner: Arc<dyn CommandRunner>,
+    customize: impl FnOnce(&mut Settings),
+) -> Fixture {
+    build_fixture_with_relay(config_text, runner, false, customize)
+}
+
+fn build_fixture_with_relay(
+    config_text: Option<&str>,
+    runner: Arc<dyn CommandRunner>,
+    relay_binding: bool,
     customize: impl FnOnce(&mut Settings),
 ) -> Fixture {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -167,7 +187,11 @@ fn build_fixture(
 
     let audit_path = settings.audit_path();
     let adb_dir = settings.adb_dir.clone();
-    let state = AppState::with_runner(settings, "127.0.0.1:8686".to_owned(), device, runner);
+    let state = if relay_binding {
+        AppState::with_runner_and_relay(settings, "127.0.0.1:8686".to_owned(), device, runner)
+    } else {
+        AppState::with_runner(settings, "127.0.0.1:8686".to_owned(), device, runner)
+    };
     let router = router(state.clone());
     Fixture {
         dir,

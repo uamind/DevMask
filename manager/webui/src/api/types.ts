@@ -89,8 +89,6 @@ export type ValidationErrorCode =
   | 'invalid_egress_proxy'
   /** 探测 URL 非 http:// 或超长（契约 §6.7）。 */
   | 'invalid_probe_url'
-  /** Manager 侧探测只支持 HTTP 代理（socks5 返回 422）。 */
-  | 'unsupported_proxy_type'
 
 /** 单个字段校验错误。 */
 export interface ValidationError {
@@ -720,7 +718,10 @@ export interface EgressCheck {
   ok: boolean
   exitIp: string | null
   latencyMs: number | null
-  /** 六值 reason 枚举或 unsupported_proxy_type（契约 §4.4）。 */
+  /**
+   * 六值 reason 枚举（契约 §4.4）：connect / timeout / dns / tls / http_status / invalid_response。
+   * http 与 socks5 探测现在都走真连，不再有 unsupported_proxy_type。
+   */
   errorCode: string | null
   checkedAt: Iso8601
 }
@@ -745,6 +746,12 @@ export interface EgressProxy {
   /** 引用行数（含 app="" 的整机行）。 */
   boundApps: number
   lastCheck: EgressCheck | null
+  /**
+   * 该定义在**绑定设备**上是否正**经设备内中继**生效（契约 §6.1）。
+   * 任一绑定设备的中继 listener 在 accept → true；只分配了 localPort 但没在监听 → false；
+   * 没有绑定 / 设备离线 / 旧设备没上报 relay → null（不猜）。
+   */
+  relayActive?: boolean | null
   createdAt: Iso8601
   updatedAt: Iso8601
 }
@@ -834,6 +841,8 @@ export interface EgressProbeResponse {
   checkedAt: Iso8601
   url: string
   upstreamStatus: number | null
+  /** 非致命提醒（如 egress_check_not_recorded：探测成功但结果没落库）。 */
+  warnings?: Warning[]
 }
 
 /** 设备绑定行（GET / PUT /devices/{id}/egress 共用）。 */
@@ -844,6 +853,94 @@ export interface DeviceEgressBinding {
   proxyId: EgressProxyId | null
   proxyName: string | null
   updatedAt: Iso8601
+}
+
+/**
+ * 设备端 `relay` 对象的透传形状（契约 §6.1 字段表，GET /egress 原样转发）。
+ * Manager 的摘要口径见 DeviceRelaySummary：listeners 只数 listening=true。
+ */
+export interface DeviceRelayState {
+  /** `[relay].enabled` 的实际生效值（设备端降级后的结果）。 */
+  enabled?: boolean
+  /** 实际生效的 `base_port`：设备级端口等于它，应用级在 17800–17899 内哈希取端口。 */
+  basePort?: number
+  /** `[probe].fail_open` 的实际生效值（上游探测失败时是否改走直连）。 */
+  failOpen?: boolean
+  /** 本快照时刻（RFC 3339 UTC）。 */
+  at?: Iso8601
+  /** 并发上限。 */
+  limits?: {
+    maxConnections?: number
+    maxConnectionsPerUid?: number
+  }
+  /** 每个「应该监听」的中继端口一条（设备级在前，其余按端口升序）。 */
+  listeners?: DeviceRelayListener[]
+  /** uid 防火墙状态（仅应用级监听需要）。 */
+  firewall?: DeviceRelayFirewall | null
+  /** 端口变化（仅写响应可能非空）。 */
+  portChanges?: Array<{
+    proxy?: string
+    /** 变化前（null = 首次分配）。 */
+    from?: number | null
+    /** 变化后（null = 释放）。 */
+    to?: number | null
+    /** initial / collision / out_of_range / addr_in_use / role_change / credentials_change。 */
+    reason?: string
+  }>
+  /** 需要重启才能拿到新注入值的应用（仅写响应可能非空；GET 恒 `[]`）。 */
+  restartRequiredApps?: string[]
+}
+
+/** 设备端一个中继 listener 的透传形状。 */
+export interface DeviceRelayListener {
+  /** 代理定义名（定义表名）。 */
+  proxy?: string
+  /** 实际监听端口（等于 `localPort`）。 */
+  port?: number
+  /** `device` = 设备级端口；`app` = 应用级。 */
+  scope?: 'device' | 'app' | string
+  /** true = 正在 accept；false = 期望监听但失败（原因见 `lastError`）。 */
+  listening?: boolean
+  /** `device` 恒为 `all`；`app` 恒为 `restricted`。 */
+  uidPolicy?: 'all' | 'restricted' | string
+  /** `restricted` 时为解析出的 uid（升序，含 0）。 */
+  allowedUids?: number[]
+  /** 当前连接数（含握手中；进程重启清零）。 */
+  activeConnections?: number
+  /** 最近一次绑定 / 退出失败；code 属于 relay 警告码。 */
+  lastError?: {
+    code?: string
+    /** 该码 `details.reason` 的值（如 listener_exited / persist_failed / uid_unresolved）。 */
+    reason?: string
+    at?: Iso8601
+  } | null
+}
+
+/** 设备端 uid 防火墙状态（iptables 链 DF_EGRESS_RLY）。 */
+export interface DeviceRelayFirewall {
+  /** 期望规则是否已落地。 */
+  applied?: boolean
+  /** 三条链规则总条数。 */
+  rules?: number
+  allowRules?: number
+  denyRules?: number
+  /** 最近一次失败（如 `egress_relay_firewall_failed`）。 */
+  lastError?: {
+    code?: string
+    reason?: string
+    /** `apply` / `clear`。 */
+    op?: string
+    at?: Iso8601
+  } | null
+}
+
+/** 设备端 `proxies[]` 的透传形状：`localPort` 只读，由设备端分配。 */
+export interface DeviceEgressProxyState {
+  name?: string
+  /** 17800–17899；null / 缺省表示该定义在设备上没有分配中继端口。 */
+  localPort?: number | null
+  /** 本地 listener 是否在 accept（设备端事实）。 */
+  relayActive?: boolean
 }
 
 /** 设备端 GET /egress 的透传子集（Relay 原样转发，允许出现新字段）。 */
@@ -886,6 +983,13 @@ export interface DeviceEgressDeviceState {
     effective?: string
     proxy?: string | null
   }>
+  /**
+   * 设备内本地认证中继的运行时状态（契约 §6.1）。
+   * 旧设备没有这个字段 —— 界面上要显示「设备未上报中继状态」，不要猜。
+   */
+  relay?: DeviceRelayState | null
+  /** 逐代理定义的中继端口（只有分配了 localPort 的定义才出现）。 */
+  proxies?: DeviceEgressProxyState[]
 }
 
 /** GET /devices/{id}/egress：绑定表 + 设备实时状态（离线时 deviceState=null）。 */
@@ -968,6 +1072,23 @@ export interface EgressApplyDryRunResponse {
 /** apply 的两种响应：正常 202 / dryRun 200。 */
 export type EgressApplyResponse = EgressApplyAcceptedResponse | EgressApplyDryRunResponse
 
+/**
+ * 设备内本地认证中继（relay）的摘要，来源是设备 `GET /egress` 的 `relay` 对象。
+ *
+ * `listeners` 只数**正在 accept** 的 listener，因此 `active == enabled && listeners > 0`：
+ * 绑定失败（listening=false）的端口不会让设备卡亮起「经设备中继」。
+ */
+export interface DeviceRelaySummary {
+  /** `[relay].enabled` 的实际生效值（设备端降级后的结果）。 */
+  enabled: boolean
+  /** 是否真的在经设备内中继转发。 */
+  active: boolean
+  /** 正在监听的中继端口数量。 */
+  listeners: number
+  /** `relay.firewall.applied`：uid 防火墙规则是否已落地。 */
+  firewallApplied: boolean
+}
+
 /** 设备级出口摘要（DeviceSummary.egress，契约 §6.12 收尾）。 */
 export interface DeviceEgressSummary {
   /** proxy / direct；设备级没有任何绑定时为 null。 */
@@ -979,6 +1100,11 @@ export interface DeviceEgressSummary {
   checkedAt: Iso8601 | null
   ok: boolean | null
   errorCode: string | null
+  /**
+   * 设备内中继状态（字段只增不改）。
+   * null / 缺省 = 设备没上报（离线、旧版本没有 relay 字段、或设备不可达）。
+   */
+  relay?: DeviceRelaySummary | null
 }
 
 // ---------------------------------------------------------------------------

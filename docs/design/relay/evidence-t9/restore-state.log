@@ -1,0 +1,19 @@
+# 设备恢复（重装模块后）—— 2026-11-25T04:10:16Z
+1
+bin
+module.prop
+server.default.toml
+service.sh
+uninstall.sh
+webroot
+zygisk
+:0
+iptables: No chain/target/match by that name.
+root          3690  3677   11005528   7484 futex_wait_queue    0 S device_faker_server
+/data/adb/modules/device_faker/bin:
+total 4112
+-rwxr-xr-x 1 root root 4203288 2026-11-25 12:09 device_faker_server
+
+/data/adb/modules/device_faker/zygisk:
+total 1416
+-rw-r--r-- 1 root root 1448528 2026-11-25 12:09 arm64-v8a.so

@@ -6,9 +6,10 @@
 //!
 //! 数据流分三段，各管一段，互不依赖对方的实现细节：
 //!
-//! 1. **companion（root 域）**：[load_proxies] 读 0600 的 `egress.toml`，
-//!    [resolve_for_package] 按 `[[apps]].egress` → `[egress].default` → 直连 的
-//!    三级继承链算出某个包**实际**要用的代理，[EgressProxy::to_toml] 把它写进
+//! 1. **companion（root 域）**：[load_egress] 读 0600 的 `egress.toml`，
+//!    [spec_proxies] 先按中继规则改写（带凭据 → 回环），[resolve_for_package] 再按
+//!    `[[apps]].egress` → `[egress].default` → 直连 的三级继承链算出某个包**实际**要用的
+//!    代理，[EgressProxy::to_toml] 把它写进
 //!    `GetSpec` 响应 TOML 的 `[egress_proxy]` 小节（全内存，不落盘）。
 //! 2. **模块侧（zygote 域）**：[from_spec_doc] 从同一份 TOML 里取回该小节。模块
 //!    **不读** `egress.toml`——它碰不到 0600 文件，暴露面更小（契约 §5.1 末）。
@@ -19,6 +20,19 @@
 //!
 //! 凭据边界（契约 §7.1）：密码只存在于这两个进程的内存里；[EgressProxy] 的 `Debug`
 //! 实现把密码打码，本模块的任何日志路径都不输出它。
+//!
+//! 中继（v1.11 增量，契约 docs/plans/relay-contract.md §3，v1.2 语义）：
+//!
+//! - **带凭据**的定义在 `[relay].enabled = true` 且分到 `local_port` 时改写成
+//!   `127.0.0.1:<local_port>` + `relay = true`（[spec_proxies]），既不往应用进程里塞
+//!   凭据、也不暴露上游地址；
+//! - **fail-closed**（R12/R13）：中继开着却拿不到可用端口 → `127.0.0.1:9` 哨兵；
+//!   模块侧收到任何非法 relay 视图也一律改写成该哨兵并经 [injection_plan] 注入
+//!   （从而 arm replay），**绝不**返回「未配置」或回退上游——那会让应用裸奔；
+//! - **凭据载体自 v1.2 起全部移除**：socks 的两个凭据属性与
+//!   `Authenticator` 在任何路径都不写（§9.1 K1 / §9.2 B13）；
+//! - **无凭据**、`__DIRECT__` 与「未配置」的 spec 与 v1.10.0 逐字节一致
+//!   （[spec::render_doc] 只在真的有代理时写 `[egress_proxy]`）。
 
 use std::{collections::HashMap, fmt, fs};
 
@@ -37,6 +51,30 @@ pub const EGRESS_PATH: &str = "/data/adb/device_faker/config/egress.toml";
 
 /// `egress.toml` 目前唯一支持的 `version`（契约 §2.1）。
 const SUPPORTED_VERSION: i64 = 1;
+
+/// 本地中继的监听地址：relay 生效时应用侧看到的地址**必然**是回环（契约 §3.2 不变量）。
+pub const RELAY_HOST: &str = "127.0.0.1";
+
+/// `local_port` 端口池的下界（契约 §2.3：17800..=17899）。
+pub const RELAY_PORT_MIN: u16 = 17800;
+
+/// `local_port` 端口池的上界。
+pub const RELAY_PORT_MAX: u16 = 17899;
+
+/// 某个端口是否落在中继端口池内。
+pub fn is_relay_port(port: u16) -> bool {
+    (RELAY_PORT_MIN..=RELAY_PORT_MAX).contains(&port)
+}
+
+/// fail-closed 哨兵端口（契约 §3.3 规则 1/2/6：RELAY_FAIL_CLOSED_PORT = 9）。
+///
+/// 指向它 = **主动断网**：内核立刻回 ECONNREFUSED（不是 DROP，也不是换出口），应用得到
+/// 「连接被拒」。用它替代 v1.1 的「非法 relay 视图 → 当作未配置 → 继承设备级或直连」，
+/// 后者会在应当走代理时让应用裸奔（R12）。
+pub const RELAY_FAIL_CLOSED_PORT: u16 = 9;
+
+// 编译期断言：哨兵端口**绝不能**落进中继端口池（契约 §3.3 规则 1 的硬要求）。
+const _: () = assert!(RELAY_FAIL_CLOSED_PORT < RELAY_PORT_MIN);
 
 /// 需要「清除」的系统属性全集：`__DIRECT__` 与协议互斥都会用到。
 const PROXY_PROPERTY_KEYS: [&str; 6] = [
@@ -79,6 +117,16 @@ impl EgressType {
 
 /// 一条已解析的出口代理（`egress.toml` 的 `[proxies.<name>]`，或 spec 的
 /// `[egress_proxy]`）。
+///
+/// `local_port` 与 `relay` 是中继增量的两个字段，**各自只在一个方向上存在**：
+///
+/// - `local_port`：只出现在 `egress.toml`（server 分配、0600 落盘），**永不**写进 spec；
+/// - `relay`：只出现在 spec 的 `[egress_proxy]`（`relay = true` 表示地址是本地中继），
+///   `egress.toml` 里不认这个键。
+///
+/// 之所以放同一个结构体里：两条链路共享「type/host/port/username/password」五个键的
+/// 解析与渲染，拆成两个类型会让 [EgressProxy::from_table] 复制一遍校验。代价是渲染两侧
+/// 各自要显式清掉对方专有的字段——[spec_proxies] 与 [EgressProxy::to_toml] 各做一次。
 #[derive(Clone, PartialEq, Eq)]
 pub struct EgressProxy {
     pub kind: EgressType,
@@ -86,6 +134,72 @@ pub struct EgressProxy {
     pub port: Option<u16>,
     pub username: Option<String>,
     pub password: Option<String>,
+    /// `egress.toml` `[proxies.<name>].local_port`：只读、由 server 分配（契约 §2.3）。
+    pub local_port: Option<u16>,
+    /// spec `[egress_proxy].relay`：地址是本地中继（契约 §3.3）。
+    pub relay: bool,
+}
+
+/// relay 视图归一化的结果（纯数据；日志由 [from_spec_doc] 与 hooks 打）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelayNormalized {
+    /// 可直接注入的代理：type=direct 时是主动直连；其余目标已归一（非法 → 127.0.0.1:9）。
+    pub proxy: EgressProxy,
+    /// 目标非法时的原因；None = 目标合法（含哨兵 9）。
+    pub failure: Option<RelayTargetFailure>,
+    /// spec 里是否带过凭据：只用于日志的 creds=0|1，值本身已丢弃。
+    pub had_credentials: bool,
+}
+
+/// 非法 relay 视图的两类原因（契约 §3.3 规则 2 的 reason= 取值）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelayTargetFailure {
+    /// host 不是回环，或端口既不是哨兵 9 也不在 17800..=17899
+    InvalidTarget,
+    /// 段里根本没有 port
+    PortMissing,
+}
+
+impl RelayTargetFailure {
+    /// 日志里的 reason= 取值（契约 §3.3 规则 2，冻结字符串）。
+    pub fn reason(self) -> &'static str {
+        match self {
+            Self::InvalidTarget => "invalid_target",
+            Self::PortMissing => "port_missing",
+        }
+    }
+}
+
+/// 非法 relay 视图的降级日志行（契约 §3.3 规则 2 的冻结格式）。
+///
+/// 抽成纯函数有两个原因：真机日志检索要稳定（`reason=` 是固定字符串），以及宿主机
+/// 单测能直接断言「这行不含凭据」——函数签名里根本没有凭据参数，凭据也就无从拼进来。
+pub fn relay_fail_closed_line(
+    package: &str,
+    failure: RelayTargetFailure,
+    had_credentials: bool,
+) -> String {
+    format!(
+        "[egress] relay fail-closed package={package} reason={} creds={}",
+        failure.reason(),
+        u8::from(had_credentials)
+    )
+}
+
+/// 「仅多带凭据」的修复日志行（契约 §3.3 规则 3：剥凭据照常注入，不是降级）。
+pub fn relay_creds_stripped_line(package: &str) -> String {
+    format!("[egress] relay creds stripped package={package}")
+}
+
+/// 「凭据被忽略」的日志行（契约 §9.1 K1：v1.2 起任何路径都不注入凭据载体）。
+///
+/// http 与 socks5 **共用同一行**（只换 type）：socks 无认证时也不能静默——排障时
+/// 「为什么 socks 代理连上了却被上游拒」必须能在日志里看到 credentials ignored。
+pub fn unsupported_auth_line(package: &str, kind: EgressType) -> String {
+    format!(
+        "[egress] unsupported-auth package={package} type={}          (host/port injected only, credentials ignored)",
+        kind.as_str()
+    )
 }
 
 impl EgressProxy {
@@ -97,6 +211,8 @@ impl EgressProxy {
             port: None,
             username: None,
             password: None,
+            local_port: None,
+            relay: false,
         }
     }
 
@@ -109,6 +225,104 @@ impl EgressProxy {
             port: Some(port),
             username: None,
             password: None,
+            local_port: None,
+            relay: false,
+        }
+    }
+
+    /// 这条代理是否指向本地中继，且地址满足契约 §3.3 规则 1 的三项校验：
+    /// host 是回环、端口 ∈ {9} ∪ [17800,17899]、没有任何凭据。
+    pub fn relay_target_is_valid(&self) -> bool {
+        self.kind != EgressType::Direct
+            && self.host.as_deref() == Some(RELAY_HOST)
+            && self
+                .port
+                .is_some_and(|port| port == RELAY_FAIL_CLOSED_PORT || is_relay_port(port))
+            && !self.has_credentials()
+    }
+
+    /// 这是不是 fail-closed 哨兵（127.0.0.1:9 + relay=true，契约 §3.3 规则 6）。
+    pub fn is_fail_closed(&self) -> bool {
+        self.relay
+            && self.kind != EgressType::Direct
+            && self.host.as_deref() == Some(RELAY_HOST)
+            && self.port == Some(RELAY_FAIL_CLOSED_PORT)
+    }
+
+    /// fail-closed 哨兵代理：127.0.0.1:9 + relay=true + 无凭据（契约 §3.3 规则 2）。
+    pub fn fail_closed(kind: EgressType) -> Self {
+        Self {
+            // direct 不是可注入的地址族；哨兵至少封住一个协议族，缺省用 http。
+            kind: if kind == EgressType::Direct {
+                EgressType::Http
+            } else {
+                kind
+            },
+            host: Some(RELAY_HOST.to_string()),
+            port: Some(RELAY_FAIL_CLOSED_PORT),
+            username: None,
+            password: None,
+            local_port: None,
+            relay: true,
+        }
+    }
+
+    /// 归一化 spec 里的 relay 视图（契约 §3.3 规则 1–4）。
+    ///
+    /// 三件事，顺序固定：
+    /// 1. type=direct + relay=true（自相矛盾）→ 主动直连（清 6 个属性 + NO_PROXY），不是「未配置」；
+    /// 2. 凭据一律剥掉（v1.2 起凭据不进应用进程，§9.1 K1 / §9.2 B13）；
+    /// 3. 目标非法（host 非回环 / 端口越界 / 缺 port）→ 换成哨兵 127.0.0.1:9，
+    ///    由调用方记 reason，**绝不**返回「无计划」或回退上游（R12）。
+    pub fn relay_normalized(&self) -> RelayNormalized {
+        let had_credentials = self.has_credentials();
+
+        if self.kind == EgressType::Direct {
+            return RelayNormalized {
+                proxy: Self::direct(),
+                failure: None,
+                had_credentials,
+            };
+        }
+
+        let mut proxy = self.clone();
+        proxy.username = None;
+        proxy.password = None;
+        proxy.local_port = None;
+        proxy.relay = true;
+
+        let failure = if proxy.port.is_none() {
+            Some(RelayTargetFailure::PortMissing)
+        } else if proxy.relay_target_is_valid() {
+            // 凭据已在上面剥掉，所以这里只剩「host 回环 + 端口 ∈ {9} ∪ 端口池」两条。
+            None
+        } else {
+            Some(RelayTargetFailure::InvalidTarget)
+        };
+        if failure.is_some() {
+            proxy = Self::fail_closed(self.kind);
+        }
+
+        RelayNormalized {
+            proxy,
+            failure,
+            had_credentials,
+        }
+    }
+
+    /// 把一条**带凭据的上游定义**改写成「本地中继」视图（契约 §3.3 的字段表）。
+    ///
+    /// 凭据与上游地址都不进 spec：应用进程只看到 127.0.0.1:<local_port>，认证发生在
+    /// 设备内的中继里。
+    fn relay_view(&self, local_port: u16) -> Self {
+        Self {
+            kind: self.kind,
+            host: Some(RELAY_HOST.to_string()),
+            port: Some(local_port),
+            username: None,
+            password: None,
+            local_port: None,
+            relay: true,
         }
     }
 
@@ -128,43 +342,35 @@ impl EgressProxy {
         Some((host, port))
     }
 
-    /// 凭据 `(username, password)`；两侧都为空时返回 `None`（契约 §2.1：`""` 视为未设置）。
-    fn credentials(&self) -> Option<(String, String)> {
-        if !self.has_credentials() {
-            return None;
-        }
-        Some((
-            self.username.clone().unwrap_or_default(),
-            self.password.clone().unwrap_or_default(),
-        ))
-    }
-
     /// 渲染成 spec 的 `[egress_proxy]` 表（键名与契约 §2.1 的 `egress.toml` 对齐）。
+    ///
+    /// 渲染规则（v1.2 冻结）：
+    /// - `local_port` **永不**进 spec（契约 §2.3：只读、只属于 `egress.toml`）；
+    /// - `username`/`password` **任何路径都不写**（契约 §3.3 字段表 + §9.2 B13）：
+    ///   凭据只在设备内的中继里出示，写进 spec 等于把凭据交给同 uid 的应用进程；
+    /// - 只有 `relay = true` 这个内部标记会进 spec。
     pub fn to_toml(&self) -> toml::Value {
         let mut table = toml::map::Map::new();
         table.insert(
             "type".to_string(),
             toml::Value::String(self.kind.as_str().to_string()),
         );
-        for (key, value) in [
-            ("host", &self.host),
-            ("username", &self.username),
-            ("password", &self.password),
-        ] {
-            if let Some(value) = value {
-                table.insert(key.to_string(), toml::Value::String(value.clone()));
-            }
+        if let Some(host) = &self.host {
+            table.insert("host".to_string(), toml::Value::String(host.clone()));
         }
         if let Some(port) = self.port {
             table.insert("port".to_string(), toml::Value::Integer(i64::from(port)));
+        }
+        if self.relay {
+            table.insert("relay".to_string(), toml::Value::Boolean(true));
         }
         toml::Value::Table(table)
     }
 
     /// 从 `[proxies.<name>]` / `[egress_proxy]` 表里解析一条定义；结构不合法返回 `None`。
     ///
-    /// 未知键按契约 §2.1「忽略但保留」处理——这里只读自己认识的五个键，不回写文件，
-    /// 也就不会丢掉用户手写的内容。
+    /// 未知键按契约 §2.1「忽略但保留」处理——这里只读自己认识的键（五个基础键 +
+    /// `local_port` + `relay`），不回写文件，也就不会丢掉用户手写的内容。
     fn from_table(table: &toml::Value) -> Option<Self> {
         let kind = table
             .get("type")
@@ -183,7 +389,24 @@ impl EgressProxy {
             port,
             username: non_empty_str(table, "username"),
             password: non_empty_str(table, "password"),
+            local_port: parse_local_port(table),
+            // 只有 spec 的 `relay = true` 有意义；`egress.toml` 不认这个键，缺省即 `false`。
+            relay: table.get("relay").and_then(toml::Value::as_bool) == Some(true),
         })
+    }
+}
+
+/// 读 `local_port`：只有落在中继端口池内的整数才算数（契约 §2.3）。
+///
+/// 越界/类型不对一律按「没有分配」处理：真正的降级决策与那行 warn 在 [spec_proxies]
+/// 里统一做，这里保持纯解析、不打日志（同一份文件会被解析多次）。
+fn parse_local_port(table: &toml::Value) -> Option<u16> {
+    match table.get("local_port") {
+        Some(toml::Value::Integer(port)) if (0..=i64::from(u16::MAX)).contains(port) => {
+            let port = *port as u16;
+            is_relay_port(port).then_some(port)
+        }
+        _ => None,
     }
 }
 
@@ -229,36 +452,61 @@ impl fmt::Debug for EgressProxy {
 
 // ── ① companion 侧：读 egress.toml + 解析继承链 ──────────────────────────────
 
-/// 读取并解析 `egress.toml`，返回「代理名 → 定义」。
+/// `egress.toml` 的 `[relay]` 段（契约 §2.2）。缺省即「中继开启」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RelaySettings {
+    /// `[relay].enabled`：缺省 `true`；类型非法时按契约 §2.5 降级为 `false`。
+    pub enabled: bool,
+}
+
+impl Default for RelaySettings {
+    /// 契约 §2.2：`[relay]` 整段缺失 == 全部默认值，即**中继默认开**。
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+/// 一份解析后的 `egress.toml`：代理定义 + 中继开关 + 「是否已迁移」的原始事实。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EgressFile {
+    pub relay: RelaySettings,
+    /// 文件里是否出现过 `[relay]` 键（判断「已迁移」的一半，见 [Self::is_migrated]）。
+    pub relay_present: bool,
+    pub proxies: HashMap<String, EgressProxy>,
+}
+
+impl EgressFile {
+    /// 「文件已迁移」= 有 `[relay]` 键，**或** 任何定义带 `local_port`（契约 §3.2 规则 7）。
+    ///
+    /// 未迁移 = v1.10.0 的老文件（既没 `[relay]` 也没人写过端口）：这种文件里中继视为
+    /// **明确未启用**，带凭据的定义回退上游（R13 保留的可用性窗口）；一旦迁移过
+    /// （server 写过 `[relay]` 或端口表），缺 `local_port` 就是故障 → fail-closed。
+    pub fn is_migrated(&self) -> bool {
+        self.relay_present
+            || self
+                .proxies
+                .values()
+                .any(|proxy| proxy.local_port.is_some())
+    }
+}
+
+/// 解析 `egress.toml` 文本（纯函数；文件 IO 在 [load_egress]）。
 ///
-/// 出口代理是可选功能：文件不存在、语法错误、版本不认识都只记一行日志并返回空表——
-/// 配置坏了不能让机型伪装整体失效。语法错误的详细定位由 server 侧的
+/// 出口代理是可选功能：语法错误、版本不认识都只记一行日志并返回**默认值**（中继开、
+/// 没有代理）——配置坏了不能让机型伪装整体失效。语法错误的详细定位由 server 侧的
 /// `GET /api/v1/egress` 报（契约 §2.1 末），这里不重复展开（错误详情可能带行内原文，
 /// 而行可能是 password）。
-pub fn load_proxies() -> HashMap<String, EgressProxy> {
-    let mut proxies = HashMap::new();
+pub fn parse_egress(content: &str) -> EgressFile {
+    let mut file = EgressFile::default();
 
-    let content = match fs::read_to_string(EGRESS_PATH) {
-        Ok(content) => content,
-        Err(err) => {
-            if err.kind() != std::io::ErrorKind::NotFound {
-                warn!(
-                    "egress.toml unreadable ({}); app-level egress disabled",
-                    err.kind()
-                );
-            }
-            return proxies;
-        }
-    };
-
-    let document: toml::Value = match toml::from_str(&content) {
+    let document: toml::Value = match toml::from_str(content) {
         Ok(document) => document,
         Err(err) => {
             warn!(
                 "egress.toml unparsable ({}); app-level egress disabled",
                 err.message()
             );
-            return proxies;
+            return file;
         }
     };
 
@@ -266,11 +514,14 @@ pub fn load_proxies() -> HashMap<String, EgressProxy> {
         && version != SUPPORTED_VERSION
     {
         warn!("egress.toml version {version} is not supported; app-level egress disabled");
-        return proxies;
+        return file;
     }
 
+    file.relay_present = document.get("relay").is_some();
+    file.relay = parse_relay_settings(document.get("relay"));
+
     let Some(table) = document.get("proxies").and_then(toml::Value::as_table) else {
-        return proxies;
+        return file;
     };
 
     for (name, value) in table {
@@ -278,13 +529,149 @@ pub fn load_proxies() -> HashMap<String, EgressProxy> {
             // `direct` 不是合法代理名（只能由 `[[apps]].egress` 表达），缺 host/port
             // 的定义也注入不了：都当坏条目跳过，避免把「半张配置」当成可用代理。
             Some(proxy) if proxy.endpoint().is_some() => {
-                proxies.insert(name.clone(), proxy);
+                file.proxies.insert(name.clone(), proxy);
             }
             _ => warn!("egress.toml: proxy '{name}' is unusable; ignored"),
         }
     }
 
-    proxies
+    file
+}
+
+/// 读 `[relay]` 段；单个键非法只降级该键（契约 §2.5：**不**报 500、不写文件）。
+fn parse_relay_settings(section: Option<&toml::Value>) -> RelaySettings {
+    let Some(section) = section else {
+        return RelaySettings::default();
+    };
+
+    let Some(table) = section.as_table() else {
+        // `[relay]` 写成标量/数组：整段视为非法，按 §2.5「enabled 非法 → false」保守处理。
+        warn!("[egress] relay config degraded key=enabled (section is not a table)");
+        return RelaySettings { enabled: false };
+    };
+
+    let enabled = match table.get("enabled") {
+        None => true,
+        Some(toml::Value::Boolean(enabled)) => *enabled,
+        Some(_) => {
+            warn!("[egress] relay config degraded key=enabled");
+            false
+        }
+    };
+
+    RelaySettings { enabled }
+}
+
+/// 读 0600 的 `egress.toml`（文件不存在/不可读按「没有代理」处理）。
+///
+/// companion（root 域）每渲染一次 spec 调一次；模块进程不碰这个文件（契约 §5.1 末）。
+pub fn load_egress() -> EgressFile {
+    match fs::read_to_string(EGRESS_PATH) {
+        Ok(content) => parse_egress(&content),
+        Err(err) => {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!(
+                    "egress.toml unreadable ({}); app-level egress disabled",
+                    err.kind()
+                );
+            }
+            EgressFile::default()
+        }
+    }
+}
+
+/// 「要写进 spec 的代理表」+ 渲染期间产生的降级日志（由 `spec::render_map` 统一输出）。
+#[derive(Debug, Default)]
+pub struct SpecProxies {
+    pub proxies: HashMap<String, EgressProxy>,
+    /// 一行一条，**不含任何凭据**。三种来源：中继明确关闭的回退、文件未迁移的回退、
+    /// 以及「中继开着却缺 `local_port`」的 fail-closed。
+    pub warnings: Vec<String>,
+}
+
+/// 把 `egress.toml` 的代理表翻译成 spec 视图（契约 §3.2 的应用级判定，v1.2 收窄）。
+///
+/// 规则顺序即优先级：
+/// 1. **无凭据** → 上游 `host:port`（不经中继）；
+/// 2. **带凭据 + `[relay].enabled=false`** → 回退上游 `host:port`，**不写凭据载体**（§3.2 规则 5）；
+/// 3. **带凭据 + 文件未迁移**（无 `[relay]` 且无任何 `local_port`）→ 同上回退（R13 的可用性窗口）；
+/// 4. **带凭据 + relay 开 + 已迁移 + 有 `local_port`** → `127.0.0.1:<local_port>` + `relay = true`；
+/// 5. **带凭据 + relay 开 + 已迁移 + 缺 `local_port`** → **fail-closed** `127.0.0.1:9`
+///    （R13：中继开着就不是回退理由；池耗尽/写回失败/手改坏都走这条）。
+///
+/// 任何分支都不把 username/password 写进 spec（v1.2 起一律不写，§9.2 B13）。
+pub fn spec_proxies(file: &EgressFile) -> SpecProxies {
+    let mut view = SpecProxies {
+        proxies: HashMap::with_capacity(file.proxies.len()),
+        warnings: Vec::new(),
+    };
+    let migrated = file.is_migrated();
+
+    for (name, proxy) in &file.proxies {
+        // 上游视图：清掉 `egress.toml` 专有的 `local_port` 与 spec 专有的 `relay`，
+        // 并且**永不**带凭据（`to_toml` 也不再写，这里同步清掉便于断言）。
+        let mut upstream = proxy.clone();
+        upstream.local_port = None;
+        upstream.relay = false;
+        upstream.username = None;
+        upstream.password = None;
+
+        // 只有「可用的上游定义」才谈得上走中继：缺 host/port 的定义注入不了，改写成本地
+        // 端口反而可能指到别的定义的中继上。
+        let relay_candidate = proxy.kind != EgressType::Direct
+            && proxy.endpoint().is_some()
+            && proxy.has_credentials();
+        if !relay_candidate {
+            view.proxies.insert(name.clone(), upstream);
+            continue;
+        }
+
+        let endpoint = endpoint_text(proxy);
+
+        if !file.relay.enabled {
+            // 契约 §3.2 规则 5：中继**明确关闭** → 回退上游，且不写凭据载体。
+            view.warnings.push(format!(
+                "[egress] relay disabled: proxy '{name}' injected as upstream {endpoint} without credentials"
+            ));
+            view.proxies.insert(name.clone(), upstream);
+            continue;
+        }
+
+        if !migrated {
+            // R13 保留的唯一「不算故障」的回退：老文件还没被 server 迁移过。
+            view.warnings.push(format!(
+                "[egress] relay not migrated: proxy '{name}' injected as upstream {endpoint} without credentials"
+            ));
+            view.proxies.insert(name.clone(), upstream);
+            continue;
+        }
+
+        match proxy.local_port {
+            Some(local_port) => {
+                view.proxies
+                    .insert(name.clone(), proxy.relay_view(local_port));
+            }
+            None => {
+                // 契约 §3.2 规则 7（R13）：中继开着、文件已迁移，却缺端口 → fail-closed。
+                // 绝不回退上游、不静默直连。
+                view.warnings.push(format!(
+                    "[egress] relay fail-closed for proxy '{name}' reason=port_missing; injecting {RELAY_HOST}:{RELAY_FAIL_CLOSED_PORT}"
+                ));
+                view.proxies
+                    .insert(name.clone(), EgressProxy::fail_closed(proxy.kind));
+            }
+        }
+    }
+
+    view
+}
+
+/// 把定义的可用上游写成 `host:port`（只用于日志；定义不可用时给 `-`）。
+fn endpoint_text(proxy: &EgressProxy) -> String {
+    proxy
+        .endpoint()
+        .map(|(host, port)| format!("{host}:{port}"))
+        .unwrap_or_else(|| "-".to_string())
 }
 
 /// 解析某个包**需要应用级注入**的出口代理。
@@ -333,11 +720,24 @@ fn resolve_name(
 
 /// 从 `GetSpec` 的 TOML 里取回 `[egress_proxy]`。小节不存在 = 未配置（返回 `None`）。
 ///
-/// 解析失败一律当「未配置」：spec 是 companion 自己渲染的，真坏了也不该让目标应用
-/// 启动失败（契约 §5.5）；日志里只报小节坏了，不打印内容。
-pub fn from_spec_doc(document: &str) -> Option<EgressProxy> {
+/// 两条**完全不同**的错误口径（v1.2 冻结，很容易搞混）：
+///
+/// - **非 relay 段**解析失败 → 仍按「未配置」处理（`None`）：spec 是 companion 自己渲染的，
+///   真坏了也不该让目标应用启动失败（契约 §5.5）；日志只报小节坏了，不打印内容；
+/// - **`relay = true` 的段** → **永远返回一个可注入的代理**（R12）：目标非法就换成哨兵
+///   `127.0.0.1:9`，绝不返回「未配置」（那会让应用继承设备级代理或直连 = 裸奔），也绝不
+///   回退上游。唯一例外是同段还带凭据：剥掉后照常注入（§3.3 规则 3）。
+///
+/// `package` 只用于日志定位。
+pub fn from_spec_doc(document: &str, package: &str) -> Option<EgressProxy> {
     let value: toml::Value = toml::from_str(document).ok()?;
     let section = value.get(SPEC_SECTION)?;
+
+    // 先看**原始表**里的 relay：即使 type/port 解析不出来，也必须 fail-closed，
+    // 而不是「未配置」（§3.3 规则 1/2）。
+    if section.get("relay").and_then(toml::Value::as_bool) == Some(true) {
+        return Some(relay_spec_proxy(section, package));
+    }
 
     let Some(proxy) = EgressProxy::from_table(section) else {
         warn!("[egress] spec [{SPEC_SECTION}] is malformed; app-level egress disabled");
@@ -348,6 +748,52 @@ pub fn from_spec_doc(document: &str) -> Option<EgressProxy> {
         return None;
     }
     Some(proxy)
+}
+
+/// `relay = true` 的段：归一化 + 打点，**恒返回**可注入的代理（契约 §3.3 规则 2–4）。
+fn relay_spec_proxy(section: &toml::Value, package: &str) -> EgressProxy {
+    let Some(proxy) = EgressProxy::from_table(section) else {
+        // type / port 类型非法：连表都解析不出来，直接哨兵（协议族按 type 尽量猜）。
+        let line = relay_fail_closed_line(
+            package,
+            RelayTargetFailure::InvalidTarget,
+            section_has_credentials(section),
+        );
+        warn!("{line}");
+        return EgressProxy::fail_closed(relay_sentinel_kind(section));
+    };
+
+    let normalized = proxy.relay_normalized();
+    match normalized.failure {
+        Some(failure) => {
+            let line = relay_fail_closed_line(package, failure, normalized.had_credentials);
+            warn!("{line}");
+        }
+        // 规则 3：仅多带凭据 → 剥掉照常注入中继目标（这是修复，不是降级）。
+        None if normalized.had_credentials => {
+            let line = relay_creds_stripped_line(package);
+            warn!("{line}");
+        }
+        None => {}
+    }
+    normalized.proxy
+}
+
+/// 段里是否带过凭据（只看有没有非空值，**不打印值**）。
+fn section_has_credentials(section: &toml::Value) -> bool {
+    non_empty_str(section, "username").is_some() || non_empty_str(section, "password").is_some()
+}
+
+/// 表解析失败时用来选哨兵协议族：type 认识就用它，否则按 http 兜底。
+fn relay_sentinel_kind(section: &toml::Value) -> EgressType {
+    match section
+        .get("type")
+        .and_then(toml::Value::as_str)
+        .and_then(EgressType::parse)
+    {
+        Some(EgressType::Socks5) => EgressType::Socks5,
+        _ => EgressType::Http,
+    }
 }
 
 // ── ③ 进程内注入计划（纯逻辑，JNI 见 hooks::apply_egress_proxy）──────────────
@@ -384,18 +830,27 @@ pub struct InjectionPlan {
     /// 按顺序执行；单条失败只跳过这一条（契约 §5.5）。
     pub property_ops: Vec<PropertyOp>,
     pub selector: Option<SelectorSpec>,
-    /// http 代理带凭据：Java 侧只能靠全局 `java.net.Authenticator`，影响面过大
-    /// （同一进程里所有连接都会被问到凭据），因此只注入主机端口并记一行
-    /// `unsupported-auth`，认证交给应用自己。
+    /// spec 里带了凭据（只可能来自旧版 companion）：v1.2 起**任何路径都不注入凭据载体**
+    /// （契约 §9.1 K1 / §9.2 B13），该标志只驱动一行 unsupported-auth 日志。
     pub unsupported_auth: bool,
-    /// socks5 代理带凭据：走 `java.net.socks.username` / `java.net.socks.password`
-    /// 两个属性（契约 §5.1 第 7 项），不涉及全局 Authenticator。
-    pub socks_credentials: Option<(String, String)>,
 }
 
-/// 把解析结果翻译成注入计划；`None` = 计划不完整（`http`/`socks5` 缺 host 或 port），
-/// 调用方不注入任何东西。
+/// 把解析结果翻译成注入计划；`None` 只可能出现在**非 relay** 的残缺定义上
+/// （`http`/`socks5` 缺 host 或 port），调用方不注入任何东西。
+///
+/// **relay 视图永远有计划**（契约 §3.3 规则 2/7）：非法目标先归一成哨兵
+/// `127.0.0.1:9`、`type=direct` 归一成主动直连——两条都必须走本函数，因为只有它返回
+/// 计划才会 arm replay（否则框架 ~95ms 后把属性重写回设备级值，fail-closed 失效）。
 pub fn injection_plan(proxy: &EgressProxy) -> Option<InjectionPlan> {
+    if proxy.relay {
+        let normalized = proxy.relay_normalized();
+        return plan_for(&normalized.proxy);
+    }
+    plan_for(proxy)
+}
+
+/// 按 `kind`/`endpoint` 生成计划（不看 `relay` 标记；归一化由 [injection_plan] 完成）。
+fn plan_for(proxy: &EgressProxy) -> Option<InjectionPlan> {
     match proxy.kind {
         EgressType::Direct => Some(InjectionPlan {
             // 契约 §5.2：`__DIRECT__` 是**主动**直连——不设置任何代理地址属性，只清掉
@@ -407,7 +862,6 @@ pub fn injection_plan(proxy: &EgressProxy) -> Option<InjectionPlan> {
                 .collect(),
             selector: Some(SelectorSpec::Direct),
             unsupported_auth: false,
-            socks_credentials: None,
         }),
         EgressType::Http => {
             let (host, port) = proxy.endpoint()?;
@@ -444,7 +898,6 @@ pub fn injection_plan(proxy: &EgressProxy) -> Option<InjectionPlan> {
                     port,
                 }),
                 unsupported_auth: proxy.has_credentials(),
-                socks_credentials: None,
             })
         }
         EgressType::Socks5 => {
@@ -479,8 +932,7 @@ pub fn injection_plan(proxy: &EgressProxy) -> Option<InjectionPlan> {
                     host: host.to_string(),
                     port,
                 }),
-                unsupported_auth: false,
-                socks_credentials: proxy.credentials(),
+                unsupported_auth: proxy.has_credentials(),
             })
         }
     }
@@ -500,87 +952,43 @@ pub fn injection_plan(proxy: &EgressProxy) -> Option<InjectionPlan> {
 // 「注入 → 95ms 被覆盖 → 下一次 tick 修回」这条时间序（见测试），不需要真机。
 
 /// 一条「注入后必须一直成立」的系统属性期望。
+///
+/// v1.2 起注入清单只有 6 个代理属性（凭据载体已移除，§9.2 B13），因此这里没有
+/// 「需要打码的期望值」——所有键值都是 host/port，可以安全进日志。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayExpectation {
     /// 属性名（全部是 Java 系统属性，不是 Android 属性）。
     pub key: &'static str,
     /// `None` = 必须不存在/空串；`Some(_)` = 必须等于该值。
     pub want: Option<String>,
-    /// 凭据载体（`java.net.socks.username` / `java.net.socks.password`）：日志里只允许
-    /// 出现 `set=true|false`，绝不打印值（契约 §7.1）。
-    pub secret: bool,
 }
 
 /// 把注入计划翻译成属性期望：`Set` → 必须等于该值，`Clear` → 必须为空。
 pub fn replay_expectations(plan: &InjectionPlan) -> Vec<ReplayExpectation> {
-    let mut expectations: Vec<ReplayExpectation> = plan
-        .property_ops
+    plan.property_ops
         .iter()
         .map(|op| match op {
             PropertyOp::Set { key, value } => ReplayExpectation {
                 key,
                 want: Some(value.clone()),
-                secret: false,
             },
-            PropertyOp::Clear { key } => ReplayExpectation {
-                key,
-                want: None,
-                secret: false,
-            },
+            PropertyOp::Clear { key } => ReplayExpectation { key, want: None },
         })
-        .collect();
-
-    if let Some((username, password)) = &plan.socks_credentials {
-        expectations.push(ReplayExpectation {
-            key: "java.net.socks.username",
-            want: Some(username.clone()),
-            secret: true,
-        });
-        expectations.push(ReplayExpectation {
-            key: "java.net.socks.password",
-            want: Some(password.clone()),
-            secret: true,
-        });
-    }
-
-    expectations
+        .collect()
 }
 
-/// 一条读回与期望的偏差。
-///
-/// `Debug` 是手写的：凭据载体（`java.net.socks.username/password`）的期望值/实际值
-/// 连 Debug 也不能出原文，否则一次 `{divergence:?}` 就把凭据写进日志了。
-#[derive(Clone, PartialEq, Eq)]
+/// 一条读回与期望的偏差（键值都是 host/port，无凭据，可安全进日志）。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Divergence {
     pub key: &'static str,
     pub want: Option<String>,
     /// 实际读回（空串归一化为 `None`）。
     pub got: Option<String>,
-    pub secret: bool,
-}
-
-impl fmt::Debug for Divergence {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("Divergence");
-        debug.field("key", &self.key);
-        if self.secret {
-            debug
-                .field("want", &mask_credential(&self.want))
-                .field("got", &mask_credential(&self.got));
-        } else {
-            debug.field("want", &self.want).field("got", &self.got);
-        }
-        debug.field("secret", &self.secret).finish()
-    }
 }
 
 impl Divergence {
-    /// 日志文本：凭据载体只报「有没有设置」，其余报 `实际->期望`（都是 host/port 这类
-    /// 非凭据值，可以进日志）。
+    /// 日志文本：`实际->期望`。
     pub fn describe(&self) -> String {
-        if self.secret {
-            return format!("{}=set:{}", self.key, self.got.is_some());
-        }
         format!(
             "{}={}->{}",
             self.key,
@@ -609,7 +1017,6 @@ where
             key: expectation.key,
             want: expectation.want.clone(),
             got,
-            secret: expectation.secret,
         });
     }
     divergences
@@ -953,7 +1360,6 @@ mod tests {
                 port: 1080,
             })
         );
-        assert_eq!(plan.socks_credentials, None);
     }
 
     #[test]
@@ -971,7 +1377,6 @@ mod tests {
         }
         assert_eq!(plan.selector, Some(SelectorSpec::Direct));
         assert!(!plan.unsupported_auth);
-        assert_eq!(plan.socks_credentials, None);
     }
 
     #[test]
@@ -981,7 +1386,6 @@ mod tests {
         proxy.password = Some("pas sw0rd".to_string());
         let plan = injection_plan(&proxy).expect("http plan");
         assert!(plan.unsupported_auth);
-        assert_eq!(plan.socks_credentials, None);
         assert!(
             !plan.property_ops.iter().any(
                 |op| matches!(op, PropertyOp::Set { value, .. } if value.contains("pas sw0rd"))
@@ -991,15 +1395,30 @@ mod tests {
     }
 
     #[test]
-    fn socks_credentials_go_through_socks_properties() {
+    fn socks_proxy_never_gets_credential_carriers() {
+        // v1.2（§9.1 K1 / §9.2 B13）：凭据只在设备内的中继里出示，应用进程拿不到；
+        // 于是注入清单里只有 6 个代理属性，连 socks 的凭据属性都不出现。
         let mut proxy = socks_proxy();
         proxy.username = Some("user".to_string());
         proxy.password = Some("pas sw0rd".to_string());
         let plan = injection_plan(&proxy).expect("socks plan");
-        assert!(!plan.unsupported_auth);
-        assert_eq!(
-            plan.socks_credentials,
-            Some(("user".to_string(), "pas sw0rd".to_string()))
+
+        assert!(
+            plan.unsupported_auth,
+            "带凭据的定义必须留一行 unsupported-auth"
+        );
+        assert!(
+            !plan.property_ops.iter().any(
+                |op| matches!(op, PropertyOp::Set { key, .. } if key.starts_with("java.net."))
+            ),
+            "{:?}",
+            plan.property_ops
+        );
+        assert!(
+            replay_expectations(&plan)
+                .iter()
+                .all(|expectation| !expectation.key.starts_with("java.net.")),
+            "凭据载体不得出现在重放清单里"
         );
     }
 
@@ -1107,7 +1526,9 @@ mod tests {
     }
 
     #[test]
-    fn spec_section_round_trips_through_toml() {
+    fn spec_section_round_trips_without_credentials() {
+        // v1.2（§9.2 B13）：to_toml 不写 username/password，所以「写进去 → 读回来」
+        // 只剩 type/host/port；凭据字段必须为空，且文档里连字段名都不该出现。
         let mut proxy = socks_proxy();
         proxy.username = Some("user".to_string());
         proxy.password = Some("p@ss=\"word\"".to_string());
@@ -1117,7 +1538,13 @@ mod tests {
         root.insert("debug".to_string(), toml::Value::Boolean(true));
         let document = toml::to_string(&toml::Value::Table(root)).expect("render spec");
 
-        assert_eq!(from_spec_doc(&document), Some(proxy));
+        assert!(!document.contains("username"), "{document}");
+        assert!(!document.contains("password"), "{document}");
+        assert!(!document.contains("p@ss"), "{document}");
+
+        let parsed = from_spec_doc(&document, "com.example.a").expect("spec parses");
+        assert_eq!(parsed, socks_proxy());
+        assert!(!parsed.has_credentials());
     }
 
     #[test]
@@ -1143,7 +1570,10 @@ mod tests {
 
         // 渲染出来的文档必须同时满足两件事：模块能取回代理，Config 仍能整体解析
         //（[egress_proxy] 是 Config 不认识的顶层键，靠 serde 忽略未知字段拿到兼容）。
-        assert_eq!(from_spec_doc(&document), Some(http_proxy()));
+        assert_eq!(
+            from_spec_doc(&document, "com.example.a"),
+            Some(http_proxy())
+        );
         let config = Config::from_toml(&document).expect("spec still parses as Config");
         assert_eq!(config.apps.len(), 1);
         assert_eq!(config.apps[0].package, "com.example.a");
@@ -1159,8 +1589,8 @@ mod tests {
             package = "com.example.a"
             model = "Pixel 9"
         "#;
-        assert_eq!(from_spec_doc(document), None);
-        assert_eq!(from_spec_doc("not = toml = at all"), None);
+        assert_eq!(from_spec_doc(document, "com.example.a"), None);
+        assert_eq!(from_spec_doc("not = toml = at all", "com.example.a"), None);
     }
 
     #[test]
@@ -1168,7 +1598,10 @@ mod tests {
         let mut root = toml::map::Map::new();
         root.insert(SPEC_SECTION.to_string(), EgressProxy::direct().to_toml());
         let document = toml::to_string(&toml::Value::Table(root)).expect("render spec");
-        assert_eq!(from_spec_doc(&document), Some(EgressProxy::direct()));
+        assert_eq!(
+            from_spec_doc(&document, "com.example.a"),
+            Some(EgressProxy::direct())
+        );
     }
 
     #[test]
@@ -1318,14 +1751,19 @@ mod tests {
             Some("203.0.113.10")
         );
         assert_eq!(expect_value(&expectations, "socksProxyHost"), None);
+        // v1.2：注入清单只有 6 个代理属性，没有任何凭据载体（§9.1 K1）。
         assert!(
-            expectations.iter().all(|expectation| !expectation.secret),
-            "http 代理没有凭据载体"
+            expectations
+                .iter()
+                .all(|expectation| expectation.key.starts_with("http.")
+                    || expectation.key.starts_with("https.")
+                    || expectation.key.starts_with("socksProxy")),
+            "{expectations:?}"
         );
     }
 
     #[test]
-    fn socks_plan_expectations_mark_credentials_as_secret() {
+    fn socks_plan_expectations_never_carry_credentials() {
         let mut proxy = socks_proxy();
         proxy.username = Some("user".to_string());
         proxy.password = Some("s3cret".to_string());
@@ -1335,12 +1773,24 @@ mod tests {
             expect_value(&expectations, "socksProxyHost").as_deref(),
             Some("198.51.100.7")
         );
-        let password = expectations
-            .iter()
-            .find(|expectation| expectation.key == "java.net.socks.password")
-            .expect("password expectation");
-        assert!(password.secret);
-        assert_eq!(password.want.as_deref(), Some("s3cret"));
+        assert_eq!(
+            expect_value(&expectations, "socksProxyPort").as_deref(),
+            Some("1080")
+        );
+        // v1.2：socks 的两个凭据属性一律不注入、不重放（§9.1 K1 / §9.2 B13）。
+        assert!(
+            expectations
+                .iter()
+                .all(|expectation| !expectation.key.starts_with("java.net.")),
+            "{expectations:?}"
+        );
+        assert!(
+            !expectations
+                .iter()
+                .filter_map(|expectation| expectation.want.as_deref())
+                .any(|value| value.contains("s3cret")),
+            "凭据值不得进入重放清单"
+        );
     }
 
     #[test]
@@ -1363,7 +1813,6 @@ mod tests {
                 "https.proxyPort"
             ]
         );
-        assert!(found.iter().all(|divergence| !divergence.secret));
         assert!(
             found
                 .iter()
@@ -1386,20 +1835,14 @@ mod tests {
     }
 
     #[test]
-    fn secret_divergence_never_prints_the_value() {
+    fn divergence_describe_shows_got_and_want() {
+        // v1.2 起重放清单只有 host/port（无凭据），所以 describe 直接给「实际->期望」。
         let divergence = Divergence {
-            key: "java.net.socks.password",
-            want: Some("s3cret".to_string()),
-            got: Some("s3cret".to_string()),
-            secret: true,
+            key: "socksProxyHost",
+            want: Some("127.0.0.1".to_string()),
+            got: Some("10.0.0.9".to_string()),
         };
-        let text = divergence.describe();
-        assert_eq!(text, "java.net.socks.password=set:true");
-        assert!(!text.contains("s3cret"));
-        // 同一份数据被 Debug 打印也不能出原文（L-2：Debug 与 describe 都要打码）。
-        let debug = format!("{divergence:?}");
-        assert!(!debug.contains("s3cret"), "{debug}");
-        assert!(debug.contains("<redacted>"), "{debug}");
+        assert_eq!(divergence.describe(), "socksProxyHost=10.0.0.9->127.0.0.1");
     }
 
     #[test]
@@ -1639,5 +2082,719 @@ mod tests {
         assert!(!should_report_never_fired(false, false, false));
         // 只有这一种组合要打：武装了、从没 spawn、还没报过。
         assert!(should_report_never_fired(true, false, false));
+    }
+
+    // ── ⑦ 中继：`[relay]` + `local_port` → spec 视图（契约 §2.2 / §3.2 / §3.3）────
+
+    /// 带凭据的上游定义；`local_port` 由「server 是否已分配」决定。
+    fn credential_proxy(
+        kind: EgressType,
+        host: &str,
+        port: u16,
+        local_port: Option<u16>,
+    ) -> EgressProxy {
+        let mut proxy = EgressProxy::endpoint_proxy(kind, host, port);
+        proxy.username = Some("relay-user".to_string());
+        proxy.password = Some("relay-secret".to_string());
+        proxy.local_port = local_port;
+        proxy
+    }
+
+    fn relay_file(enabled: bool, entries: &[(&str, EgressProxy)]) -> EgressFile {
+        EgressFile {
+            relay: RelaySettings { enabled },
+            relay_present: true,
+            proxies: proxies(entries),
+        }
+    }
+
+    /// 把一个代理渲染成完整的 spec 文档（只有 [egress_proxy] 一小节）。
+    fn spec_section_text(proxy: &EgressProxy) -> String {
+        let mut root = toml::map::Map::new();
+        insert_spec_section(&mut root, proxy);
+        toml::to_string(&toml::Value::Table(root)).expect("render spec")
+    }
+
+    /// 老文件（未迁移）：既没有 `[relay]` 键，也没有任何 `local_port`。
+    fn unmigrated_file(entries: &[(&str, EgressProxy)]) -> EgressFile {
+        EgressFile {
+            relay: RelaySettings::default(),
+            relay_present: false,
+            proxies: proxies(entries),
+        }
+    }
+
+    #[test]
+    fn egress_toml_parses_relay_switch_and_local_port() {
+        let file = parse_egress(
+            r#"
+            version = 1
+
+            [relay]
+            enabled = false
+
+            [proxies.hk_resi]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "relay-user"
+            password = "relay-secret"
+            local_port = 17800
+
+            [proxies.us_la]
+            type = "socks5"
+            host = "198.51.100.7"
+            port = 1080
+            local_port = 17850
+            "#,
+        );
+
+        assert!(!file.relay.enabled);
+        assert!(file.relay_present, "有 [relay] 键 = 已迁移");
+        assert_eq!(file.proxies["hk_resi"].local_port, Some(17800));
+        assert!(file.proxies["hk_resi"].has_credentials());
+        assert_eq!(file.proxies["us_la"].local_port, Some(17850));
+        assert!(!file.proxies["us_la"].relay, "egress.toml 不认 relay 键");
+    }
+
+    #[test]
+    fn relay_switch_defaults_to_enabled_and_degrades_when_mistyped() {
+        // 整段缺失 == 默认值（契约 §2.2：中继默认开）
+        assert!(parse_egress("version = 1").relay.enabled);
+        // 段在、键缺 == 默认值
+        assert!(
+            parse_egress("version = 1\n[relay]\nbase_port = 17800")
+                .relay
+                .enabled
+        );
+        // 显式关闭
+        assert!(
+            !parse_egress("version = 1\n[relay]\nenabled = false")
+                .relay
+                .enabled
+        );
+        // 类型非法 → §2.5「视为 false」（宁可不中继，也不用未知状态）
+        assert!(
+            !parse_egress("version = 1\n[relay]\nenabled = \"true\"")
+                .relay
+                .enabled
+        );
+        // 整段写错类型 → 同样降级为 false
+        assert!(!parse_egress("version = 1\nrelay = 1").relay.enabled);
+    }
+
+    #[test]
+    fn local_port_outside_the_relay_pool_is_ignored() {
+        let file = parse_egress(
+            r#"
+            version = 1
+
+            [proxies.a]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "u"
+            password = "p"
+            local_port = 17799
+
+            [proxies.b]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "u"
+            password = "p"
+            local_port = 17800
+
+            [proxies.c]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "u"
+            password = "p"
+            local_port = 17899
+
+            [proxies.d]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "u"
+            password = "p"
+            local_port = 17900
+
+            [proxies.e]
+            type = "http"
+            host = "203.0.113.10"
+            port = 8080
+            username = "u"
+            password = "p"
+            local_port = "17800"
+            "#,
+        );
+
+        assert_eq!(file.proxies["a"].local_port, None);
+        assert_eq!(file.proxies["b"].local_port, Some(17800));
+        assert_eq!(file.proxies["c"].local_port, Some(17899));
+        assert_eq!(file.proxies["d"].local_port, None);
+        assert_eq!(file.proxies["e"].local_port, None);
+    }
+
+    #[test]
+    fn spec_proxies_rewrites_only_credentialed_proxies_to_the_loopback() {
+        let file = relay_file(
+            true,
+            &[
+                (
+                    "hk_resi",
+                    credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+                ),
+                (
+                    "jp_socks",
+                    credential_proxy(EgressType::Socks5, "198.51.100.20", 1080, Some(17831)),
+                ),
+                (
+                    "us_la",
+                    EgressProxy::endpoint_proxy(EgressType::Socks5, "198.51.100.7", 1080),
+                ),
+            ],
+        );
+
+        let view = spec_proxies(&file);
+        assert!(view.warnings.is_empty(), "{:?}", view.warnings);
+
+        // 带凭据 + 有 local_port → 回环 + relay=true，凭据与上游地址都不在视图里
+        let http = &view.proxies["hk_resi"];
+        assert_eq!(http.host.as_deref(), Some(RELAY_HOST));
+        assert_eq!(http.port, Some(17800));
+        assert!(http.relay);
+        assert_eq!(http.username, None);
+        assert_eq!(http.password, None);
+        assert_eq!(http.local_port, None, "local_port 不跟着进 spec");
+
+        let socks = &view.proxies["jp_socks"];
+        assert_eq!(socks.host.as_deref(), Some(RELAY_HOST));
+        assert_eq!(socks.port, Some(17831));
+        assert!(socks.relay);
+
+        // 无凭据 → 上游地址，且不带 relay 标记
+        let plain = &view.proxies["us_la"];
+        assert_eq!(plain.host.as_deref(), Some("198.51.100.7"));
+        assert_eq!(plain.port, Some(1080));
+        assert!(!plain.relay);
+    }
+
+    #[test]
+    fn spec_proxies_fails_closed_when_relay_enabled_and_local_port_missing() {
+        // R13：中继开着、文件已迁移（本 fixture 有 [relay]），却缺 local_port（池耗尽 /
+        // 写回失败 / 手改坏）→ 哨兵 127.0.0.1:9，**不回退上游**。
+        let file = relay_file(
+            true,
+            &[(
+                "hk_legacy",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+            )],
+        );
+
+        let view = spec_proxies(&file);
+        let proxy = &view.proxies["hk_legacy"];
+        assert_eq!(proxy.host.as_deref(), Some(RELAY_HOST));
+        assert_eq!(proxy.port, Some(RELAY_FAIL_CLOSED_PORT));
+        assert!(proxy.relay);
+        assert!(proxy.is_fail_closed());
+        assert!(!proxy.has_credentials());
+        assert_eq!(proxy.local_port, None);
+        assert_ne!(proxy.port, Some(0), "绝不能注入 0 端口");
+
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        let line = &view.warnings[0];
+        assert!(line.contains("fail-closed"), "{line}");
+        assert!(line.contains("port_missing"), "{line}");
+        assert!(line.contains("hk_legacy"), "{line}");
+        // 不回退上游：上游地址不出现在这一行里
+        assert!(!line.contains("203.0.113.10"), "{line}");
+        // 日志边界：凭据原文一个字符都不能出现
+        assert!(!line.contains("relay-user"), "{line}");
+        assert!(!line.contains("relay-secret"), "{line}");
+    }
+
+    #[test]
+    fn spec_proxies_falls_back_upstream_when_relay_is_disabled() {
+        let file = relay_file(
+            false,
+            &[(
+                "hk_resi",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+            )],
+        );
+
+        let view = spec_proxies(&file);
+        let proxy = &view.proxies["hk_resi"];
+        assert_eq!(proxy.host.as_deref(), Some("203.0.113.10"));
+        assert_eq!(proxy.port, Some(8080));
+        assert!(!proxy.relay);
+        assert!(!proxy.is_fail_closed(), "明确关闭不是故障，不该断网");
+        // v1.2（§9.2 B13）：回退窗口也不带凭据载体——spec 里连凭据都不出现。
+        assert!(!proxy.has_credentials());
+        assert_eq!(proxy.local_port, None);
+
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        let line = &view.warnings[0];
+        assert!(line.contains("relay disabled"), "{line}");
+        assert!(line.contains("203.0.113.10:8080"), "{line}");
+        assert!(!line.contains("relay-user"), "{line}");
+        assert!(!line.contains("relay-secret"), "{line}");
+
+        let document = spec_section_text(proxy);
+        assert!(!document.contains("username"), "{document}");
+        assert!(!document.contains("password"), "{document}");
+    }
+
+    #[test]
+    fn relay_spec_toml_carries_only_type_host_port_and_flag() {
+        let file = relay_file(
+            true,
+            &[(
+                "jp_socks",
+                credential_proxy(EgressType::Socks5, "198.51.100.20", 1080, Some(17831)),
+            )],
+        );
+        let view = spec_proxies(&file);
+        let table = view.proxies["jp_socks"].to_toml();
+        let keys: Vec<&str> = table
+            .as_table()
+            .expect("table")
+            .keys()
+            .map(String::as_str)
+            .collect();
+
+        // 契约 §3.3 字段表：relay 生效时只有 type/host/port + relay=true
+        assert_eq!(keys, vec!["type", "host", "port", "relay"]);
+        assert_eq!(
+            table.get("relay").and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            table.get("host").and_then(toml::Value::as_str),
+            Some(RELAY_HOST)
+        );
+        assert_eq!(
+            table.get("port").and_then(toml::Value::as_integer),
+            Some(17831)
+        );
+    }
+
+    #[test]
+    fn relay_spec_round_trips_and_plans_without_credential_carriers() {
+        let file = relay_file(
+            true,
+            &[
+                (
+                    "hk_resi",
+                    credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+                ),
+                (
+                    "jp_socks",
+                    credential_proxy(EgressType::Socks5, "198.51.100.20", 1080, Some(17831)),
+                ),
+            ],
+        );
+        let view = spec_proxies(&file);
+
+        for name in ["hk_resi", "jp_socks"] {
+            let proxy = view.proxies[name].clone();
+            let document = spec_section_text(&proxy);
+
+            // 模块侧读回来必须与原视图一致，且通过 §3.3 的三项校验
+            let parsed = from_spec_doc(&document, "com.example.a").expect("relay spec parses");
+            assert_eq!(parsed, proxy);
+            assert!(parsed.relay_target_is_valid());
+
+            // relay 视图不得规划任何凭据载体（否则凭据会暴露进应用进程）
+            let plan = injection_plan(&parsed).expect("relay plan");
+            assert!(!plan.unsupported_auth, "{name}");
+            assert_eq!(
+                replay_expectations(&plan).len(),
+                PROXY_PROPERTY_KEYS.len(),
+                "{name}"
+            );
+            assert!(
+                replay_expectations(&plan)
+                    .iter()
+                    .all(|item| !item.key.starts_with("java.net.")),
+                "{name}: relay 计划里不该有凭据载体"
+            );
+        }
+    }
+
+    /// 拼一段 relay=true 的 spec 文档（host/port 可选，用来构造各种非法视图）。
+    fn relay_spec_document(kind: &str, host: Option<&str>, port: Option<u16>) -> String {
+        let mut section = format!("type = \"{kind}\"\nrelay = true\n");
+        if let Some(host) = host {
+            section.push_str(&format!("host = \"{host}\"\n"));
+        }
+        if let Some(port) = port {
+            section.push_str(&format!("port = {port}\n"));
+        }
+        format!("debug = false\n\n[egress_proxy]\n{section}")
+    }
+
+    #[test]
+    fn fail_closed_port_is_outside_the_pool_and_is_a_valid_target() {
+        // 契约 §3.3 规则 1：哨兵 9 不在 17800..=17899，但它是**合法**的 relay 目标。
+        assert_eq!(RELAY_FAIL_CLOSED_PORT, 9);
+        assert!(!is_relay_port(RELAY_FAIL_CLOSED_PORT));
+
+        for kind in [EgressType::Http, EgressType::Socks5] {
+            let sentinel = EgressProxy::fail_closed(kind);
+            assert_eq!(sentinel.host.as_deref(), Some(RELAY_HOST));
+            assert_eq!(sentinel.port, Some(RELAY_FAIL_CLOSED_PORT));
+            assert!(sentinel.relay);
+            assert!(!sentinel.has_credentials());
+            assert!(sentinel.is_fail_closed());
+            assert!(sentinel.relay_target_is_valid());
+        }
+        // direct 不是可注入地址族：哨兵兜底成 http，避免把「断网」写成「直连」。
+        assert_eq!(
+            EgressProxy::fail_closed(EgressType::Direct).kind,
+            EgressType::Http
+        );
+    }
+
+    #[test]
+    fn relay_normalization_classifies_reasons_and_drops_credentials() {
+        // 缺 port → port_missing
+        let mut proxy = EgressProxy::endpoint_proxy(EgressType::Http, RELAY_HOST, 17800);
+        proxy.relay = true;
+        proxy.port = None;
+        let normalized = proxy.relay_normalized();
+        assert_eq!(normalized.failure, Some(RelayTargetFailure::PortMissing));
+        assert_eq!(
+            normalized.failure.map(RelayTargetFailure::reason),
+            Some("port_missing")
+        );
+        assert!(normalized.proxy.is_fail_closed());
+
+        // host 非回环 / 端口越界 / 端口是上游端口 → invalid_target
+        for (host, port) in [
+            ("10.0.0.5", 17800u16),
+            (RELAY_HOST, 18000),
+            (RELAY_HOST, 8080),
+        ] {
+            let mut proxy = EgressProxy::endpoint_proxy(EgressType::Http, host, port);
+            proxy.relay = true;
+            let normalized = proxy.relay_normalized();
+            assert_eq!(
+                normalized.failure,
+                Some(RelayTargetFailure::InvalidTarget),
+                "{host}:{port}"
+            );
+            assert_eq!(
+                normalized.failure.map(RelayTargetFailure::reason),
+                Some("invalid_target")
+            );
+            assert!(normalized.proxy.is_fail_closed());
+        }
+
+        // 仅多带凭据 → 合法目标 + had_credentials（值被丢弃）
+        let mut proxy = credential_proxy(EgressType::Http, RELAY_HOST, 17800, None);
+        proxy.relay = true;
+        let normalized = proxy.relay_normalized();
+        assert_eq!(normalized.failure, None);
+        assert!(normalized.had_credentials);
+        assert!(!normalized.proxy.has_credentials());
+        assert_eq!(normalized.proxy.port, Some(17800));
+    }
+
+    #[test]
+    fn invalid_relay_specs_fail_closed_and_are_armed_for_replay() {
+        // R12：非法 relay 视图 → 哨兵 127.0.0.1:9，并**经过 injection_plan**
+        // （只有有计划才会 arm replay；返回 None 会让框架 95ms 后把属性重写回设备级）。
+        for (kind, host, port) in [
+            ("http", Some("10.0.0.5"), Some(17800u16)),
+            ("http", Some(RELAY_HOST), Some(18000)),
+            ("http", Some(RELAY_HOST), Some(8080)),
+            ("http", Some(RELAY_HOST), None),
+            ("socks4", Some(RELAY_HOST), Some(17800)),
+        ] {
+            let document = relay_spec_document(kind, host, port);
+            let proxy = from_spec_doc(&document, "com.example.a").unwrap_or_else(|| {
+                panic!("非法 relay 视图必须 fail-closed，不能返回未配置: {kind} {host:?} {port:?}")
+            });
+
+            assert_eq!(proxy.host.as_deref(), Some(RELAY_HOST));
+            assert_eq!(proxy.port, Some(RELAY_FAIL_CLOSED_PORT));
+            assert!(proxy.relay);
+            assert!(proxy.is_fail_closed());
+            assert!(!proxy.has_credentials());
+            assert_eq!(proxy.kind, EgressType::Http);
+
+            let plan =
+                injection_plan(&proxy).expect("fail-closed 必须有注入计划（否则不会 arm replay）");
+            assert_eq!(
+                value_of(&plan, "http.proxyHost").as_deref(),
+                Some(RELAY_HOST)
+            );
+            assert_eq!(value_of(&plan, "http.proxyPort").as_deref(), Some("9"));
+            assert_eq!(value_of(&plan, "https.proxyPort").as_deref(), Some("9"));
+            assert!(cleared(&plan, "socksProxyHost"));
+            assert!(cleared(&plan, "socksProxyPort"));
+            assert_eq!(
+                plan.selector,
+                Some(SelectorSpec::Proxy {
+                    kind: EgressType::Http,
+                    host: RELAY_HOST.to_string(),
+                    port: RELAY_FAIL_CLOSED_PORT,
+                })
+            );
+
+            // 重放期望覆盖 6 个属性：框架改写后 replay 必须能把 9 写回去。
+            let expectations = replay_expectations(&plan);
+            assert_eq!(expectations.len(), PROXY_PROPERTY_KEYS.len());
+            assert_eq!(
+                expectations
+                    .iter()
+                    .find(|expectation| expectation.key == "http.proxyPort")
+                    .and_then(|expectation| expectation.want.as_deref()),
+                Some("9")
+            );
+        }
+    }
+
+    #[test]
+    fn sentinel_relay_spec_stays_fail_closed_for_socks5() {
+        let document = "debug = false\n\n[egress_proxy]\ntype = \"socks5\"\nhost = \"127.0.0.1\"\nport = 9\nrelay = true\n";
+        let proxy = from_spec_doc(document, "com.example.a").expect("哨兵是合法输入");
+        assert!(proxy.is_fail_closed());
+
+        let plan = injection_plan(&proxy).expect("plan");
+        assert_eq!(
+            value_of(&plan, "socksProxyHost").as_deref(),
+            Some(RELAY_HOST)
+        );
+        assert_eq!(value_of(&plan, "socksProxyPort").as_deref(), Some("9"));
+        assert!(cleared(&plan, "http.proxyHost"));
+        assert_eq!(
+            plan.selector,
+            Some(SelectorSpec::Proxy {
+                kind: EgressType::Socks5,
+                host: RELAY_HOST.to_string(),
+                port: RELAY_FAIL_CLOSED_PORT,
+            })
+        );
+    }
+
+    #[test]
+    fn relay_spec_with_only_extra_credentials_is_stripped_and_injected() {
+        let document = "debug = false\n\n[egress_proxy]\ntype = \"socks5\"\nhost = \"127.0.0.1\"\nport = 17831\nrelay = true\nusername = \"relay-user\"\npassword = \"relay-secret\"\n";
+        let proxy = from_spec_doc(document, "com.example.a").expect("合法目标");
+        assert!(proxy.relay);
+        assert_eq!(proxy.host.as_deref(), Some(RELAY_HOST));
+        assert_eq!(proxy.port, Some(17831));
+        assert!(!proxy.has_credentials());
+        assert!(!proxy.is_fail_closed(), "多带凭据是修复，不是降级");
+
+        let plan = injection_plan(&proxy).expect("plan");
+        assert_eq!(
+            value_of(&plan, "socksProxyHost").as_deref(),
+            Some(RELAY_HOST)
+        );
+        assert_eq!(value_of(&plan, "socksProxyPort").as_deref(), Some("17831"));
+        assert!(cleared(&plan, "http.proxyHost"));
+        assert!(!plan.unsupported_auth);
+        assert!(
+            !plan
+                .property_ops
+                .iter()
+                .any(|op| matches!(op, PropertyOp::Set { value, .. } if value.contains("relay-"))),
+            "凭据值不得进入注入属性"
+        );
+        assert!(
+            !replay_expectations(&plan)
+                .iter()
+                .filter_map(|expectation| expectation.want.as_deref())
+                .any(|value| value.contains("relay-")),
+            "凭据值不得进入重放清单"
+        );
+    }
+
+    #[test]
+    fn direct_relay_spec_is_active_direct_not_unconfigured() {
+        // 契约 §3.3 规则 4：type=direct + relay=true 自相矛盾 → 主动直连。
+        let document = "debug = false\n\n[egress_proxy]\ntype = \"direct\"\nrelay = true\n";
+        let proxy = from_spec_doc(document, "com.example.a")
+            .expect("direct+relay 必须按主动直连处理（返回 None 会继承设备级代理）");
+        assert_eq!(proxy, EgressProxy::direct());
+
+        let plan = injection_plan(&proxy).expect("direct plan");
+        assert!(
+            plan.property_ops
+                .iter()
+                .all(|op| matches!(op, PropertyOp::Clear { .. })),
+            "{:?}",
+            plan.property_ops
+        );
+        for key in PROXY_PROPERTY_KEYS {
+            assert!(cleared(&plan, key));
+        }
+        assert_eq!(
+            plan.selector,
+            Some(SelectorSpec::Direct),
+            "必须是 NO_PROXY selector"
+        );
+        assert_eq!(
+            replay_expectations(&plan).len(),
+            PROXY_PROPERTY_KEYS.len(),
+            "清属性同样要重放（否则框架会写回设备级代理）"
+        );
+    }
+
+    #[test]
+    fn spec_proxies_falls_back_upstream_only_before_migration() {
+        // 未迁移（无 [relay] 且无任何 local_port）→ 回退上游，且不写凭据载体。
+        let file = unmigrated_file(&[(
+            "hk_resi",
+            credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+        )]);
+        assert!(!file.is_migrated());
+        let view = spec_proxies(&file);
+        let proxy = &view.proxies["hk_resi"];
+        assert_eq!(proxy.host.as_deref(), Some("203.0.113.10"));
+        assert_eq!(proxy.port, Some(8080));
+        assert!(!proxy.relay);
+        assert!(!proxy.is_fail_closed(), "未迁移不是故障，不该断网");
+        assert!(!proxy.has_credentials());
+        assert_eq!(view.warnings.len(), 1, "{:?}", view.warnings);
+        assert!(
+            view.warnings[0].contains("not migrated"),
+            "{:?}",
+            view.warnings
+        );
+
+        // 只写了 local_port、没有 [relay] → 也算已迁移：走中继。
+        let migrated = EgressFile {
+            relay: RelaySettings::default(),
+            relay_present: false,
+            proxies: proxies(&[(
+                "hk_resi",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+            )]),
+        };
+        assert!(migrated.is_migrated());
+        let view = spec_proxies(&migrated);
+        assert_eq!(view.proxies["hk_resi"].port, Some(17800));
+        assert!(view.proxies["hk_resi"].relay);
+    }
+
+    #[test]
+    fn migration_state_is_relay_key_or_any_local_port() {
+        assert!(!parse_egress("version = 1").is_migrated());
+        assert!(parse_egress("version = 1\n[relay]\n").is_migrated());
+        assert!(parse_egress("version = 1\n[relay]\nenabled = false").is_migrated());
+        assert!(
+            parse_egress(
+                "version = 1\n[proxies.a]\ntype = \"http\"\nhost = \"203.0.113.10\"\nport = 8080\nusername = \"u\"\nlocal_port = 17800\n"
+            )
+            .is_migrated()
+        );
+        assert!(
+            !parse_egress(
+                "version = 1\n[proxies.a]\ntype = \"http\"\nhost = \"203.0.113.10\"\nport = 8080\nusername = \"u\"\n"
+            )
+            .is_migrated()
+        );
+    }
+
+    #[test]
+    fn spec_toml_never_carries_credentials_on_any_path() {
+        // 中继生效
+        let relay = spec_proxies(&relay_file(
+            true,
+            &[(
+                "hk",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+            )],
+        ));
+        assert!(!spec_section_text(&relay.proxies["hk"]).contains("username"));
+
+        // 明确关闭（回退窗口）
+        let off = spec_proxies(&relay_file(
+            false,
+            &[(
+                "hk",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, Some(17800)),
+            )],
+        ));
+        assert!(!spec_section_text(&off.proxies["hk"]).contains("username"));
+
+        // 未迁移（回退窗口）
+        let legacy = spec_proxies(&unmigrated_file(&[(
+            "hk",
+            credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+        )]));
+        let document = spec_section_text(&legacy.proxies["hk"]);
+        assert!(!document.contains("username"), "{document}");
+        assert!(!document.contains("password"), "{document}");
+
+        // fail-closed 哨兵同样不带
+        let failed = spec_proxies(&relay_file(
+            true,
+            &[(
+                "hk",
+                credential_proxy(EgressType::Http, "203.0.113.10", 8080, None),
+            )],
+        ));
+        let document = spec_section_text(&failed.proxies["hk"]);
+        assert!(!document.contains("username"), "{document}");
+        assert!(document.contains("relay = true"), "{document}");
+    }
+
+    #[test]
+    fn credentialed_fallbacks_are_marked_unsupported_for_both_protocols() {
+        // 契约 §9.1 K1：回退窗口里 http 与 socks5 都「带凭据但用不上」，两者都必须
+        // unsupported_auth=true（socks 不得静默无认证），且共用同一行日志（只换 type）。
+        for kind in [EgressType::Http, EgressType::Socks5] {
+            let mut proxy = EgressProxy::endpoint_proxy(kind, "203.0.113.10", 8080);
+            proxy.username = Some("relay-user".to_string());
+            proxy.password = Some("relay-secret".to_string());
+
+            let plan = injection_plan(&proxy).expect("fallback plan");
+            assert!(plan.unsupported_auth, "{kind:?} 必须标记 unsupported-auth");
+
+            let line = unsupported_auth_line("com.example.a", kind);
+            assert!(
+                line.starts_with(&format!(
+                    "[egress] unsupported-auth package=com.example.a type={}",
+                    kind.as_str()
+                )),
+                "{line}"
+            );
+            assert!(line.contains("credentials ignored"), "{line}");
+            assert!(!line.contains("relay-user"), "{line}");
+            assert!(!line.contains("relay-secret"), "{line}");
+        }
+    }
+
+    #[test]
+    fn fail_closed_log_line_is_frozen_and_never_carries_credentials() {
+        // 契约 §3.3 规则 2 的冻结格式：真机 logcat 检索依赖 reason= 的稳定取值。
+        let line = relay_fail_closed_line("com.example.a", RelayTargetFailure::InvalidTarget, true);
+        assert_eq!(
+            line,
+            "[egress] relay fail-closed package=com.example.a reason=invalid_target creds=1"
+        );
+        let line = relay_fail_closed_line("com.example.b", RelayTargetFailure::PortMissing, false);
+        assert_eq!(
+            line,
+            "[egress] relay fail-closed package=com.example.b reason=port_missing creds=0"
+        );
+
+        // 日志行不含凭据：函数签名里根本没有凭据参数，凭据值也无从出现。
+        assert!(!line.contains("relay-user"));
+        assert!(!line.contains("relay-secret"));
+
+        // 规则 3 的修复日志同样冻结。
+        assert_eq!(
+            relay_creds_stripped_line("com.example.a"),
+            "[egress] relay creds stripped package=com.example.a"
+        );
     }
 }

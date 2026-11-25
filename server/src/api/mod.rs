@@ -36,10 +36,11 @@ pub mod packages;
 pub mod schema;
 pub mod templates;
 
-/// 契约里 29 个操作的 (method, path)，用于契约测试与路由双向校验。
+/// 契约里 30 个操作的 (method, path)，用于契约测试与路由双向校验。
 ///
-/// 本增量（egress）+5：GET/PUT/DELETE /egress、POST /egress/probe、GET /egress/proxies。
-pub const CONTRACT_OPERATIONS: [(&str, &str); 29] = [
+/// egress 增量 +5（GET/PUT/DELETE /egress、POST /egress/probe、GET /egress/proxies）；
+/// relay 增量 +1（POST /egress/relay/restart，契约 §6.3 / §6.6：29 → 30）。
+pub const CONTRACT_OPERATIONS: [(&str, &str); 30] = [
     ("GET", "/api/v1/healthz"),
     ("GET", "/api/v1/status"),
     ("GET", "/api/v1/overview"),
@@ -69,6 +70,7 @@ pub const CONTRACT_OPERATIONS: [(&str, &str); 29] = [
     ("DELETE", "/api/v1/egress"),
     ("POST", "/api/v1/egress/probe"),
     ("GET", "/api/v1/egress/proxies"),
+    ("POST", "/api/v1/egress/relay/restart"),
 ];
 
 /// 本增量已实现的能力标签（契约固定顺序）。
@@ -326,6 +328,6 @@ packages = ["com.example.three"]
         for (method, path) in CONTRACT_OPERATIONS {
             assert!(seen.insert((method, path)), "{method} {path} 重复");
         }
-        assert_eq!(seen.len(), 29);
+        assert_eq!(seen.len(), 30);
     }
 }

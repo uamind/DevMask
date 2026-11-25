@@ -49,7 +49,8 @@ public class MainActivity extends Activity {
         String report = buildReport()
                 + "fetch.app=" + fetch("http://app.fixture/") + "\n"
                 + "fetch.ip=" + fetch("http://198.51.100.7/") + "\n"
-                + "rawsocks=" + rawSocket("198.51.100.9", 80) + "\n";
+                + "rawsocks=" + rawSocket("198.51.100.9", 80) + "\n"
+                + "socksdomain=" + socksDomain("app.fixture", 80) + "\n";
         Log.i(TAG, report);
         persist(report);
         TextView view = new TextView(this);
@@ -113,6 +114,36 @@ public class MainActivity extends Activity {
             socket.setSoTimeout(3000);
             OutputStream out = socket.getOutputStream();
             out.write(("GET / HTTP/1.0\r\nHost: " + host + "\r\n\r\n").getBytes("UTF-8"));
+            out.flush();
+            byte[] buffer = new byte[96];
+            int read = socket.getInputStream().read(buffer);
+            String body = read > 0 ? new String(buffer, 0, read).trim() : "";
+            return "ok body=" + body;
+        } catch (Throwable t) {
+            return "error=" + t.getClass().getSimpleName();
+        } finally {
+            if (socket != null) {
+                try {
+                    socket.close();
+                } catch (Throwable ignored) {
+                    // 探针，忽略
+                }
+            }
+        }
+    }
+
+    /**
+     * t9 用的远程 DNS 判据：目标地址用 createUnresolved，SOCKS 代理若生效，
+     * 握手里的 ATYP 必须是域名（fixture 侧看到 app.fixture 而不是解析后的 IP）。
+     */
+    private String socksDomain(String host, int port) {
+        Socket socket = null;
+        try {
+            socket = new Socket();
+            socket.connect(java.net.InetSocketAddress.createUnresolved(host, port), 3000);
+            socket.setSoTimeout(3000);
+            OutputStream out = socket.getOutputStream();
+            out.write(("GET / HTTP/1.1\r\nHost: " + host + "\r\n\r\n").getBytes("UTF-8"));
             out.flush();
             byte[] buffer = new byte[96];
             int read = socket.getInputStream().read(buffer);

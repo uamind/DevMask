@@ -501,6 +501,8 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
       ),
 
     // ---- 出口代理 egress（docs/plans/egress-contract.md §6）----
+    // 探测（POST /egress-proxies/{id}/probe）对 http 与 socks5 都走真连：
+    // http 预置 Proxy-Authorization；socks5 走 socks5h:// + RFC 1929，且不发任何认证头。
     listEgressProxies: (query: EgressProxyQuery = {}) =>
       send<EgressProxyListResponse>('/egress-proxies', {
         query: buildQuery(
@@ -532,6 +534,7 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
       await send<void>(`/egress-proxies/${encodeId(id)}`, { method: 'DELETE' })
     },
 
+    /** 真连探测出口 IP；失败统一 502 egress_probe_failed（details.reason 为六值枚举之一）。 */
     probeEgressProxy: (id: EgressProxyId, body?: EgressProbeRequest) =>
       send<EgressProbeResponse>(`/egress-proxies/${encodeId(id)}/probe`, {
         method: 'POST',

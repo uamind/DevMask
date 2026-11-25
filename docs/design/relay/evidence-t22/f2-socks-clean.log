@@ -1,0 +1,6 @@
+# 应用级 SOCKS5 + 远程 DNS（重跑，fixture 已确认在跑）—— 2026-11-25T04:52:07Z
+## fixture socks 行
+## server relay lines
+[2m2026-11-25T04:51:57.252535Z[0m [33m WARN[0m relay uid 归属失败但防火墙已生效：放行（内核层已按 uid 过滤） [3mproxy[0m[2m=[0mapp_socks [3mport[0m[2m=[0m17864 [3mreason[0m[2m=[0m"uid_unresolved_firewall_enforced"
+[2m2026-11-25T04:51:57.992604Z[0m [33m WARN[0m relay upstream failed [3mproxy[0m[2m=[0mdev_http [3mport[0m[2m=[0m17800 [3mreason[0m[2m=[0m"timeout"
+[2m2026-11-25T04:52:02.013045Z[0m [33m WARN[0m relay upstream failed [3mproxy[0m[2m=[0mdev_http [3mport[0m[2m=[0m17800 [3mreason[0m[2m=[0m"timeout"

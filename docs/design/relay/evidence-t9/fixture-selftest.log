@@ -1,0 +1,32 @@
+# fixture 认证自测（本机 127.0.0.1）
+date: 2026-11-25T03:06:10Z
+## python 客户端结果
+absuri(no creds)   -> ('HTTP/1.1 407 Proxy Authentication Required', 'proxy authentication required')
+absuri(right creds)-> ('HTTP/1.1 200 OK', '198.51.100.8')
+absuri(wrong creds)-> ('HTTP/1.1 407 Proxy Authentication Required', 'proxy authentication required')
+connect(no creds)  -> HTTP/1.1 407 Proxy Authentication Required
+connect(with creds)-> ('HTTP/1.1 200 Connection Established', '198.51.100.8')
+socks(only noauth) -> {'method_reply': '05ff', 'result': 'rejected-method'}
+socks(wrong pass)  -> {'method_reply': '0502', 'auth_reply': '0101', 'result': 'auth-rejected'}
+socks(userpass)    -> {'method_reply': '0502', 'auth_reply': '0100', 'connect_reply': '050000017f0000010000', 'tunnel_body': '198.51.100.8', 'result': 'ok'}
+
+## fixture 侧日志（只含摘要）
+2026-11-25T11:06:09+0800 proto=start http_ports=18090,18092 socks=18091 virtual=198.51.100.7 app=198.51.100.8 raw=198.51.100.9 socks_auth=1
+2026-11-25T11:06:10+0800 proto=http listener=18090 GET http://app.fixture/ auth=missing digest=- rejected=407
+2026-11-25T11:06:10+0800 proto=http listener=18090 GET http://app.fixture/ host=app.fixture auth=ok digest=7213dc66f53c
+2026-11-25T11:06:10+0800 proto=http listener=18090 GET http://app.fixture/ auth=bad digest=c6df9f92e245 rejected=407
+2026-11-25T11:06:10+0800 proto=http listener=18090 CONNECT app.fixture:80 auth=missing digest=- rejected=407
+2026-11-25T11:06:10+0800 proto=http listener=18090 CONNECT app.fixture:80 auth=ok digest=7213dc66f53c
+2026-11-25T11:06:10+0800 proto=http listener=18090 tunnel-request app.fixture 37 bytes auth_header=0 cred_hit=0
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 methods=00 rejected=require-userpass-but-no-userpass-offered
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 method=no-userpass-offered rejected
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 methods=02 auth user_ok=1 pass_ok=0 digest=372367f0ba20 (values never logged)
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 method=auth-failed rejected
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 methods=02 auth user_ok=1 pass_ok=1 digest=c71343023d5c (values never logged)
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 method=userpass(ok) methods=? CONNECT app.fixture:80
+2026-11-25T11:06:10+0800 proto=socks5 listener=18091 tunnel-request app.fixture 37 bytes auth_header=0 cred_hit=0
+
+## 明文凭据扫描（期望全 0）
+/tmp/t9-fixture.log:0
+/tmp/t9-fixture.out:0
+/tmp/t9-fixture.err:0

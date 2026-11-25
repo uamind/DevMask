@@ -259,8 +259,8 @@ Magisk 与 KernelSU 的 SELinux 域不同，个别机型可能出现「能启动
 
 | 粒度 | 服务做什么 | 作用面 |
 | --- | --- | --- |
-| 设备级（方案 A） | 写 Android 全局代理：`settings put global http_proxy <host>:<port>`（可选 `global_http_proxy_exclusion_list`） | 整机尊重系统代理的应用；**仅 HTTP/HTTPS，不承载认证** |
-| 应用级（方案 B） | 通过 companion 把解析好的代理下发给 Zygisk，在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector` | 只有目标应用；SOCKS5 可用，但**带认证的代理本期不可用**（见 §10.7）；**不动系统设置** |
+| 设备级（方案 A） | 写 Android 全局代理：`settings put global http_proxy <host>:<port>`（可选 `global_http_proxy_exclusion_list`） | 整机尊重系统代理的应用；**仅 HTTP/HTTPS；带凭据时经设备内中继**（§10.8） |
+| 应用级（方案 B） | 通过 companion 把解析好的代理下发给 Zygisk，在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector` | 只有目标应用；SOCKS5 可用；带凭据时经**设备内中继**（§10.8）；**不动系统设置** |
 
 ### 10.1 三条必须记住的命令规则
 
@@ -287,7 +287,9 @@ Magisk 与 KernelSU 的 SELinux 域不同，个别机型可能出现「能启动
 
 - `POST /api/v1/egress/probe`，URL 取 `egress.toml` 的 `[probe].url`（默认 `http://checkip.amazonaws.com/`，只接受 `http://`），超时 5 s（1–30 可配）。
 - 直连 / HTTP 代理（absolute-form）/ SOCKS5（含用户名密码认证）三条路径都由服务实现；响应体上限 4 KiB、不跟随重定向。
-- **探测链路 ≠ 应用链路**：服务自己的客户端在 SOCKS5 下可以发用户名密码认证，但应用进程里的 libcore（经方案 B 注入）不会发送凭据（§10.7）。所以带凭据的代理可能「探测成功、应用仍出不去」，别拿探测结果反推应用可用性。
+- **两条路径**：请求体 `via="upstream"`（缺省，直连上游）或 `via="relay"`（经设备内中继，覆盖「本地端口在监听 + 中继转发 + 上游认证 + 目标往返」）。`via="relay"` 的判定顺序：先 `enabled` / 有凭据（否则 409 `egress.not_configured`），再看监听（否则 502 `relay_not_listening`），最后才连。
+- **fail-open 只认 `via="upstream"`**：`via="relay"` 失败**不动** `settings`（中继挂了不该让整机静默直连）。
+- **探测链路 ≠ 应用 uid 链路**：`via="relay"` 由 uid 0 发起，只证明中继数据面可用，**不证明**目标应用 uid 能连（uid 授权靠 accept 期双检与应用内探针）。
 - 失败返回 `502 egress.probe_failed`（`reason` = `connect`/`dns`/`timeout`/`tls`/`http_status`/`invalid_response`）；未配置出口返回 `409 egress.not_configured`。
 - 探测**不回落**：失败就是失败；fail-open 只影响流量链路。
 
@@ -312,7 +314,7 @@ Magisk 与 KernelSU 的 SELinux 域不同，个别机型可能出现「能启动
 
 ### 10.5 卸载与禁用清理
 
-`uninstall.sh` 的顺序是：停守护循环 → 停 server → **清系统代理（`settings put global http_proxy :0`）** → 删 `/data/adb/device_faker`。前两步顺序不能反（否则守护循环 5 秒后会把进程拉回来）。
+`uninstall.sh` 的顺序是：停守护循环 → 停 server → **清中继防火墙三链**（先 `-D OUTPUT -j DF_EGRESS_RLY`，再按叶子链 → 入口链 `-F/-X`）→ **清系统代理（`settings put global http_proxy :0`）** → 删 `/data/adb/device_faker`。前两步顺序不能反（否则守护循环 5 秒后会把进程拉回来）。
 
 ⚠️ **手动「禁用模块」（管理器里关掉开关）不会执行 `uninstall.sh`**：服务不启动，就没有进程替你清系统代理，设备会继续走那条可能已经失效的代理。禁用前请先执行一次 `DELETE /api/v1/egress`（WebUI 设置页「网络出口」开关等价），或者在禁用后用 root 手工清：
 
@@ -334,6 +336,11 @@ su -c 'dumpsys connectivity | grep -i "global proxy"'                # Global pr
 | 探测 409 `egress.not_configured` | 设备级没有 `default` 且没有定义；先 `PUT /api/v1/egress` |
 | 应用级配了但没效果 | 应用需**重启**；native 栈（cronet/QUIC）不覆盖；`__DIRECT__` 会主动覆盖系统代理，检查配置是否写反 |
 | `health.degraded=true` | fail-open 已把系统代理切直连；修好代理后跑一次 `POST /api/v1/egress/probe` 即恢复 |
+| 应用级中继**全部**不可用（受限 ROM / `/proc` 读不到 uid） | 看 `relay.firewall.applied`：`true` → unknown uid 会放行（限频日志 `uid_unresolved_firewall_enforced`）；`false` 或 `[relay].firewall=false` → unknown uid 一律 close（fail-closed，属预期）。不要用 `firewall=false` 排障 |
+| `relay.listeners[].lastError.reason=addr_in_use` / `pool_exhausted` | 端口被占 / 池耗尽：`ss -ltn \| grep 178` 看占用；`POST /api/v1/egress/relay/restart` 会重分配，端口变化时按 `relay.restartRequiredApps` 重启应用 |
+| `egress_relay_firewall_failed` / `relay.firewall.applied=false` | `iptables` 缺失、非 root、`-m owner` 不支持，或规则被外部改动（`reason=state_mismatch`）；**本轮需要重建**的应用级端口不监听（未变 listener 保持监听，靠 accept 期 uid 双检兜底；设备级照常），修好后 restart |
+| 应用经中继收到 **407** | 上游凭据错；服务日志 `relay upstream auth failed proxy=… reason=auth_failed`（不含凭据）。修 `username`/`password` 后 `POST /api/v1/egress/relay/restart` + 重启应用 |
+| `egress_relay_device_socks5_unsupported` / `readback.settingsValue=127.0.0.1:9` | `default` 指向 socks5 定义：PUT 会 `422 invalid_egress_default`；旧配置仅在 `enabled=true` 时被黑洞化（fail-closed），`enabled=false` 按未配置（直连）。改 http default 或删除 default；socks5 定义只用于 `[[apps]].egress` |
 
 ### 10.7 应用级注入的已知代价与限制（模块侧）
 
@@ -342,11 +349,43 @@ su -c 'dumpsys connectivity | grep -i "global proxy"'                # Global pr
 | 代价 | 表现 | 观测 |
 | --- | --- | --- |
 | 显式配置 `egress` 的进程**保留模块代码页** | 进程内常驻模块代码（重放线程 + PLT hook 都在 `.so` 里，不能提前 `dlclose`），但**按名字扫 `/proc/<pid>/maps` 看不到**：Zygisk 用无名/匿名映射，实测 armed 进程 3170 行里 `libzygisk` 命中 0；只有 **companion 进程**的 maps 能看到 `…/zygisk/arm64-v8a.so`。真判断要比**匿名可执行段**（对比未配置进程的 `r-xp` 匿名段） | 未配置应用级出口的进程不受影响，照旧立即卸载 |
-| **带用户名/密码的代理本期不可用** | 应用流量不发认证：SOCKS5 的 `java.net.socks.username/password` 进程内可读，但 libcore 不发送（代理侧 `methods=0002 user_ok=0 pass_ok=0`、最终 `auth-failed`）；HTTP Basic 未实现（只注入 host/port） | `[egress] unsupported-auth package=… type=http`（HTTP）；SOCKS5 看代理自身的 `auth-failed` 日志。可用 **IP 白名单**授权，或等 P2「设备内本地认证中继」（尚未实现） |
+| **带凭据的代理经中继后才可用**（v1.11.0） | relay 生效时由 root 中继补认证，应用只看到 `127.0.0.1:<local_port>`；relay 明确未启用（`enabled=false` / 文件未迁移）时回退上游 `host:port`、认证不可用；注入视图非法时 **fail-closed**（`127.0.0.1:9`，断网不直连） | `GET /api/v1/egress` 的 `relay` 与 `proxies[].relayActive`；日志 `relay listen/upstream/auth`；关闭通道见 §10.8 |
 | **运行中修改设备级代理不重放** | 应用冷启动后的重放窗口只有 0–2000ms；跑起来之后再改 `[egress] default`，该进程不会跟着变 | 重启应用（或 `POST /api/v1/apps/{pkg}/restart`）后生效 |
 | **`setpriority` hook 未命中时退化为一次性注入** | 注入值写进去了，但可能被框架的 `updateHttpProxy` 覆盖：应用级 HTTP 出口不生效、`__DIRECT__` 拉不回直连 | `adb logcat -s DeviceFaker` 里的 `[egress] replay hook unavailable reason=...` |
 
 机制与重放时间表见 [CONFIG.md「应用级注入如何生效」](CONFIG.md#应用级注入如何生效后置重放)。
+
+### 10.8 设备内认证中继（relay，v1.11.0）
+
+带凭据的代理由服务内的 **relay** 落地：只监听 `127.0.0.1`，替应用向上游出示 HTTP Basic / SOCKS5 RFC1929（契约见 [plans/relay-contract.md](plans/relay-contract.md)）。
+
+**端口**：预留 **17800–17899**。设备级（`[egress].default`）固定用 `base_port`（默认 17800）；应用级从哈希池分配（FNV-1a32 + 线性探测），写在 `egress.toml` 的 `local_port`（只读）。端口变化时 `relay.portChanges` / `relay.restartRequiredApps` 会提示要重启哪些应用。
+
+**iptables（uid 防火墙，默认开）**：三条链，入口固定为 `ALLOW → DENY → RETURN`：
+
+| 链 | 内容 | 重建方式 |
+| --- | --- | --- |
+| `DF_EGRESS_RLY` | 入口：`-j DF_EGRESS_RLY_ALLOW`、`-j DF_EGRESS_RLY_DENY`、`-j RETURN` | 只补缺 |
+| `DF_EGRESS_RLY_ALLOW` | 只有 ACCEPT：root → 设备级全 uid → 应用级逐 uid | `-F` 后按序重建（空链 = 全拒） |
+| `DF_EGRESS_RLY_DENY` | 每个中继端口一条 `REJECT`（含非回环目的地） | 只 `-C`/`-A` 增补、`-D` 精确删除，**永不 `-F`** |
+
+排障与恢复：
+
+- `adb shell su -c 'iptables -S DF_EGRESS_RLY'`（以及 `_ALLOW` / `_DENY`）核对三条链；`applied` 由服务每次 `-S` 现算，手工 `-F` 后 `GET /egress.relay.firewall.applied=false`，`POST /api/v1/egress/relay/restart` 会**强制重装**并修回 `true`。
+- **端口占用**：`relay.listeners[].lastError.reason=addr_in_use` / `pool_exhausted`；`ss -ltn` 看谁占了 178xx。restart 会重分配并把变化的端口写进 `portChanges`，此时引用该定义的应用需重启。
+- **防火墙失败**：`egress_relay_firewall_failed`（`reason=iptables_missing/command_failed/permission_denied/state_mismatch`）。**本轮需要重建**的应用级端口不监听（paused socket 直接关闭），**未变 listener 保持监听**（规则可能已被 `-F ALLOW` 清空，此时唯一防线是 accept 期 uid 双检）；设备级照常。修好 `iptables` / `-m owner` 后 restart。
+- **上游 407**：中继把上游的 407 **原样回传**给应用，日志一行 `relay upstream auth failed proxy=… reason=auth_failed`（不含凭据）；修 `username`/`password` 后 restart + 重启应用。
+- **关闭中继**：编辑 0600 的 `egress.toml`，把 `[relay].enabled` 设为 `false`，再 `POST /api/v1/egress/relay/restart`（**没有 API 开关**）。关闭后带凭据的代理回到「只写上游 host:port、认证不可用」。
+- **卸载 / 禁用清理**：服务退出与 `uninstall.sh` 会摘掉 `OUTPUT` 跳转并按「叶子链 → 入口链」删三条链（见 §10.5）；手工清理用同样的命令，别只 `-F` 入口链。
+
+**uid 分层策略（v1.11.0）**：应用级端口在 accept 后先判 uid——已归属且在白名单 → 放行；已归属但不在 → close（`uid_not_allowed`）；**归属失败时，只有 `relay.firewall.applied=true`（同一次 `-S` 采样确认三链生效）才放行**，并记限频日志 `uid_unresolved_firewall_enforced`（≤1 次/秒），否则 close（`uid_unresolved`）。放行前服务会**限频复核 `-S`**（≤1 次/秒、单次 1s 超时），规则被手工 `-F` 或第三方改动后 ≤1s 回到 fail-closed。折中代价是 root-trust：只约束「谁能连本地端口」，不约束「连上后以谁的 uid 出网」。
+
+**设备级只中继 http**：`[egress].default` 指向 `type="socks5"` 时**不会**在 `base_port` 建 listener（`relay.listeners[]` 无 `scope="device"` 条目）。`PUT /egress` 按合并后的有效 default 校验，指向非 http → `422 invalid_egress_default`（与 `[relay].enabled` / 凭据无关）；**已存在的旧配置**：`enabled=true` → `settings` 写黑洞 `127.0.0.1:9`（fail-closed，不把 HTTP 流量送到 SOCKS 端口、也不直连泄漏），`readback.settingsValue=127.0.0.1:9`；`enabled=false` → 按未配置（`:0` 直连），**不写黑洞**。两种都报 warning `egress_relay_device_socks5_unsupported`（`details={proxy, scope:"device", reason:"socks5_device_scope_unsupported"}`，配置提醒）。处置：把 default 换成 http 定义，把 socks5 定义只用于应用级。
+
+**本地端口劫持**：listener 释放到重绑之间，`127.0.0.1:178xx` 可能被本机进程抢占。检测信号是**下一次 bind 失败（`addr_in_use`）**（`-S` 复核不能判断端口属主）：应用级换端口并在 `relay.portChanges` / `restartRequiredApps` 提示；设备级只有一个候选，失败即不监听并给 `egress_relay_bind_failed`。排障：`ss -ltnp | grep 178` 核对端口属主是否为 `device_faker_server`。
+
+**边界**：中继只覆盖 **Java 层**（属性 + `ProxySelector`）；native 栈与 WebView 的代理行为不变。`[relay].firewall=false` 时规则层不设防，但 accept 期 uid 双检仍会拒绝未授权 uid（不是「全 uid 可用」）。
+
 
 ## 11. 许可
 

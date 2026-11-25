@@ -12,7 +12,8 @@
         <h1>代理池</h1>
         <p>
           设备级 HTTP 代理（方案 A：settings put global http_proxy）与应用级 SOCKS5 注入（方案 B）共用同一份代理定义。
-          密码只写不读：这里的每一行都只有「是否已设置凭据」。
+          密码只写不读：这里的每一行都只有「是否已设置凭据」。带凭据的代理由设备内本地认证中继
+          （127.0.0.1:localPort，HTTP Basic / SOCKS5 RFC 1929）持有凭据，应用只连中继。
         </p>
       </div>
       <div class="head-actions">
@@ -46,7 +47,8 @@
       <span class="spacer"></span>
       <span class="toolbar-count">
         {{ manager.egressProxies.length }} / {{ manager.egressProxyTotal }} 个代理 ·
-        {{ manager.boundProxyCount }} 个已绑定 · {{ socksCount }} 个 SOCKS5
+        {{ manager.boundProxyCount }} 个已绑定 · {{ socksCount }} 个 SOCKS5 ·
+        {{ relayActiveCount }} 个经设备中继
       </span>
     </div>
 
@@ -74,6 +76,21 @@
             <div class="egress-tags">
               <span v-if="row.hasCredentials" class="tag accent">已设凭据</span>
               <span v-else class="tag">无凭据</span>
+              <span
+                v-if="row.relayActive === true"
+                class="tag ok"
+                title="绑定设备上的本地中继 listener 正在 accept"
+                data-testid="proxy-relay-tag"
+              >
+                经设备中继
+              </span>
+              <span
+                v-else-if="row.hasCredentials"
+                class="tag warn"
+                title="带凭据代理必须由设备内中继承载：中继没起来时该代理解析不到凭据"
+              >
+                需设备中继
+              </span>
             </div>
           </template>
         </el-table-column>
@@ -130,6 +147,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="设备中继" min-width="150">
+          <template #default="{ row }">
+            <span
+              :class="relayActiveTagClass(row.relayActive)"
+              :title="proxyRelayDetail(row as EgressProxy)"
+              data-testid="proxy-relay-state"
+            >
+              {{ proxyRelayLabel(row as EgressProxy) }}
+            </span>
+            <div class="probe-meta">{{ proxyRelayDetail(row as EgressProxy) }}</div>
+          </template>
+        </el-table-column>
+
         <el-table-column label="启用" width="78">
           <template #default="{ row }">
             <el-switch
@@ -143,14 +173,17 @@
         <el-table-column label="操作" width="248" align="right">
           <template #default="{ row }">
             <div class="egress-actions">
-              <el-button
-                link
-                type="primary"
-                :loading="manager.isProbingProxy(row.id)"
-                @click="probe(row as EgressProxy)"
-              >
-                探测
-              </el-button>
+              <el-tooltip :content="probeHint(row as EgressProxy)" placement="top">
+                <el-button
+                  link
+                  type="primary"
+                  :loading="manager.isProbingProxy(row.id)"
+                  data-testid="proxy-probe"
+                  @click="probe(row as EgressProxy)"
+                >
+                  探测
+                </el-button>
+              </el-tooltip>
               <el-button link type="primary" @click="openBind(row as EgressProxy)">绑定设备</el-button>
               <el-button link type="primary" @click="openEdit(row as EgressProxy)">编辑</el-button>
               <el-button link type="danger" @click="remove(row as EgressProxy)">删除</el-button>
@@ -185,7 +218,7 @@
           <el-form-item label="类型 (type)">
             <el-select v-model="form.type" style="width: 100%">
               <el-option label="http（设备级 + 应用级）" value="http" />
-              <el-option label="socks5（应用级；Manager 探测返回 422）" value="socks5" />
+              <el-option label="socks5（应用级；探测经 socks5h 真连）" value="socks5" />
             </el-select>
           </el-form-item>
           <el-form-item label="主机 (host)">
@@ -231,6 +264,15 @@
           <el-switch v-model="form.clearCredentials" />
           <span>
             清除已保存的凭据（当前状态：{{ editingHasCredentials ? '已设置' : '未设置' }}；密码永不在界面上回显）
+          </span>
+        </div>
+
+        <div v-if="formHasCredentials" class="inline-alert is-muted" data-testid="credential-relay-hint">
+          <el-icon><InfoFilled /></el-icon>
+          <span>
+            带凭据代理需设备内中继，保存后重启目标应用生效：设备在本机
+            <code>127.0.0.1:17800–17899</code> 起一个认证中继 listener，只有中继拿得到用户名 / 密码，
+            应用配置里不会出现凭据。
           </span>
         </div>
       </el-form>
@@ -521,6 +563,12 @@ import { useRouter } from 'vue-router'
 import { PACKAGE_PATTERN, appDisplayName } from '../appCatalog'
 import { useManagerStore } from '../stores/manager'
 import { relativeTime } from '../utils/format'
+import {
+  relayActiveDetail,
+  relayActiveLabel,
+  relayActiveTagClass,
+  relayLabel,
+} from '../utils/relay'
 
 const manager = useManagerStore()
 const router = useRouter()
@@ -580,6 +628,24 @@ const bindJob = ref<Job | null>(null)
 const socksCount = computed(
   () => manager.egressProxies.filter((proxy) => proxy.type === 'socks5').length
 )
+
+/** 当前列表里正**经设备内中继**生效的代理数（relayActive=true）。 */
+const relayActiveCount = computed(
+  () => manager.egressProxies.filter((proxy) => proxy.relayActive === true).length
+)
+
+/**
+ * 这张表单保存后是不是「带凭据」的代理：
+ * - 勾了「清除已保存的凭据」→ 不是；
+ * - 用户名 / 密码任一填了 → 是（新建或覆盖）；
+ * - 编辑已有凭据的代理但没动凭据 → 仍是。
+ * 只有带凭据的代理才需要设备内中继，所以提示跟着这个判断走。
+ */
+const formHasCredentials = computed(() => {
+  if (form.value.clearCredentials) return false
+  if (form.value.username.trim() || form.value.password) return true
+  return Boolean(editingId.value && editingHasCredentials.value)
+})
 
 // 模板里在「组件 slot 套组件 slot」（el-dialog > el-form-item > …）时直接读 store 属性，
 // vue-tsc 会把它当 ref 再取一次 .value；这里给两个热点做本地投影，模板只用本地名。
@@ -771,20 +837,45 @@ async function toggleEnabled(row: EgressProxy, enabled: boolean): Promise<void> 
   }
 }
 
+/** 六值 reason 的中文说明（设备端与 Manager 探测共用同一套 reason，契约 §4.4）。 */
+const PROBE_REASON_LABELS: Record<string, string> = {
+  connect: '连不上代理',
+  timeout: '超时',
+  dns: 'DNS 解析失败',
+  tls: 'TLS 握手失败',
+  http_status: '上游返回非 2xx',
+  invalid_response: '响应不是 IP 字面量',
+}
+
+function probeReasonLabel(reason: string | null): string {
+  if (!reason) return 'unknown'
+  const label = PROBE_REASON_LABELS[reason]
+  return label ? `${label}（${reason}）` : reason
+}
+
+/** 探测链路说明（按钮悬停）：http 与 socks5 的认证方式不同，socks5 现在也是真连。 */
+function probeHint(row: EgressProxy): string {
+  if (row.type === 'socks5') {
+    return 'socks5：经 socks5h 真连（DNS 交给代理解析），凭据按 RFC 1929 协商；隧道内不发 Proxy-Authorization'
+  }
+  return 'http：经代理发 GET，凭据以 Proxy-Authorization 预置（不走 407 往返）'
+}
+
 async function probe(row: EgressProxy): Promise<void> {
   try {
     const result = await manager.probeProxy(row.id)
+    const upstream = result.upstreamStatus ? ` · 上游 ${result.upstreamStatus}` : ''
     ElMessage.success(
-      `出口 IP ${result.exitIp} · ${result.latencyMs} ms（${relativeTime(result.checkedAt)}）`
+      `${row.type} 出口 IP ${result.exitIp} · ${result.latencyMs} ms（${relativeTime(result.checkedAt)}${upstream}）`
     )
+    // 探测成功但结果没落库这类提醒不能静默吞掉。
+    const warning = result.warnings?.[0]?.message
+    if (warning) ElMessage.warning(warning)
   } catch (cause) {
     if (cause instanceof ApiError && cause.code === 'egress_probe_failed') {
-      const reason = (cause.details?.reason ?? null) as string | null
-      ElMessage.error(`探测失败（${reason ?? 'unknown'}）：${cause.message}`)
-      return
-    }
-    if (cause instanceof ApiError && (cause.status === 422 || cause.code === 'validation_failed')) {
-      ElMessage.warning('socks5 代理不支持 Manager 侧直连探测（422 unsupported_proxy_type）')
+      const details = cause.details ?? null
+      const reason = typeof details?.reason === 'string' ? details.reason : null
+      ElMessage.error(`探测失败（${probeReasonLabel(reason)}）：${cause.message}`)
       return
     }
     ElMessage.error(describeError(cause, '探测失败'))
@@ -856,14 +947,34 @@ function toggleBindDevice(id: string, checked: boolean): void {
   }
 }
 
+/**
+ * 「设备中继」列的文案：relayActive 三态直接映射；
+ * 但一条没有绑定的代理谈不上「设备未上报」—— 它压根没有设备可上报。
+ */
+function proxyRelayLabel(row: EgressProxy): string {
+  const unbound = row.boundDevices === 0 && row.boundApps === 0
+  if (unbound && (row.relayActive === undefined || row.relayActive === null)) return '未绑定设备'
+  return relayActiveLabel(row.relayActive)
+}
+
+function proxyRelayDetail(row: EgressProxy): string {
+  const unbound = row.boundDevices === 0 && row.boundApps === 0
+  if (unbound && (row.relayActive === undefined || row.relayActive === null)) {
+    return '绑定到设备后才会分配本地中继端口'
+  }
+  return relayActiveDetail(row.relayActive)
+}
+
 function deviceEgressLabel(deviceId: string): string {
   const summary = manager.deviceById(deviceId)?.egress
   if (!summary) return '未配代理'
+  // 绑定候选里要能看出这台设备的中继是否在跑：带凭据代理只有中继起来才生效。
+  const relay = summary.relay ? ` · ${relayLabel(summary.relay)}` : ''
   if (summary.mode === 'proxy' && summary.proxyName) {
     const exit = summary.exitIp ? ` · 出口 ${summary.exitIp}` : ''
-    return `${summary.proxyName}${exit}`
+    return `${summary.proxyName}${exit}${relay}`
   }
-  if (summary.mode === 'direct') return '整机直连'
+  if (summary.mode === 'direct') return `整机直连${relay}`
   return '未配代理'
 }
 

@@ -1,0 +1,23 @@
+# t20 bind/uid/F2 —— 2026-11-25T04:21:03Z，firewall=false 诊断态
+## ss -ltn
+LISTEN      0      128    127.0.0.1:17800              0.0.0.0:*                  
+## ss -ltn6
+(empty)
+## nc ::1 17835
+nc: connect: Connection refused
+rc=1
+## nc 127.0.0.2 17835
+nc: connect: Connection refused
+rc=1
+## nc LAN(192.168.30.2) 17835
+nc: connect: Connection refused
+rc=0
+## uid 2000 协议级 17835（od 整行判定）
+nc: connect: Connection refused
+## 应用内探针（cfg-app-http 时）见 f2-app-http.log
+## server.log reason 行
+grep: client: No such file or directory
+grep: rejected: No such file or directory
+/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:16.244864Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
+/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:26.677086Z[0m [32m INFO[0m relay restarted [3mlisteners[0m[2m=[0m2
+/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:32.604361Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"

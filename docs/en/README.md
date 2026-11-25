@@ -21,7 +21,7 @@ A device model spoofing module based on Zygisk that can configure different devi
 - 🎭 **Unified Execution Flow**: No mode selection needed, automatically schedules JNI field spoofing, COW property spoofing and companion services
 - 🔒 **COW Property Engine**: process-private property-area copies for spoofing, per-process isolation, zero residency and no write-mapping fingerprint
 - 🌐 **WebUI Management**: Provides graphical interface for convenient configuration management
-- 🛰️ **Egress Proxy**: device-wide HTTP proxy plus per-app SOCKS5 injection, a configurable exit IP per app (per-app exits settle on the app's next cold start via post-start replay; authenticated proxies are not supported in this release — use an IP allow-list), with exit-IP probing and one-tap rollback to direct
+- 🛰️ **Egress Proxy**: device-wide HTTP proxy plus per-app SOCKS5 injection, a configurable exit IP per app (per-app exits settle on the app's next cold start via post-start replay; authenticated proxies go through the **in-device relay** since v1.11.0 — an IP allow-list is only needed when the relay is off), with exit-IP probing and one-tap rollback to direct
 
 ## WebUI Features 🖥️
 

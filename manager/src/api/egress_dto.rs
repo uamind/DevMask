@@ -69,6 +69,9 @@ pub struct EgressProxyDto {
     pub bound_devices: i64,
     pub bound_apps: i64,
     pub last_check: Option<EgressCheckDto>,
+    /// 该定义在**某台绑定设备**上是否正**经本地中继**生效
+    /// （设备在线、该定义有 `localPort` 时才有值；其余情况为 null）。
+    pub relay_active: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -94,6 +97,7 @@ impl EgressProxyDto {
             bound_devices,
             bound_apps,
             last_check: last_check.map(EgressCheckDto::from),
+            relay_active: None,
             created_at: record.created_at,
             updated_at: record.updated_at,
         }

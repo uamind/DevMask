@@ -25,6 +25,27 @@ pub struct DeviceEgressSummary {
     pub checked_at: Option<String>,
     pub ok: Option<bool>,
     pub error_code: Option<String>,
+    /// 设备内本地认证中继（relay）状态；离线 / 旧设备（`GET /egress` 无 `relay` 字段）
+    /// / 设备不可达时保持 null（字段只增不改）。
+    pub relay: Option<DeviceRelaySummary>,
+}
+
+/// 设备内本地认证中继（relay）的状态投影，来源是设备 `GET /egress` 的 `relay` 对象。
+///
+/// `listeners` 只数**正在 accept** 的 listener（`listening=true`），因此
+/// `active == enabled && listeners > 0`——`relay.listeners` 里绑定失败（`listening=false`）
+/// 的端口不会让设备卡片亮起「经设备中继」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceRelaySummary {
+    /// `[relay].enabled` 的实际生效值（设备端降级后的结果）。
+    pub enabled: bool,
+    /// 是否真的在经设备内中继转发。
+    pub active: bool,
+    /// 正在监听的中继端口数量。
+    pub listeners: usize,
+    /// `relay.firewall.applied`：uid 防火墙规则是否已落地。
+    pub firewall_applied: bool,
 }
 
 /// 设备摘要（API.md 5.1）。
@@ -107,6 +128,7 @@ pub fn device_egress_summaries(
                 checked_at: None,
                 ok: None,
                 error_code: None,
+                relay: None,
             },
         );
     }
@@ -121,6 +143,7 @@ pub fn device_egress_summaries(
                 checked_at: None,
                 ok: None,
                 error_code: None,
+                relay: None,
             });
         entry.exit_ip = check.exit_ip.clone();
         entry.checked_at = Some(check.checked_at.clone());

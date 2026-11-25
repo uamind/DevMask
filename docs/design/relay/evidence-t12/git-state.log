@@ -1,0 +1,7 @@
+== git log -1 ==
+3ddd03199e1511c0a155e3ede6c1875bb7fb2e64 feat(egress): add device egress proxy with manager pool and console
+== 是否有新 commit（应仍为 3ddd031）==
+3ddd031
+== 未提交改动计数 ==
+67
+== 未执行 commit/push 的证据：HEAD 未变、无 stash ==

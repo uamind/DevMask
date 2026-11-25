@@ -1,0 +1,8 @@
+# firewall=false 态（captain 新判据：uid 未知必须 fail-closed）—— 2026-11-25T04:40:32Z
+11-25 12:40:30.010 11582 11582 I EGRESSPROBE: socksProxyPort=17864
+11-25 12:40:30.010 11582 11582 I EGRESSPROBE: selector.app.fixture=SOCKS @ 127.0.0.1/<unresolved>:17864
+11-25 12:40:30.010 11582 11582 I EGRESSPROBE: fetch.app=error=UnknownHostException
+11-25 12:40:30.010 11582 11582 I EGRESSPROBE: socksdomain=error=UnknownHostException
+## server reason
+[2m2026-11-25T04:40:22.410743Z[0m [32m INFO[0m relay restarted [3mlisteners[0m[2m=[0m2
+[2m2026-11-25T04:40:24.175565Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_socks [3mport[0m[2m=[0m17864 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"

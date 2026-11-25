@@ -9,6 +9,7 @@ import {
   DEFAULT_PROBE_URL,
   backend,
   buildProxyInputs,
+  egressProxyPath,
   findProxySummary,
   isApiError,
   isUnsupportedError,
@@ -35,6 +36,11 @@ const KNOWN_WARNING_CODES = [
   'egress_probe_approximate',
   'egress_parse',
   'server_not_running',
+  // 设备内中继（契约 §6.4）：四个码都由服务端 warnings 直接带出来。
+  'egress_relay_bind_failed',
+  'egress_relay_firewall_failed',
+  'egress_relay_uid_unknown',
+  'egress_relay_upstream_unreachable',
 ]
 
 function blankForm(): EgressFormValues {
@@ -72,6 +78,7 @@ export const useEgressStore = defineStore('egress', () => {
   const saving = ref(false)
   const clearing = ref(false)
   const probing = ref(false)
+  const restarting = ref(false)
 
   const error = ref('')
   const errorCode = ref('')
@@ -125,6 +132,17 @@ export const useEgressStore = defineStore('egress', () => {
   const degraded = computed(() => snapshot.value?.health.degraded === true)
   const warnings = computed(() => snapshot.value?.warnings ?? [])
   const probeApproximate = computed(() => probeResult.value?.approximate === true)
+
+  // ---- 设备内中继（relay，契约 §6.1）----
+  /** null = 服务端没有 relay 字段（旧版本 / 管理器模式）：界面整块隐藏，不报错。 */
+  const relay = computed(() => snapshot.value?.relay ?? null)
+  const relayListeners = computed(() => relay.value?.listeners ?? [])
+  const relayPortChanges = computed(() => relay.value?.portChanges ?? [])
+  const relayRestartRequired = computed(() => relay.value?.restartRequiredApps ?? [])
+  /** 重启中继只在原生服务模式可用（POST /egress/relay/restart，ops 作用域）。 */
+  const relayRestartSupported = computed(() => serverStore.runtime === 'http')
+  /** 代理定义走哪条链路：relay / 直连上游 / 凭据未生效（界面标注用）。 */
+  const proxyPath = egressProxyPath
 
   function warningText(warning: EgressWarning): string {
     if (KNOWN_WARNING_CODES.includes(warning.code)) {
@@ -338,6 +356,53 @@ export const useEgressStore = defineStore('egress', () => {
     }
   }
 
+  /**
+   * 重启设备内中继：POST /egress/relay/restart（ops 作用域，无 If-Match / Idempotency-Key）。
+   *
+   * 失败必须把错误码展示出来（界面用 errorCode 渲染 [code]），不能只弹一句「失败」。
+   */
+  async function restartRelay(): Promise<boolean> {
+    clearError()
+    if (!relayRestartSupported.value) {
+      errorCode.value = 'unsupported'
+      error.value = t('settings.egress.errors.relay_restart_unsupported')
+      return false
+    }
+    restarting.value = true
+    try {
+      const result = await backend.restartEgressRelay()
+      const restartRequired = result.relay?.restartRequiredApps ?? []
+      // 响应已带回重建后的 relay：先就地更新，避免额外一次往返期间界面闪回旧端口。
+      if (result.relay && snapshot.value) {
+        snapshot.value = {
+          ...snapshot.value,
+          relay: result.relay,
+          warnings: result.warnings.length > 0 ? result.warnings : snapshot.value.warnings,
+        }
+      }
+      await load()
+      // load() 自己会吞掉读取错误并写进 error：读回失败时不要谎报「已重建」。
+      if (!error.value) {
+        notify(t('settings.egress.messages.relay_restarted'), 'success')
+        if (warningTexts.value.length > 0) {
+          notify(warningTexts.value[0], 'warning')
+        }
+        if (restartRequired.length > 0) {
+          notify(
+            t('settings.egress.relay.restart_required', { apps: restartRequired.join(', ') }),
+            'warning'
+          )
+        }
+      }
+      return true
+    } catch (failure) {
+      setError(failure, 'settings.egress.errors.relay_restart_failed')
+      return false
+    } finally {
+      restarting.value = false
+    }
+  }
+
   function openAdvanced(): void {
     advancedOpen.value = true
   }
@@ -351,6 +416,7 @@ export const useEgressStore = defineStore('egress', () => {
     saving,
     clearing,
     probing,
+    restarting,
     error,
     errorCode,
     errorMessage,
@@ -379,11 +445,19 @@ export const useEgressStore = defineStore('egress', () => {
     warnings,
     warningTexts,
     probeApproximate,
+    // 设备内中继
+    relay,
+    relayListeners,
+    relayPortChanges,
+    relayRestartRequired,
+    relayRestartSupported,
+    proxyPath,
     // actions
     load,
     save,
     clear,
     probe,
+    restartRelay,
     clearError,
     warningText,
     openAdvanced,

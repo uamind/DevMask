@@ -54,6 +54,15 @@ impl CommandOutcome {
 pub trait CommandRunner: Send + Sync + Debug {
     /// 执行 `program args...`。
     fn run(&self, program: &str, args: &[&str]) -> CommandOutcome;
+
+    /// 带本次调用的超时上限执行。
+    ///
+    /// 默认实现忽略 `timeout`（fixture 是纯查表，不会卡住）；[SystemRunner] 覆盖它，
+    /// 用于 relay 的 `iptables -S`（契约要求单次上限 ≤1 s，不吃 5 s 的默认值）。
+    fn run_with_timeout(&self, program: &str, args: &[&str], timeout: Duration) -> CommandOutcome {
+        let _ = timeout;
+        self.run(program, args)
+    }
 }
 
 /// 默认命令超时。
@@ -100,6 +109,10 @@ impl SystemRunner {
 
 impl CommandRunner for SystemRunner {
     fn run(&self, program: &str, args: &[&str]) -> CommandOutcome {
+        self.run_with_timeout(program, args, self.timeout)
+    }
+
+    fn run_with_timeout(&self, program: &str, args: &[&str], timeout: Duration) -> CommandOutcome {
         let mut child = match Command::new(program)
             .args(args)
             .stdout(Stdio::piped())
@@ -113,7 +126,7 @@ impl CommandRunner for SystemRunner {
                 };
             }
         };
-        let deadline = Instant::now() + self.timeout;
+        let deadline = Instant::now() + timeout;
         loop {
             match child.try_wait() {
                 Ok(Some(_)) => {
@@ -130,7 +143,7 @@ impl CommandRunner for SystemRunner {
                         let _ = child.wait();
                         return CommandOutcome::Failed {
                             code: None,
-                            stderr: format!("timeout after {}ms", self.timeout.as_millis()),
+                            stderr: format!("timeout after {}ms", timeout.as_millis()),
                         };
                     }
                     std::thread::sleep(COMMAND_POLL_INTERVAL);
@@ -157,9 +170,17 @@ fn outcome_from_output(output: Output) -> CommandOutcome {
 }
 
 /// 测试执行器：按完整命令行（空格分隔）查表；未配置的命令返回 Unavailable。
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
+/// 假命令执行器。
+///
+/// **fake 必须比真机更挑剔**：真机容忍的写法（例如把 -S 的输出原样回显成期望串，
+/// 或对没实现的 iptables 子命令默默返回成功）在这里一律失败，否则单测会假绿，
+/// 真机再挂一次（t20/t24 都踩过）。iptables 用内存链模型，-S 按真机格式渲染
+/// （-d 先于 -o、自动补 -m tcp / -m owner），未注册的子命令显式失败。
 pub struct FixtureRunner {
     responses: HashMap<String, CommandOutcome>,
+    chains: std::sync::Mutex<std::collections::BTreeMap<String, Vec<String>>>,
+    iptables: std::sync::atomic::AtomicBool,
 }
 
 impl FixtureRunner {
@@ -180,20 +201,225 @@ impl FixtureRunner {
 
     /// 注册一条失败命令。
     #[must_use]
-    pub fn with_failure(mut self, command: &str, code: i32) -> Self {
+    pub fn with_failure(self, command: &str, code: i32) -> Self {
+        self.with_failure_stderr(command, code, "")
+    }
+
+    /// 注册一条失败命令（带 stderr）。
+    #[must_use]
+    pub fn with_failure_stderr(mut self, command: &str, code: i32, stderr: &str) -> Self {
         self.responses.insert(
             normalize_key(command),
             CommandOutcome::Failed {
                 code: Some(code),
-                stderr: String::new(),
+                stderr: stderr.to_owned(),
             },
         );
         self
     }
+
+    /// 打开 iptables 内存链模型（默认关闭：不打开时 iptables 视为不存在，
+    /// 与「命令缺失」用例保持一致）。
+    #[must_use]
+    pub fn with_iptables(self) -> Self {
+        self.iptables
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        self
+    }
+
+    /// 当前某条链的规则（测试断言用）。
+    pub fn chain_rules(&self, chain: &str) -> Vec<String> {
+        self.chains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(chain)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// iptables 子命令的假实现：内存链模型 + 真机格式的 -S。
+    fn run_iptables(&self, args: &[&str]) -> CommandOutcome {
+        let mut index = 0;
+        while index < args.len() && (args[index] == "-w" || args[index] == "-W") {
+            index += 1;
+            if index < args.len() && args[index].chars().all(|c| c.is_ascii_digit()) {
+                index += 1;
+            }
+        }
+        let Some(subcommand) = args.get(index).copied() else {
+            return CommandOutcome::Failed {
+                code: Some(2),
+                stderr: "iptables: no command".to_owned(),
+            };
+        };
+        let chain = args.get(index + 1).copied().unwrap_or("");
+        let mut chains = self
+            .chains
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match subcommand {
+            "-N" => {
+                if chains.contains_key(chain) {
+                    return CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: format!("iptables: Chain already exists ({chain})"),
+                    };
+                }
+                chains.insert(chain.to_owned(), Vec::new());
+                CommandOutcome::Ok(String::new())
+            }
+            "-F" => match chains.get_mut(chain) {
+                Some(rules) => {
+                    rules.clear();
+                    CommandOutcome::Ok(String::new())
+                }
+                None => CommandOutcome::Failed {
+                    code: Some(1),
+                    stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                },
+            },
+            "-X" => {
+                if chains.remove(chain).is_some() {
+                    CommandOutcome::Ok(String::new())
+                } else {
+                    CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                    }
+                }
+            }
+            "-A" => {
+                let rule = args[index + 2..].join(" ");
+                match chains.get_mut(chain) {
+                    Some(rules) => {
+                        rules.push(rule);
+                        CommandOutcome::Ok(String::new())
+                    }
+                    None => CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                    },
+                }
+            }
+            "-I" => {
+                let rule = args[index + 3..].join(" ");
+                match chains.get_mut(chain) {
+                    Some(rules) => {
+                        rules.insert(0, rule);
+                        CommandOutcome::Ok(String::new())
+                    }
+                    None => CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                    },
+                }
+            }
+            "-C" => {
+                let rule = args[index + 2..].join(" ");
+                let present = chains.get(chain).is_some_and(|rules| rules.contains(&rule));
+                if present {
+                    CommandOutcome::Ok(String::new())
+                } else {
+                    CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: "iptables: Bad rule".to_owned(),
+                    }
+                }
+            }
+            "-D" => {
+                let rule = args[index + 2..].join(" ");
+                match chains.get_mut(chain) {
+                    Some(rules) => {
+                        if let Some(position) = rules.iter().position(|existing| *existing == rule)
+                        {
+                            rules.remove(position);
+                            CommandOutcome::Ok(String::new())
+                        } else {
+                            CommandOutcome::Failed {
+                                code: Some(1),
+                                stderr: "iptables: Bad rule".to_owned(),
+                            }
+                        }
+                    }
+                    None => CommandOutcome::Failed {
+                        code: Some(1),
+                        stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                    },
+                }
+            }
+            "-S" => match chains.get(chain) {
+                Some(rules) => {
+                    let mut out = format!("-N {chain}\n");
+                    for rule in rules {
+                        out.push_str(&format!("-A {chain} {}\n", iptables_device_style(rule)));
+                    }
+                    CommandOutcome::Ok(out)
+                }
+                None => CommandOutcome::Failed {
+                    code: Some(1),
+                    stderr: format!("iptables: No chain/target/match by that name ({chain})"),
+                },
+            },
+            other => CommandOutcome::Failed {
+                code: Some(2),
+                stderr: format!("iptables: unknown subcommand {other}"),
+            },
+        }
+    }
+}
+
+/// 把期望规则渲染成真机 -S 的样子：-d 在 -o 之前，--dport / --uid-owner 前补隐式模块标记。
+pub fn iptables_device_style(rule: &str) -> String {
+    let tokens: Vec<&str> = rule.split_whitespace().collect();
+    let mut dest: Option<String> = None;
+    let mut iface: Option<String> = None;
+    let mut rest: Vec<String> = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        match tokens[index] {
+            "-d" => {
+                dest = tokens.get(index + 1).map(|value| (*value).to_owned());
+                index += 2;
+            }
+            "-o" => {
+                iface = tokens.get(index + 1).map(|value| (*value).to_owned());
+                index += 2;
+            }
+            option @ ("--uid-owner" | "--dport") => {
+                rest.push("-m".to_owned());
+                rest.push(if option == "--dport" { "tcp" } else { "owner" }.to_owned());
+                rest.push(option.to_owned());
+                if let Some(value) = tokens.get(index + 1) {
+                    rest.push((*value).to_owned());
+                }
+                index += 2;
+            }
+            other => {
+                rest.push(other.to_owned());
+                index += 1;
+            }
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    if let Some(dest) = dest {
+        out.push("-d".to_owned());
+        out.push(dest);
+    }
+    if let Some(iface) = iface {
+        out.push("-o".to_owned());
+        out.push(iface);
+    }
+    out.extend(rest);
+    out.join(" ")
 }
 
 impl CommandRunner for FixtureRunner {
     fn run(&self, program: &str, args: &[&str]) -> CommandOutcome {
+        // iptables 用内存链模型（-S 输出是真机格式，不回显期望串）；
+        // 未显式打开时仍按「命令不存在」处理（保持既有 iptables_missing 语义）。
+        if program == "iptables" && self.iptables.load(std::sync::atomic::Ordering::SeqCst) {
+            return self.run_iptables(args);
+        }
         // 与 with_output 一致地归一化空白，否则带空参数的命令（如清空排除列表）查不到
         let key = normalize_key(&command_key(program, args));
         self.responses
@@ -250,6 +476,63 @@ fn normalize_key(command: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixture_runner_renders_device_style_chain() {
+        let runner = FixtureRunner::new().with_iptables();
+        runner.run("iptables", &["-w", "2", "-N", "DF_EGRESS_RLY_ALLOW"]);
+        let added = runner.run(
+            "iptables",
+            &[
+                "-w",
+                "2",
+                "-A",
+                "DF_EGRESS_RLY_ALLOW",
+                "-o",
+                "lo",
+                "-d",
+                "127.0.0.0/8",
+                "-p",
+                "tcp",
+                "--dport",
+                "17835",
+                "-m",
+                "owner",
+                "--uid-owner",
+                "0",
+                "-j",
+                "ACCEPT",
+            ],
+        );
+        assert!(added.is_ok(), "{added:?}");
+        let listing = runner.run("iptables", &["-w", "2", "-S", "DF_EGRESS_RLY_ALLOW"]);
+        let text = listing.stdout().expect("stdout");
+        assert!(
+            text.contains("-d 127.0.0.0/8 -o lo"),
+            "-d 必须排在 -o 之前: {text}"
+        );
+        assert!(
+            text.contains("-m tcp --dport 17835"),
+            "必须补 -m tcp: {text}"
+        );
+        assert!(
+            text.contains("-m owner --uid-owner 0"),
+            "必须补 -m owner: {text}"
+        );
+    }
+
+    #[test]
+    fn fixture_runner_rejects_unknown_iptables_subcommand() {
+        let runner = FixtureRunner::new().with_iptables();
+        let outcome = runner.run("iptables", &["-w", "2", "-Z", "DF_EGRESS_RLY"]);
+        match outcome {
+            CommandOutcome::Failed { code, stderr } => {
+                assert_eq!(code, Some(2), "未注册子命令必须显式失败");
+                assert!(stderr.contains("unknown subcommand"), "{stderr}");
+            }
+            other => panic!("未注册子命令必须失败，实际 {other:?}"),
+        }
+    }
 
     #[test]
     fn fixture_returns_registered_output() {

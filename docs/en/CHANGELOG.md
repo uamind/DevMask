@@ -1,5 +1,30 @@
 # 📝 Changelog
 
+## ⬆️[v1.10.0 → v1.11.0] - 2026-12-02
+
+### 🆕 New Features
+- 🔐 **In-device authenticated relay**: proxies with a username/password are forwarded by a relay that only listens on `127.0.0.1` and adds HTTP Basic / SOCKS5 RFC1929 upstream; covers device-wide and per-app egress with zero app changes
+- 🔌 Relay port table: a `[relay]` section plus read-only `local_port` in `egress.toml`; range 17800–17899, device-wide port = `base_port`, per-app ports assigned by a stable hash
+- 🛡️ uid firewall: three iptables chains (`DF_EGRESS_RLY` / `_ALLOW` / `_DENY`) that only let authorized uids connect; rebuilds are **fail-closed** (DENY catch-all, no naked window)
+- 🔁 `POST /api/v1/egress/relay/restart` (`ops`, forced apply); `GET /egress` gains a `relay` object; `GET /egress/proxies` gains `localPort` / `relayActive`
+- 🔍 Probe gains `via=relay` (default stays `upstream`), covering "local port listening + relay forwarding + upstream auth + target round-trip"; new `relay_not_listening` / `relay_connect` reasons
+
+### ⚡ Improvements
+- 🚫 **Fail-closed injection**: an invalid relay view (non-loopback host / out-of-pool port / bad type) now injects `127.0.0.1:9` and arms the replay instead of behaving as "not configured" — the app goes offline but never silently changes exit
+- 🧯 Narrowed fallback: only "relay explicitly disabled" (`[relay].enabled=false` or an unmigrated file) falls back upstream; enabled but missing `local_port` is fail-closed
+- 🧹 Credential boundary: from v1.2 credentials are **never written into app processes** (≤v1.1 wrote `java.net.socks.username/password`, which never worked in practice)
+- 📊 Manager: `DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`; `/devices/{id}/egress` passes `relay` through; `socks5` probing now really connects (reqwest `socks` feature)
+- 📚 Docs: API.md / openapi.yaml (30 operations) / CONFIG.md / SERVER.md / Manager contract and architecture; five new `egress_relay_*` warning codes (including `egress_relay_device_socks5_unsupported`)
+
+### ⚠️ Known Limitations
+- Relay ports (`127.0.0.1:178xx`) and the `DF_EGRESS_RLY` chain names are **detectable**; relay traffic leaves as **root**, so per-uid firewalls such as AFWall+ / NetGuard no longer block that app
+- **Device-wide egress depends on the relay being alive**: while a listener is down the whole-device proxy path is unavailable; with `fail_open=true` the next failed upstream probe silently falls back to direct (set `[probe].fail_open=false` if you must never leak)
+- Only **credentialed** proxies use the relay; there is no API to disable it (edit `[relay].enabled` in the 0600 `egress.toml` and restart)
+- The relay only covers the **Java layer**: native stacks and WebView are not protected by fail-closed
+- 🪜 **Layered uid policy (availability vs. security)**: per-app listeners decide by uid after accept; an **unknown uid is allowed only when `relay.firewall.applied=true`** (a fresh `iptables -S` sample) and logs a rate-limited `uid_unresolved_firewall_enforced` line, otherwise it is closed (fail-closed). The allow path revalidates `-S` at most once per second, so a manual `iptables -F` flips it back within ~1s. Trade-off: root-trust (the check constrains who may connect, not which uid leaves)
+- ⚠️ **The device-wide default must be http**: a merged non-http default is rejected with `422 invalid_egress_default` (regardless of `[relay].enabled` or credentials); an existing one is blackholed to `127.0.0.1:9` only while the relay is enabled (`enabled=false` is treated as unconfigured, direct) — **no** SOCKS5 listener is created on `base_port` in either case, and `egress_relay_device_socks5_unsupported` is reported. Use socks5 definitions through `[[apps]].egress` only
+- ⚠️ **Local port hijack window**: between releasing a listener and rebinding, another local process may grab the port. Detection is the next bind failing with `addr_in_use`: per-app reallocates and reports `relay.portChanges` / `restartRequiredApps`, the device-wide port then does not listen (`egress_relay_bind_failed`)
+
 ## ⬆️[v1.9.0 → v1.10.0] - 2026-12-01
 
 ### 🆕 New Features
@@ -18,7 +43,7 @@
 - 📚 Docs: five egress endpoints in [API.md](../API.md), a "Network egress" chapter in [CONFIG.md](CONFIG.md), five operations in [openapi.yaml](../openapi.yaml), plus Manager contract/architecture updates
 - ⚖️ Per-app injection is now **explicit-only**: only processes whose `[[apps]].egress` names a proxy (or `__DIRECT__`) get the PLT hook and the replay thread (the device-wide default no longer adds cost to every app)
 - ⚠️ The three costs of the replay mechanism are documented: (1) a process with explicit egress keeps the **module code pages resident** (the replay thread and the PLT hook live in the `.so`) — but they are **not visible by name in `/proc/<pid>/maps`** (Zygisk uses unnamed/anonymous mappings; an armed process showed 0 hits across 3170 lines), so detection must compare anonymous executable segments; (2) changing the device-wide proxy while an app is running falls outside the 0–2000ms replay window, so the app must restart; (3) when the `setpriority` hook cannot be installed the injection degrades to one-shot (`replay hook unavailable`) and may be overwritten by the framework
-- ⚠️ **Proxies with a username/password do not work in this release**: the injected `java.net.socks.username/password` properties are readable inside the process, but libcore never sends them (measured on Android 17: `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`); HTTP Basic is not implemented (only host/port are injected, logged as `unsupported-auth`). Use an IP allow-list on the proxy, or wait for the P2 "in-device authenticated relay" (not implemented yet)
+- ⚠️ **Proxies with a username/password did not work in v1.10.0**: the injected `java.net.socks.username/password` properties are readable inside the process, but libcore never sends them (measured on Android 17: `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`); HTTP Basic is not implemented (only host/port are injected, logged as `unsupported-auth`). Use an IP allow-list on the proxy (since v1.11.0 these proxies work through the in-device relay — see the v1.11.0 section below)
 
 ### 🐛 Bug Fixes
 - 🔁 Fixed per-app HTTP egress not taking effect inside the target process: the framework (`ActivityThread.handleBindApplication` → `Proxy.setHttpProxyConfiguration`) rewrites the http/https properties from the **device-wide** proxy roughly 28–95ms after injection; a replay thread is now started from a PLT hook (`setpriority`) once the process transition is done, reading back and rewriting on a 0–2000ms schedule (118 probes, no early exit)

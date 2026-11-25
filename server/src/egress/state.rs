@@ -16,9 +16,9 @@ use device_faker_core::config::Config;
 use device_faker_core::revision::FileLock;
 
 use crate::app::AppState;
+use crate::egress::EGRESS_FILE_NAME;
 use crate::egress::file::EgressStore;
 use crate::egress::system::{SystemProxy, matches};
-use crate::egress::{EGRESS_FILE_NAME, expected_for};
 use crate::store;
 
 /// 最近一次探测结果（响应里的 health.lastProbe）。
@@ -265,7 +265,9 @@ pub fn reconcile_once(state: &AppState) -> ReconcileReport {
         return ReconcileReport::skipped("egress_parse");
     }
 
-    let expected = expected_for(&config, &egress.model);
+    // 中继生效时设备级期望值是 127.0.0.1:<base_port>（契约 §3.1 规则 4）；绑定失败 → :0。
+    let relay_status = state.relay().device_status(&egress.model);
+    let expected = crate::egress::expected_for_relay(&config, &egress.model, Some(&relay_status));
     let system = SystemProxy::new(state.commands());
     let outcome = match system.apply(&expected, None) {
         Ok(outcome) => outcome,

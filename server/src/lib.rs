@@ -40,6 +40,7 @@ pub mod idempotency;
 pub mod module;
 pub mod packages;
 pub mod params;
+pub mod relay;
 pub mod requests;
 pub mod settings;
 pub mod static_files;

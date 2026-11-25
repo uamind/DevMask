@@ -59,7 +59,7 @@
 - `GET /packages?names=a,b&user=0` — 已安装包元数据（`label` 本增量恒 null）。
 - `GET /device`、`GET /device/props?keys=ro.product.model,ro.build.fingerprint`（白名单前缀：`ro.product.`、`ro.build.`、`ro.soc.`、`ro.hardware`、`ro.board.`、`ro.vendor.`）、`GET /device/users`。
 
-出口代理（egress，v1.10.0 起）
+出口代理（egress，v1.10.0 起；v1.11.0 起带认证代理经设备内中继）
 
 - `GET /egress` — 当前模式 / 设备读回的生效值 / 脱敏上游 / 各应用覆盖 / 最近探测。响应体的 `revision` 是 **egress revision**（两个文件的合成值），写端点用它做 `If-Match`；响应头是 `X-DF-Egress-Revision`（**不是** `X-DF-Revision`）。
 - `PUT /egress` — 写代理定义（`egress.toml`，0600）与设备级 / 应用级出口。**省略 = 不改，`null` = 清空，数组 = 整体替换**；`If-Match` 必填；期望态与现状一致时返回 `changed:false` 且不落盘。

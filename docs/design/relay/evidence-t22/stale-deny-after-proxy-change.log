@@ -1,0 +1,40 @@
+# 换代理定义后 DENY 残留旧端口 17835 → applied=false（新 blocker）—— 2026-11-25T04:39:08Z
+## iptables -S DF_EGRESS_RLY_DENY（17835 已无 listener，仍被 REJECT）
+-N DF_EGRESS_RLY_DENY
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17864 -j REJECT --reject-with icmp-port-unreachable
+## GET relay（denyRules=3，listeners app_socks listening=false）
+{
+ "firewall": {
+  "applied": false,
+  "rules": 10,
+  "allowRules": 4,
+  "denyRules": 3,
+  "lastError": {
+   "code": "egress_relay_firewall_failed",
+   "reason": "state_mismatch",
+   "op": "apply",
+   "at": "2026-11-25T04:39:08Z"
+  }
+ },
+ "listeners": [
+  {
+   "proxy": "dev_http",
+   "port": 17800,
+   "listening": true,
+   "lastError": null
+  },
+  {
+   "proxy": "app_socks",
+   "port": 17864,
+   "listening": false,
+   "lastError": {
+    "code": "egress_relay_firewall_failed",
+    "reason": "command_failed",
+    "at": "2026-11-25T04:38:47Z"
+   }
+  }
+ ]
+}
+## restart 后仍 state_mismatch（denyRules=3）

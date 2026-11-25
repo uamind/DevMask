@@ -704,14 +704,14 @@ async fn probe_through_proxy_records_check_and_failure_is_structured() {
     assert_eq!(broken_detail["lastCheck"]["ok"], false);
     assert_eq!(broken_detail["lastCheck"]["errorCode"], "connect");
 
-    // socks5：Manager 侧探测未实现 → 422 unsupported_proxy_type，并落一条失败记录。
+    // socks5 且不可达 → 与 http 同口径的结构化 502（不再是 422 unsupported_proxy_type）。
     let socks = create_proxy(
         &app,
         json!({
             "name": "socks_01",
             "type": "socks5",
             "host": "127.0.0.1",
-            "port": 1080,
+            "port": closed_port(),
         }),
     )
     .await;
@@ -726,14 +726,25 @@ async fn probe_through_proxy_records_check_and_failure_is_structured() {
     .await;
     assert_eq!(
         socks_probe.status,
-        StatusCode::UNPROCESSABLE_ENTITY,
+        StatusCode::BAD_GATEWAY,
         "{}",
         socks_probe.text()
     );
-    assert_eq!(
-        socks_probe.json()["error"]["details"]["errors"][0]["code"],
-        "unsupported_proxy_type"
-    );
+    let socks_body = socks_probe.json();
+    assert_eq!(socks_body["error"]["code"], "egress_probe_failed");
+    assert_eq!(socks_body["error"]["details"]["reason"], "connect");
+    assert_eq!(socks_body["error"]["details"]["proxyId"], socks_id);
+    let socks_detail = send(
+        &app,
+        Method::GET,
+        &format!("/relay/api/v1/egress-proxies/{socks_id}"),
+        Some(&app.token),
+        None,
+    )
+    .await
+    .json();
+    assert_eq!(socks_detail["lastCheck"]["ok"], false);
+    assert_eq!(socks_detail["lastCheck"]["errorCode"], "connect");
 
     // 非法探测 URL → 422 invalid_probe_url。
     let bad_url = send_json(

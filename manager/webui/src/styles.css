@@ -1033,6 +1033,17 @@ code,
   color: #b45309;
 }
 
+/* 设备内中继：active = 绿，未上报 = 灰（中性占位，不暗示「关闭」） */
+.tag.ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.tag.muted {
+  background: #f3f4f9;
+  color: var(--muted);
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -2185,6 +2196,48 @@ code,
   flex: 0 0 auto;
   font-size: 9.5px;
   color: #9a9fb2;
+}
+
+/* 中继徽标的文字色调：设备详情 info-box 里 .tag 会被 .info-box span 的字号/颜色覆盖，
+   所以那一处用 strong + 下面的类，三处语义（绿 / 琥珀 / 灰）与 .tag.ok / .tag.warn / .tag.muted 一致。 */
+.info-box strong.relay-ok {
+  color: var(--green);
+}
+
+.info-box strong.relay-warn {
+  color: var(--amber);
+}
+
+.info-box strong.relay-muted {
+  color: var(--muted);
+}
+
+/* 中继端点 / 端口说明：等宽小字，避免和 info-box 的标题行混在一起 */
+.relay-meta {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #9a9fb2;
+  font-family: 'SFMono-Regular', Menlo, monospace;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-box span.relay-meta {
+  color: #9a9fb2;
+}
+
+.info-box span.relay-listener-state {
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+.info-box span.relay-listener-state.is-ok {
+  color: var(--green);
+}
+
+.info-box span.relay-listener-state.is-warn {
+  color: var(--amber);
 }
 
 /* 批量绑定弹窗的空态：说清「为什么一台都选不到」并给出下一步 */

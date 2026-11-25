@@ -420,6 +420,31 @@ fn is_valid_exclusion(entry: &str) -> bool {
 }
 
 /// 合并代理定义与 probe 策略（省略 = 不改、null = 清空/恢复默认）。
+/// 设备级中继只支持 http：**有效 default**（合并后的模型 + 新配置里的 default 名）
+/// 指向非 http 定义时给出 422 校验错误。
+///
+/// 注意不能只看 request.default：把已存在定义的 type 改成 socks5 时请求体里根本没有
+/// default，但设备级已经指向它了，同样必须拒绝（t30 L1）。
+pub fn validate_default_scope(
+    model: &EgressFile,
+    default_name: Option<&str>,
+) -> Vec<crate::dto::ValidationError> {
+    let Some(name) = default_name else {
+        return Vec::new();
+    };
+    let Some(proxy) = model.proxy(name) else {
+        return Vec::new();
+    };
+    if proxy.kind == ProxyType::Http {
+        return Vec::new();
+    }
+    vec![crate::dto::ValidationError::new(
+        "default",
+        "invalid_egress_default",
+        "设备级中继只支持 http 上游；socks5 请绑定到应用使用",
+    )]
+}
+
 pub fn merge_egress(current: &EgressFile, request: &EgressUpdateRequest) -> EgressFile {
     let mut model = current.clone();
     if let Some(proxies) = &request.proxies {
@@ -458,6 +483,9 @@ pub fn merge_egress(current: &EgressFile, request: &EgressUpdateRequest) -> Egre
                         &input.password,
                         existing.and_then(|proxy| proxy.password.clone()),
                     ),
+                    // 端口表是 **server 拥有**字段（契约 §1.8 / D3）：请求体从不携带，
+                    // 这里按名字从当前模型继承，保证「PUT 不改变已分配端口」且渲染幂等。
+                    local_port: existing.and_then(|proxy| proxy.local_port),
                 }
             })
             .collect();
@@ -648,8 +676,11 @@ mod tests {
                 port: 1080,
                 username: Some("alice".to_owned()),
                 password: Some("s3cret".to_owned()),
+                local_port: Some(17831),
             }],
             probe: ProbeSettings::default(),
+            relay: crate::egress::file::RelaySettings::default(),
+            relay_degraded: Vec::new(),
             unknown_fields: Vec::new(),
         };
         // 省略 username/password → 保留
@@ -661,6 +692,11 @@ mod tests {
         assert_eq!(merged.proxies[0].host, "203.0.113.11");
         assert_eq!(merged.proxies[0].username.as_deref(), Some("alice"));
         assert_eq!(merged.proxies[0].password.as_deref(), Some("s3cret"));
+        assert_eq!(
+            merged.proxies[0].local_port,
+            Some(17831),
+            "端口表由 server 拥有：PUT 必须原样保留"
+        );
 
         // null → 清除
         let request = parse_request(json!({

@@ -1,0 +1,60 @@
+# F1 复验：allowRules=4（去重已修），但 -S 与期望字符串仍不一致 —— 2026-11-25T04:18:50Z
+## GET /egress .relay.firewall / listeners
+{
+ "firewall": {
+  "applied": false,
+  "rules": 9,
+  "allowRules": 4,
+  "denyRules": 2,
+  "lastError": {
+   "code": "egress_relay_firewall_failed",
+   "reason": "state_mismatch",
+   "op": "apply",
+   "at": "2026-11-25T04:18:51Z"
+  }
+ },
+ "listeners": [
+  {
+   "proxy": "dev_http",
+   "port": 17800,
+   "listening": true,
+   "allowedUids": [],
+   "lastError": null
+  },
+  {
+   "proxy": "app_http",
+   "port": 17835,
+   "listening": false,
+   "allowedUids": [],
+   "lastError": {
+    "code": "egress_relay_firewall_failed",
+    "reason": "state_mismatch",
+    "at": "2026-11-25T04:18:04Z"
+   }
+  }
+ ]
+}
+
+## iptables -S DF_EGRESS_RLY_ALLOW（实际输出：-d 在前、带 -m tcp）
+-N DF_EGRESS_RLY_ALLOW
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+
+## iptables -S DF_EGRESS_RLY_DENY（同样多出 -m tcp）
+-N DF_EGRESS_RLY_DENY
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+
+## 期望串（server/src/relay/firewall.rs: accept_rule / deny_rule）
+118:    let mut rule = format!("{} 127.0.0.0/8 -p tcp --dport {port}", LOOPBACK.join(" "));
+119-    if let Some(uid) = uid {
+120-        rule.push_str(&format!(" -m owner --uid-owner {uid}"));
+121-    }
+122-    rule.push_str(" -j ACCEPT");
+123-    rule
+124-}
+
+## ss -ltn（17835 不监听）
+LISTEN      0      128    127.0.0.1:17800              0.0.0.0:*                  

@@ -75,6 +75,88 @@ pub struct ProxyDefinition {
     pub username: Option<String>,
     /// 密码（可选，永不出现在响应/日志）。
     pub password: Option<String>,
+    /// 中继端口（**server 拥有**，契约 §2.3 / §1.8：客户端只读、PUT 不接受）。
+    ///
+    /// `None` = 不需要中继（无凭据 / 中继关闭 / SOCKS5 待 t5 / 池耗尽）。
+    pub local_port: Option<u16>,
+}
+
+/// `[relay]` 段：设备内认证中继的策略（契约 §2.2）。
+///
+/// 缺省即全默认（**中继默认开**，这是相对 v1.10.0 的行为变化，见契约 §2.2 末）。
+/// 单个键非法 → 该键取默认值（降级）、`degraded` 记录键名供日志用，**不**报 500。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RelaySettings {
+    /// 中继开关（默认 `true`）。
+    pub enabled: bool,
+    /// 设备级中继端口（17800..=17899，默认 17800）。
+    pub base_port: u16,
+    /// uid 防火墙（t3 接管；默认 `true`）。
+    pub firewall: bool,
+    /// 全局并发上限（1..=1024，默认 256）。
+    pub max_connections: u32,
+    /// 单 uid 并发上限（0..=max，默认 64；`0` = 不限）。
+    pub max_connections_per_uid: u32,
+}
+
+impl Default for RelaySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            base_port: crate::relay::port::DEFAULT_BASE_PORT,
+            firewall: true,
+            max_connections: crate::relay::port::DEFAULT_MAX_CONNECTIONS,
+            max_connections_per_uid: crate::relay::port::DEFAULT_MAX_CONNECTIONS_PER_UID,
+        }
+    }
+}
+
+impl RelaySettings {
+    /// 解析 `[relay]` 表（非法键降级为默认值并记录键名）。
+    pub fn from_table(table: &Table) -> (Self, Vec<String>) {
+        let mut settings = Self::default();
+        let mut degraded: Vec<String> = Vec::new();
+        if let Some(item) = table.get("enabled") {
+            match item.as_bool() {
+                Some(value) => settings.enabled = value,
+                None => {
+                    settings.enabled = false; // 宁可不中继，也不用未知状态
+                    degraded.push("enabled".to_owned());
+                }
+            }
+        }
+        if let Some(item) = table.get("base_port") {
+            let allowed = i64::from(crate::relay::port::RELAY_PORT_MIN)
+                ..=i64::from(crate::relay::port::RELAY_PORT_MAX);
+            match item.as_integer().filter(|value| allowed.contains(value)) {
+                Some(value) => settings.base_port = value as u16,
+                None => degraded.push("base_port".to_owned()),
+            }
+        }
+        if let Some(item) = table.get("firewall") {
+            match item.as_bool() {
+                Some(value) => settings.firewall = value,
+                None => degraded.push("firewall".to_owned()),
+            }
+        }
+        if let Some(item) = table.get("max_connections") {
+            let allowed = 1..=i64::from(crate::relay::port::MAX_CONNECTIONS_LIMIT);
+            match item.as_integer().filter(|value| allowed.contains(value)) {
+                Some(value) => settings.max_connections = value as u32,
+                None => degraded.push("max_connections".to_owned()),
+            }
+        }
+        if let Some(item) = table.get("max_connections_per_uid") {
+            match item.as_integer().filter(|value| *value >= 0) {
+                Some(value) => {
+                    let value = u32::try_from(value).unwrap_or(settings.max_connections);
+                    settings.max_connections_per_uid = value.min(settings.max_connections);
+                }
+                None => degraded.push("max_connections_per_uid".to_owned()),
+            }
+        }
+        (settings, degraded)
+    }
 }
 
 impl ProxyDefinition {
@@ -133,6 +215,10 @@ pub struct EgressFile {
     pub proxies: Vec<ProxyDefinition>,
     /// 探测策略。
     pub probe: ProbeSettings,
+    /// 中继策略（server 拥有；契约 §2.2）。
+    pub relay: RelaySettings,
+    /// `[relay]` 里被降级的键（只记键名，日志用）。
+    pub relay_degraded: Vec<String>,
     /// 未识别的键（忽略但保留；路径形如 proxies.x.foo）。
     pub unknown_fields: Vec<String>,
 }
@@ -143,6 +229,8 @@ impl Default for EgressFile {
             version: VERSION,
             proxies: Vec::new(),
             probe: ProbeSettings::default(),
+            relay: RelaySettings::default(),
+            relay_degraded: Vec::new(),
             unknown_fields: Vec::new(),
         }
     }
@@ -165,8 +253,11 @@ impl EgressFile {
                 port,
                 username: None,
                 password: None,
+                local_port: None,
             }],
             probe: ProbeSettings::default(),
+            relay: RelaySettings::default(),
+            relay_degraded: Vec::new(),
             unknown_fields: Vec::new(),
         }
     }
@@ -472,10 +563,34 @@ pub fn parse(text: &str) -> Result<EgressFile, EgressError> {
         )?,
     };
 
+    // [relay] 的语义错误**不**是解析错误（契约 §2.5：降级 + 实际值可见），
+    // 否则 PUT /egress 就没有修复通道（它不写这一段）。
+    let (relay, relay_degraded) = match document.get("relay") {
+        None => (RelaySettings::default(), Vec::new()),
+        Some(item) => match item.as_table() {
+            Some(table) => RelaySettings::from_table(table),
+            None => (RelaySettings::default(), vec!["relay".to_owned()]),
+        },
+    };
+
     let mut unknown_fields = Vec::new();
     for (key, _) in document.iter() {
-        if !matches!(key, "version" | "proxies" | "probe") {
+        if !matches!(key, "version" | "proxies" | "probe" | "relay") {
             unknown_fields.push(key.to_owned());
+        }
+    }
+    if let Some(table) = document.get("relay").and_then(Item::as_table) {
+        for (key, _) in table.iter() {
+            if !matches!(
+                key,
+                "enabled"
+                    | "base_port"
+                    | "firewall"
+                    | "max_connections"
+                    | "max_connections_per_uid"
+            ) {
+                unknown_fields.push(format!("relay.{key}"));
+            }
         }
     }
     if let Some(table) = document.get("probe").and_then(Item::as_table) {
@@ -491,7 +606,10 @@ pub fn parse(text: &str) -> Result<EgressFile, EgressError> {
                 continue;
             };
             for (key, _) in proxy.iter() {
-                if !matches!(key, "type" | "host" | "port" | "username" | "password") {
+                if !matches!(
+                    key,
+                    "type" | "host" | "port" | "username" | "password" | "local_port"
+                ) {
                     unknown_fields.push(format!("proxies.{name}.{key}"));
                 }
             }
@@ -502,6 +620,8 @@ pub fn parse(text: &str) -> Result<EgressFile, EgressError> {
         version,
         proxies,
         probe,
+        relay,
+        relay_degraded,
         unknown_fields,
     })
 }
@@ -530,6 +650,17 @@ fn parse_proxy(name: &str, table: &Table) -> Result<ProxyDefinition, EgressError
         })?;
     let username = optional_string(table, "username", name, MAX_USERNAME_LEN)?;
     let password = optional_string(table, "password", name, MAX_PASSWORD_LEN)?;
+    // server 拥有的字段：类型不对或越界只当「没有值」，由 reconciler 重分配（C2），
+    // 不把整份文件报成解析错误（否则手工改坏一个端口就再也 PUT 不进去）。
+    let local_port = table
+        .get("local_port")
+        .and_then(Item::as_integer)
+        .filter(|value| {
+            (i64::from(crate::relay::port::RELAY_PORT_MIN)
+                ..=i64::from(crate::relay::port::RELAY_PORT_MAX))
+                .contains(value)
+        })
+        .map(|value| value as u16);
     Ok(ProxyDefinition {
         name: name.to_owned(),
         kind,
@@ -537,6 +668,7 @@ fn parse_proxy(name: &str, table: &Table) -> Result<ProxyDefinition, EgressError
         port: port as u16,
         username,
         password,
+        local_port,
     })
 }
 
@@ -632,6 +764,15 @@ pub fn render(base: &DocumentMut, model: &EgressFile) -> Result<String, EgressEr
             }
             None => {
                 table.remove("password");
+            }
+        }
+        // 端口表：server 拥有。`Some` 写回（首次分配 / 重分配），`None` 释放。
+        match proxy.local_port {
+            Some(port) => {
+                table.insert("local_port", value(i64::from(port)));
+            }
+            None => {
+                table.remove("local_port");
             }
         }
         proxies.insert(&proxy.name, Item::Table(table));
@@ -888,6 +1029,84 @@ fail_open = true
         let outcome = store.write(&EgressFile::empty()).unwrap();
         assert!(outcome.changed);
         assert!(store.read().unwrap().parse_error.is_none());
+    }
+
+    #[test]
+    fn relay_section_parses_degrades_and_keeps_local_port() {
+        let sample = r#"# egress.toml
+version = 1
+
+[relay]
+enabled = true
+base_port = 17850
+firewall = false
+max_connections = 512
+max_connections_per_uid = 128
+
+[proxies.hk_resi]
+type = "http"
+host = "203.0.113.10"
+port = 8080
+username = "user"
+password = "pass"
+local_port = 17899
+
+[probe]
+url = "http://checkip.amazonaws.com/"
+"#;
+        let model = parse(sample).expect("parse");
+        assert!(model.relay.enabled);
+        assert_eq!(model.relay.base_port, 17850);
+        assert!(!model.relay.firewall);
+        assert_eq!(model.relay.max_connections, 512);
+        assert_eq!(model.relay.max_connections_per_uid, 128);
+        assert_eq!(model.proxies[0].local_port, Some(17899));
+        assert!(
+            model.relay_degraded.is_empty(),
+            "{:?}",
+            model.relay_degraded
+        );
+        // local_port 不再是未知字段
+        assert!(
+            model.unknown_fields.is_empty(),
+            "{:?}",
+            model.unknown_fields
+        );
+
+        // 渲染必须把端口表写回去（server 拥有字段）
+        let document: DocumentMut = sample.parse().expect("document");
+        let rendered = render(&document, &model).expect("render");
+        assert!(rendered.contains("local_port = 17899"), "{rendered}");
+        assert_eq!(parse(&rendered).expect("reparse"), model);
+
+        // 非法单键 → 取默认值（降级），不报解析错误
+        let degraded = parse(
+            "[relay]\nenabled = \"yes\"\nbase_port = 20000\nfirewall = 1\nmax_connections = 0\nmax_connections_per_uid = -1\n",
+        )
+        .expect("语义错误不报 500");
+        assert!(
+            !degraded.relay.enabled,
+            "非法 enabled → false（宁可不中继）"
+        );
+        assert_eq!(degraded.relay.base_port, 17800);
+        assert!(degraded.relay.firewall, "非法 firewall → 默认开");
+        assert_eq!(degraded.relay.max_connections, 256);
+        assert_eq!(degraded.relay.max_connections_per_uid, 64);
+        assert_eq!(
+            degraded.relay_degraded,
+            vec![
+                "enabled".to_owned(),
+                "base_port".to_owned(),
+                "firewall".to_owned(),
+                "max_connections".to_owned(),
+                "max_connections_per_uid".to_owned()
+            ]
+        );
+
+        // per_uid 超过 max_connections 时收敛到 max_connections（契约 §2.2）
+        let clamped =
+            parse("[relay]\nmax_connections = 8\nmax_connections_per_uid = 64\n").expect("parse");
+        assert_eq!(clamped.relay.max_connections_per_uid, 8);
     }
 
     #[test]

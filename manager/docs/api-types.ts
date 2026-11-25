@@ -83,6 +83,7 @@ export type ValidationErrorCode =
   | 'invalid_egress_name'
   | 'invalid_egress_proxy'
   | 'invalid_probe_url'
+  /** v1.11.0 起 socks5 探测真连，本码不再返回（保留兼容）。 */
   | 'unsupported_proxy_type'
 
 /** 单个字段校验错误。 */
@@ -328,6 +329,20 @@ export interface DeviceEgressSummary {
   checkedAt: Iso8601 | null
   ok: boolean | null
   errorCode: string | null
+  /** v1.11.0：设备内认证中继状态；离线 / 旧设备 / 未绑定时为 null。 */
+  relay?: DeviceRelaySummary | null
+}
+
+/** 设备内认证中继（relay）投影；来源设备 GET /egress 的 relay 对象。 */
+export interface DeviceRelaySummary {
+  /** [relay].enabled 的实际生效值。 */
+  enabled: boolean
+  /** 是否真的在经中继转发（enabled 且至少一个 listener 在 listening）。 */
+  active: boolean
+  /** 正在监听的中继端口数。 */
+  listeners: number
+  /** relay.firewall.applied：uid 防火墙规则是否已落地。 */
+  firewallApplied: boolean
 }
 
 export interface DeviceSummary {

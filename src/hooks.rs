@@ -298,14 +298,31 @@ pub(crate) fn apply_egress_proxy(
         return None;
     };
 
-    if plan.unsupported_auth {
-        // 契约 §5.1 第 7 项：HTTP Basic 只能靠全局 `java.net.Authenticator`，影响面过大
-        // （同一进程里**所有**连接都会被问到凭据，包括应用自己的流量），本任务明确不装。
-        // 因此只注入主机端口，认证交给应用自己；这一行就是 unsupported-auth 标记。
+    if proxy.relay {
+        // 契约 §3.3 规则 4/6：中继投递单独留痕，方便真机验收把「注入了哪个本地端口」
+        // 和 `GET /egress.relay` 对上；哨兵端口额外标 `blocked=true`（fail-closed =
+        // 主动断网，不是换出口）。这里没有凭据可漏（中继视图本来就不带）。
         info!(
-            "[egress] unsupported-auth package={package} type=http \
-             (host/port injected only, credentials ignored)"
+            "[egress] injecting relay package={package} type={} port={}{}",
+            proxy.kind.as_str(),
+            proxy
+                .port
+                .map(|port| port.to_string())
+                .unwrap_or_else(|| "-".to_string()),
+            if proxy.is_fail_closed() {
+                " blocked=true"
+            } else {
+                ""
+            }
         );
+    }
+
+    if plan.unsupported_auth {
+        // 契约 §9.1 K1（v1.2）：**任何路径都不注入凭据载体**——凭据只在设备内的中继里
+        // 出示，写进应用进程（同 uid 可读）只增加暴露面。这一行是「该代理带了凭据但被
+        // 忽略」的标记，不含任何凭据值。
+        let line = crate::egress::unsupported_auth_line(package, proxy.kind);
+        info!("{line}");
     }
 
     let outcome = env.with_env(|jenv| -> anyhow::Result<ImmediateOutcome> {
@@ -414,17 +431,8 @@ fn apply_injection_plan(env: &mut Env, plan: &InjectionPlan) -> InjectionReport 
         }
     }
 
-    // socks5 的凭据载体：这两个属性由 Java 的 socks 实现自己读，不需要全局 Authenticator。
-    if let Some((username, password)) = &plan.socks_credentials {
-        report.record(
-            "java.net.socks.username",
-            set_system_property(env, "java.net.socks.username", username),
-        );
-        report.record(
-            "java.net.socks.password",
-            set_system_property(env, "java.net.socks.password", password),
-        );
-    }
+    // 契约 §9.1 K1（v1.2）：凭据载体（socks 的两个凭据属性、Authenticator）**一律不注入**。
+    // 凭据只在设备内的中继里出示；应用进程里只需要「走哪个本地端口」。
 
     report
 }

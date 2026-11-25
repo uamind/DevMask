@@ -1,0 +1,12 @@
+# uid 拒绝/允许（uid 2000 vs root）—— 2026-11-25T04:47:39Z
+## ss
+## uid 2000（不带 su）：期望拒绝
+nc: connect: Connection refused
+rc=1
+## root（只作中继数据面对照，不作 uid 授权证据）：期望 05 00
+## app 探针（uid 10325，应用内）：见 f2-http.log（fetch.app=200）
+# uid 拒绝/允许（listener 必须在监听）—— 2026-11-25T04:47:57Z
+## uid 2000（不带 su）
+nc: connect: Connection refused
+rc=1
+## root 对照（05 00 表示中继数据面可用；不作 uid 授权证据）

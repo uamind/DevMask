@@ -21,7 +21,7 @@ Zygisk tabanlı, farklı uygulamalar için farklı cihaz modellerini yapılandı
 * 🎭 **Birleşik Yürütme Akışı**: Mod seçimi gerektirmez; JNI alan sahteleştirmesi, COW özellik sahteleştirmesi ve companion hizmetleri otomatik olarak yönetilir.
 * 🔒 **COW Özellik Motoru**: Sistem özelliklerini sürece özel özellik alanı kopyalarıyla sahteler; süreç başına izolasyon, sıfır kalıcılık ve yazma eşlemesi izi yok.
 * 🌐 **WebUI Yönetimi**: Yapılandırmaları kolayca yönetebilmeniz için grafiksel bir web arayüzü sunar.
-* 🛰️ **Çıkış Proxy'si**: Cihaz geneli HTTP proxy ve uygulama başına SOCKS5 enjeksiyonu; uygulama başına çıkış IP'si (uygulama başına çıkışlar, uygulamanın bir sonraki soğuk başlatmasında yeniden oynatmayla oturur; kimlik doğrulamalı proxy'ler bu sürümde desteklenmez — IP izin listesi kullanın), çıkış IP'si sorgulama ve tek dokunuşla doğrudan bağlantıya dönüş; tanılama satırları (replay / never-fired) için [en/CONFIG.md](../en/CONFIG.md) ve [en/SERVER.md](../en/SERVER.md).
+* 🛰️ **Çıkış Proxy'si**: Cihaz geneli HTTP proxy ve uygulama başına SOCKS5 enjeksiyonu; uygulama başına çıkış IP'si (uygulama başına çıkışlar, uygulamanın bir sonraki soğuk başlatmasında yeniden oynatmayla oturur; kimlik doğrulamalı proxy'ler v1.11.0'dan itibaren cihaz içi aktarıcı (relay) üzerinden çalışır — IP izin listesi yalnızca relay kapalıyken gerekir), çıkış IP'si sorgulama ve tek dokunuşla doğrudan bağlantıya dönüş; tanılama satırları (replay / never-fired) için [en/CONFIG.md](../en/CONFIG.md) ve [en/SERVER.md](../en/SERVER.md).
 
 
 ## WebUI Özellikleri 🖥️

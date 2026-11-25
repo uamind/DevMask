@@ -1,0 +1,55 @@
+== date
+2026-11-25T03:02:15Z
+== adb devices
+List of devices attached
+4A190DLAQ002QR         device usb:1048576X product:tokay model:Pixel_9 device:tokay transport_id:22
+
+== build
+17
+37
+Pixel 9
+google/tokay/tokay:17/CP3A.261005.005/16271449:user/release-keys
+== root
+uid=0(root) gid=0(root) groups=0(root),1004(input),1007(log),1011(adb),1015(sdcard_rw),1028(sdcard_r),1078(ext_data_rw),1079(ext_obb_rw),3001(net_bt_admin),3002(net_bt),3003(inet),3006(net_bw_stats),3009(readproc),3011(uhid),3012(readtracefs) context=u:r:ksu:s0
+== module
+bin
+module.prop
+server.default.toml
+service.sh
+uninstall.sh
+webroot
+zygisk
+id=device_faker
+name=Device Faker
+version=v1.10.0
+versionCode=20261201
+author=酷安@瓦力喀/GitHub@Seyud
+description=使用Zygisk实现自定义配置对应用伪装机型
+updateJson=https://gitee.com/Seyud/device_faker/raw/master/Update.json
+== server proc
+root          2034     1   10857276   6600 do_sys_poll         0 S zn-zygisk-companion64 device_faker
+root         11144  9904   11007864   6336 futex_wait_queue    0 S device_faker_server
+== settings proxy
+:0
+== server config files
+total 23
+drwx------ 2 root root 3452 2026-11-24 23:18 backups
+-rw-r--r-- 1 root root 9435 2026-11-24 23:24 config.toml
+-rw------- 1 root root    0 2026-11-24 16:00 config.toml.lock
+-rw------- 1 root root    0 2026-11-24 23:25 egress.toml.lock
+-rw------- 1 root root 2131 2026-11-24 23:25 server.toml
+-rw------- 1 root root 2379 2026-11-24 16:00 server.toml.bak-v1.8.0
+== egress.toml
+cat: /data/adb/device_faker/config/egress.toml: No such file or directory
+== server.toml tokens count
+0
+== iptables DF chains
+iptables: No chain/target/match by that name.
+iptables: No chain/target/match by that name.
+iptables: No chain/target/match by that name.
+== probe app installed?
+package:io.df.egressprobe
+== lan ip
+    inet 192.168.30.2/24 brd 192.168.30.255 scope global dynamic wlan0
+== adb reverse
+

@@ -9,10 +9,12 @@ import { clearToken, getToken, requestToken, setToken } from './auth'
 import {
   EGRESS_REVISION_HEADER,
   normalizeEgressProbeResult,
+  normalizeEgressRelayRestart,
   normalizeEgressSnapshot,
   normalizeEgressWriteResult,
   type EgressProbeRequest,
   type EgressProbeResult,
+  type EgressRelayRestartResult,
   type EgressSnapshot,
   type EgressUpdateInput,
   type EgressWriteResult,
@@ -702,6 +704,17 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
     return await sendEgressWrite('/egress?confirm=true', { method: 'DELETE' })
   }
 
+  /**
+   * 重启中继：POST /egress/relay/restart（ops 作用域）。
+   *
+   * 契约 §6.3：不带 If-Match、不带 Idempotency-Key、不带任何请求体字段（服务端对未知字段 422）。
+   * 响应带回重建后的完整 relay 视图，界面可直接刷新端口 / 监听 / 防火墙状态。
+   */
+  async function restartEgressRelay(): Promise<EgressRelayRestartResult> {
+    const payload = await sendEgress('/egress/relay/restart', { method: 'POST' })
+    return normalizeEgressRelayRestart(payload)
+  }
+
   async function probeEgress(request: EgressProbeRequest = {}): Promise<EgressProbeResult> {
     const body: Record<string, unknown> = {}
     if (request.package) body.package = request.package
@@ -780,5 +793,6 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
     writeEgress,
     clearEgress,
     probeEgress,
+    restartEgressRelay,
   }
 }

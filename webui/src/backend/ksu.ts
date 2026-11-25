@@ -22,6 +22,7 @@ import {
   type EgressProbeRequest,
   type EgressProbeResult,
   type EgressProxyInput,
+  type EgressRelayRestartResult,
   type EgressProxySummary,
   type EgressSnapshot,
   type EgressUpdateInput,
@@ -1041,6 +1042,10 @@ function toProxySummaries(proxies: readonly EgressProxyInput[]): EgressProxySumm
     host: proxy.host,
     port: proxy.port,
     hasCredentials: Boolean(proxy.username || proxy.password),
+    // 管理器模式读不到运行中的中继（中继在服务进程里）：端口表与监听状态都不可知，
+    // 界面据此显示「没有中继状态」，而不是编一个 127.0.0.1 端口。
+    localPort: null,
+    relayActive: false,
   }))
 }
 
@@ -1134,6 +1139,8 @@ async function readEgress(): Promise<EgressSnapshot> {
     },
     health: { degraded: false, degradedSince: null, degradedReason: null, lastProbe: null },
     egressFile,
+    // 管理器模式没有中继运行时（中继在原生服务里）：整块隐藏，不猜。
+    relay: null,
     warnings,
     revisionAvailable: false,
     readbackAvailable: system.available,
@@ -1247,6 +1254,7 @@ async function writeEgress(input: EgressUpdateInput): Promise<EgressWriteResult>
     upstream: after.upstream,
     readback: after.readback,
     health: after.health,
+    relay: after.relay,
     warnings,
     revisionAvailable: false,
   }
@@ -1304,6 +1312,7 @@ async function clearEgress(): Promise<EgressWriteResult> {
     upstream: after.upstream,
     readback: after.readback,
     health: after.health,
+    relay: after.relay,
     warnings,
     revisionAvailable: false,
   }
@@ -1313,6 +1322,13 @@ async function clearEgress(): Promise<EgressWriteResult> {
 async function probeEgress(_request?: EgressProbeRequest): Promise<EgressProbeResult> {
   throw new UnsupportedError(
     '管理器模式下无法探测出口 IP：探测由原生服务执行，请改用服务地址访问 WebUI'
+  )
+}
+
+/** 中继在原生服务进程里：管理器模式只能重启整个服务（会中断其它配置下发），不做。 */
+async function restartEgressRelay(): Promise<EgressRelayRestartResult> {
+  throw new UnsupportedError(
+    '管理器模式下无法重启设备内中继：请改用服务地址访问 WebUI（POST /api/v1/egress/relay/restart）'
   )
 }
 
@@ -1351,6 +1367,7 @@ export function createKsuBackend(): Backend {
     writeEgress,
     clearEgress,
     probeEgress,
+    restartEgressRelay,
   }
 }
 

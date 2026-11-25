@@ -85,7 +85,7 @@ def overview():
     rev = revision()
     return {
         "revision": rev,
-        "module": {"id": "device_faker", "version": "v1.10.0", "versionCode": 20261201},
+        "module": {"id": "device_faker", "version": "v1.11.0", "versionCode": 20261202},
         "device": {
             "manufacturer": "Google",
             "brand": "google",
@@ -98,7 +98,7 @@ def overview():
         },
         "root": {"manager": "kernelsu", "version": "1.0.7"},
         "server": {
-            "version": "1.10.0",
+            "version": "1.11.0",
             "bind": "127.0.0.1:18686",
             "uptimeSec": 3600,
             "startedAt": "2026-11-24T08:00:00Z",

@@ -37,7 +37,7 @@ use toml_edit::{DocumentMut, Item};
 
 pub use file::{
     EgressError, EgressFile, EgressSnapshot, EgressStore, EgressWriteOutcome, ProbeSettings,
-    ProxyDefinition, ProxyType,
+    ProxyDefinition, ProxyType, RelaySettings,
 };
 pub use request::{AppEgressInput, EgressUpdateRequest, ProxyInput};
 pub use state::{
@@ -96,7 +96,10 @@ pub fn default_proxy<'a>(config: &Config, model: &'a EgressFile) -> Option<&'a P
     model.proxy(name)
 }
 
-/// 设备级期望链路：default 能解析成定义就是代理，否则直连。
+/// 设备级期望链路（不含中继）：default 能解析成定义就是代理，否则直连。
+///
+/// 这是 v1.10.0 的语义，保留给「不关心 relay 的调用方」与单测；生产路径要用
+/// [`expected_for_relay`]（中继生效时设备级必须指向 `127.0.0.1:<base_port>`）。
 pub fn expected_for(config: &Config, model: &EgressFile) -> Expected {
     match default_proxy(config, model) {
         Some(proxy) => Expected::Proxy {
@@ -104,6 +107,70 @@ pub fn expected_for(config: &Config, model: &EgressFile) -> Expected {
             port: proxy.port,
         },
         None => Expected::Direct,
+    }
+}
+
+/// 设备级期望链路（**计入中继**，契约 §3.1 的六条优先级）。
+///
+/// | 情形 | 期望值 |
+/// | --- | --- |
+/// | 无 default / default 指向缺失定义 | `:0`（直连） |
+/// | 命中定义是 http 且无凭据 | 上游 `host:port` |
+/// | default 非 http（socks5）+ 中继开 | `127.0.0.1:9` 黑洞（fail-closed；带不带凭据都一样，且必须告警） |
+/// | default 非 http（socks5）+ `[relay].enabled=false` | `:0`（按未配置处理，仍要告警） |
+/// | http 有凭据 + `[relay].enabled=false` | 上游 `host:port`（`egress_credentials_ignored`） |
+/// | 有凭据 + 中继开 + 设备级 listener 在监听 | `127.0.0.1:<base_port>` |
+/// | 有凭据 + 中继开 + 端口绑定失败 | `:0`（决策 #1：宁可设备级不启用代理） |
+/// 设备级只支持 http：default 非 http（socks5，带不带凭据都一样）时写入的黑洞端点。
+/// 连接必失败、不泄漏出口，也不会退化成直连。
+pub const BLACKHOLE_HOST: &str = "127.0.0.1";
+/// 黑洞端口（Discard 协议，本机通常无服务）。
+pub const BLACKHOLE_PORT: u16 = 9;
+
+pub fn expected_for_relay(
+    config: &Config,
+    model: &EgressFile,
+    relay: Option<&crate::relay::DeviceRelayStatus>,
+) -> Expected {
+    let Some(proxy) = default_proxy(config, model) else {
+        return Expected::Direct;
+    };
+    let upstream = Expected::Proxy {
+        host: proxy.host.clone(),
+        port: proxy.port,
+    };
+    // 设备级只支持 http：非 http 的 default 绝不能把上游地址写进 settings（H1）。
+    if proxy.kind != ProxyType::Http {
+        // 设备级只支持 http。中继启用 → 写黑洞 127.0.0.1:9（fail-closed，不泄漏上游、
+        // 也不静默直连）；中继未启用 → 按「未配置」处理（直连），由 warning 说明。
+        // 两种情形都由 api 层的 device_socks5_warning 告警，条件与这里严格一致。
+        let relay_enabled = relay.map(|relay| relay.enabled).unwrap_or(false);
+        if relay_enabled {
+            return Expected::Proxy {
+                host: BLACKHOLE_HOST.to_owned(),
+                port: BLACKHOLE_PORT,
+            };
+        }
+        return Expected::Direct;
+    }
+    if !proxy.has_credentials() {
+        return upstream;
+    }
+    let Some(relay) = relay else {
+        return upstream;
+    };
+    if !relay.enabled {
+        // 配置选择：中继关闭时回到 v1.10.0 的「设备级不承载认证」。
+        return upstream;
+    }
+    if relay.listening {
+        Expected::Proxy {
+            host: "127.0.0.1".to_owned(),
+            port: relay.base_port,
+        }
+    } else {
+        // 绑定失败：不写 settings 指向中继（契约 §3.1 规则 6 / §7.1）。
+        Expected::Direct
     }
 }
 

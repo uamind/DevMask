@@ -6,6 +6,7 @@ import type { InstalledApp } from '../types'
 import type {
   EgressProbeRequest,
   EgressProbeResult,
+  EgressRelayRestartResult,
   EgressSnapshot,
   EgressUpdateInput,
   EgressWriteResult,
@@ -241,6 +242,11 @@ export interface Backend {
   clearEgress(): Promise<EgressWriteResult>
   /** 经当前生效链路探测出口 IP（管理器模式抛 UnsupportedError，界面必须明示不可用）。 */
   probeEgress(request?: EgressProbeRequest): Promise<EgressProbeResult>
+  /**
+   * 重启设备内认证中继（POST /egress/relay/restart，ops 作用域）。
+   * 强制重建监听、重算端口并重放 uid 防火墙；管理器模式没有中继运行时可控制，抛 UnsupportedError。
+   */
+  restartEgressRelay(): Promise<EgressRelayRestartResult>
 
   /** 生成一个只返回、不落盘的访问 Token 与其 sha256。 */
   generateServerToken(): Promise<ServerTokenPair>

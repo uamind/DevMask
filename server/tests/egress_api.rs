@@ -1112,8 +1112,10 @@ fn startup_reconcile_runs_after_binding_and_off_the_runtime() {
     let app = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app.rs"))
         .expect("app.rs");
     let serve_at = app.find("pub async fn serve").expect("serve");
+    // relay 增量：启动顺序是「先 relay（绑定 listener）→ 再 egress 自愈（写 settings）」，
+    // 因此 serve 里启动的是 relay::spawn_startup（内部再跑 reconcile_once）。
     let spawn_at = app
-        .find("spawn_startup_reconcile(state.clone())")
+        .find("relay::spawn_startup(state.clone())")
         .expect("serve 里必须启动一次异步自愈");
     assert!(serve_at < spawn_at, "自愈必须在 serve 内、监听之后启动");
     let state =

@@ -50,6 +50,8 @@ export const mockDevices: DeviceSummary[] = [
       checkedAt: '2026-11-24T07:58:12Z',
       ok: true,
       errorCode: null,
+      // 中继三态之一：enabled + 有 listener 在 accept。
+      relay: { enabled: true, active: true, listeners: 1, firewallApplied: true },
     },
   },
   {
@@ -121,6 +123,8 @@ export const mockDevices: DeviceSummary[] = [
       checkedAt: null,
       ok: null,
       errorCode: null,
+      // 中继三态之二：enabled 但没有 listener 在 accept（端口被占用 / 防火墙未落地）。
+      relay: { enabled: true, active: false, listeners: 0, firewallApplied: true },
     },
   },
 ]
@@ -440,6 +444,8 @@ export const mockEgressProxies: EgressProxy[] = [
       errorCode: null,
       checkedAt: '2026-11-24T07:58:12Z',
     },
+    // 绑定设备上的中继 listener 在 accept → 列表标「经设备中继」。
+    relayActive: true,
     createdAt: '2026-11-24T02:00:00Z',
     updatedAt: '2026-11-24T03:30:00Z',
   },
@@ -456,6 +462,8 @@ export const mockEgressProxies: EgressProxy[] = [
     boundDevices: 0,
     boundApps: 0,
     lastCheck: null,
+    // 没有绑定设备 → 中继状态未知（null），界面显示占位而不是「未启用」。
+    relayActive: null,
     createdAt: '2026-11-24T04:10:00Z',
     updatedAt: '2026-11-24T04:10:00Z',
   },
@@ -469,8 +477,10 @@ export const mockEgressProxies: EgressProxy[] = [
     region: 'HK-HKG',
     tags: ['hk', '备用'],
     enabled: false,
-    boundDevices: 0,
+    // 停用的代理也可能仍有旧绑定（契约：已有绑定仍会下发），所以这里保留 1 台设备。
+    boundDevices: 1,
     boundApps: 0,
+    relayActive: false,
     lastCheck: {
       source: 'manager',
       deviceId: null,
@@ -559,6 +569,49 @@ export const mockDeviceEgress: Record<string, DeviceEgressResponse> = {
       },
       apps: [
         { package: 'com.xingin.xhs', egress: 'us_la_01', effective: 'proxy', proxy: 'us_la_01' },
+      ],
+      // 设备端原始 relay 对象（契约 §6.1 字段表）：1 个 listener 在 accept，
+      // 1 个期望监听但 bind 失败（详情页要能看见 lastError 的 code · reason）。
+      relay: {
+        enabled: true,
+        basePort: 17800,
+        failOpen: true,
+        at: '2026-11-24T08:12:10Z',
+        limits: { maxConnections: 256, maxConnectionsPerUid: 64 },
+        listeners: [
+          {
+            proxy: 'us_la_01',
+            port: 17800,
+            scope: 'device',
+            listening: true,
+            uidPolicy: 'all',
+            allowedUids: [],
+            activeConnections: 3,
+            lastError: null,
+          },
+          {
+            proxy: 'hk_hkg_03',
+            port: 17810,
+            scope: 'app',
+            listening: false,
+            uidPolicy: 'restricted',
+            allowedUids: [],
+            activeConnections: 0,
+            lastError: {
+              code: 'egress_relay_bind_failed',
+              reason: 'addr_in_use',
+              at: '2026-11-24T08:10:02Z',
+            },
+          },
+        ],
+        firewall: { applied: true, rules: 14, allowRules: 9, denyRules: 2, lastError: null },
+        portChanges: [],
+        restartRequiredApps: [],
+      },
+      proxies: [
+        { name: 'us_la_01', localPort: 17800, relayActive: true },
+        { name: 'jp_tokyo_02', localPort: null, relayActive: false },
+        { name: 'hk_hkg_03', localPort: 17810, relayActive: false },
       ],
     },
     warnings: [],

@@ -267,6 +267,198 @@
           </div>
         </div>
 
+        <template v-if="egress.proxies.length">
+          <h3 class="setting-name egress-status-title">{{ t('settings.egress.proxy.title') }}</h3>
+          <div class="egress-proxy-list">
+            <div v-for="proxy in egress.proxies" :key="proxy.name" class="egress-proxy-row">
+              <div class="egress-proxy-main">
+                <span class="egress-proxy-name">{{ proxy.name }}</span>
+                <span class="egress-proxy-addr"
+                  >{{ proxy.type }} · {{ proxy.host }}:{{ proxy.port }}</span
+                >
+                <span
+                  v-if="egress.snapshot && egress.snapshot.default === proxy.name"
+                  class="egress-badge"
+                >
+                  {{ t('settings.egress.proxy.default_badge') }}
+                </span>
+              </div>
+              <span :class="['egress-path', 'egress-path--' + egress.proxyPath(proxy)]">
+                {{ proxyPathLabel(proxy) }}
+              </span>
+            </div>
+          </div>
+        </template>
+
+        <div v-if="egress.relay" class="egress-relay" data-testid="egress-relay">
+          <div class="egress-relay-head">
+            <h3 class="setting-name">{{ t('settings.egress.relay.title') }}</h3>
+            <span
+              :class="['egress-badge', egress.relay.enabled ? '' : 'egress-badge--off']"
+              data-testid="relay-enabled-badge"
+            >
+              {{
+                egress.relay.enabled
+                  ? t('settings.egress.relay.enabled_on')
+                  : t('settings.egress.relay.enabled_off')
+              }}
+            </span>
+            <span class="egress-relay-spacer"></span>
+            <el-button
+              size="small"
+              :loading="egress.restarting"
+              :disabled="!egress.relayRestartSupported"
+              data-testid="relay-restart"
+              @click="restartRelay"
+            >
+              {{ t('settings.egress.relay.restart') }}
+            </el-button>
+          </div>
+          <p class="form-tip">{{ t('settings.egress.relay.desc') }}</p>
+
+          <div class="server-rows">
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.relay.base_port') }}</span>
+              <span class="server-value server-value--mono">{{ egress.relay.basePort }}</span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.relay.fail_open') }}</span>
+              <span class="server-value">
+                {{
+                  egress.relay.failOpen
+                    ? t('settings.egress.relay.fail_open_on')
+                    : t('settings.egress.relay.fail_open_off')
+                }}
+              </span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.relay.limits') }}</span>
+              <span class="server-value">
+                {{ egress.relay.limits.maxConnections }} /
+                {{ egress.relay.limits.maxConnectionsPerUid }}
+              </span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.relay.firewall') }}</span>
+              <span class="server-value">
+                {{
+                  egress.relay.firewall.applied
+                    ? t('settings.egress.relay.firewall_applied')
+                    : t('settings.egress.relay.firewall_missing')
+                }}
+                · ALLOW {{ egress.relay.firewall.allowRules }} · DENY
+                {{ egress.relay.firewall.denyRules }} ·
+                {{ t('settings.egress.relay.firewall_rules') }}
+                {{ egress.relay.firewall.rules }}
+              </span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.relay.at') }}</span>
+              <span class="server-value server-value--mono">{{ egress.relay.at || '—' }}</span>
+            </div>
+          </div>
+
+          <p
+            v-if="egress.relay.firewall.lastError"
+            class="server-hint server-hint--error"
+            data-testid="relay-firewall-error"
+          >
+            {{ t('settings.egress.relay.firewall_error') }}:
+            <span class="egress-code">{{ egress.relay.firewall.lastError.code }}</span>
+            · {{ egress.relay.firewall.lastError.reason }}
+            <template v-if="egress.relay.firewall.lastError.at">
+              · {{ egress.relay.firewall.lastError.at }}
+            </template>
+          </p>
+
+          <p v-if="!egress.relayRestartSupported" class="form-tip">
+            {{ t('settings.egress.relay.restart_unavailable') }}
+          </p>
+
+          <h4 class="egress-subtitle">{{ t('settings.egress.relay.listeners') }}</h4>
+          <p v-if="!egress.relayListeners.length" class="form-tip">
+            {{ t('settings.egress.relay.listener_empty') }}
+          </p>
+          <div v-else class="egress-relay-listeners">
+            <div
+              v-for="listener in egress.relayListeners"
+              :key="listener.proxy + ':' + listener.port"
+              class="egress-relay-listener"
+            >
+              <div class="egress-relay-listener-head">
+                <span class="egress-proxy-name">{{ listener.proxy }}</span>
+                <span
+                  :class="[
+                    'egress-path',
+                    listener.listening ? 'egress-path--relay' : 'egress-path--off',
+                  ]"
+                >
+                  {{
+                    listener.listening
+                      ? t('settings.egress.relay.listener_listening')
+                      : t('settings.egress.relay.listener_down')
+                  }}
+                </span>
+              </div>
+              <div class="egress-relay-listener-meta">
+                <span class="server-value--mono">{{ relayEndpoint(listener.port) }}</span>
+                ·
+                {{
+                  listener.scope === 'app'
+                    ? t('settings.egress.relay.scope_app')
+                    : t('settings.egress.relay.scope_device')
+                }}
+                · {{ t('settings.egress.relay.connections') }} {{ listener.activeConnections }}
+                ·
+                {{
+                  listener.uidPolicy === 'restricted'
+                    ? t('settings.egress.relay.uid_restricted', {
+                        uids: listener.allowedUids.length ? listener.allowedUids.join(', ') : '—',
+                      })
+                    : t('settings.egress.relay.uid_all')
+                }}
+              </div>
+              <p
+                v-if="listener.lastError"
+                class="server-hint server-hint--error"
+                data-testid="relay-listener-error"
+              >
+                {{ t('settings.egress.relay.last_error') }}:
+                <span class="egress-code">{{ listener.lastError.code }}</span>
+                · {{ listener.lastError.reason }}
+              </p>
+            </div>
+          </div>
+
+          <template v-if="egress.relayPortChanges.length">
+            <h4 class="egress-subtitle">{{ t('settings.egress.relay.port_changes') }}</h4>
+            <div class="server-rows">
+              <div
+                v-for="change in egress.relayPortChanges"
+                :key="change.proxy + ':' + change.reason"
+                class="server-row"
+              >
+                <span class="server-label">{{ change.proxy }}</span>
+                <span class="server-value server-value--mono">
+                  {{ change.from ?? '—' }} → {{ change.to ?? '—' }} · {{ change.reason }}
+                </span>
+              </div>
+            </div>
+          </template>
+
+          <p
+            v-if="egress.relayRestartRequired.length"
+            class="server-hint server-hint--warn"
+            data-testid="relay-restart-required"
+          >
+            {{
+              t('settings.egress.relay.restart_required', {
+                apps: egress.relayRestartRequired.join(', '),
+              })
+            }}
+          </p>
+        </div>
+
         <p
           v-for="(text, index) in egress.warningTexts"
           :key="index"
@@ -301,11 +493,12 @@
             <div class="server-row">
               <span class="server-label">{{ t('settings.egress.probe.via') }}</span>
               <span class="server-value">
-                {{
-                  egress.probeResult.via === 'proxy'
-                    ? t('settings.egress.modes.proxy')
-                    : t('settings.egress.modes.direct')
-                }}
+                {{ probeViaLabel(egress.probeResult.via) }}
+                <template
+                  v-if="egress.probeResult.via === 'relay' && egress.probeResult.relayPort !== null"
+                >
+                  · {{ relayEndpoint(egress.probeResult.relayPort) }}
+                </template>
                 <template v-if="egress.probeResult.proxy">
                   · {{ egress.probeResult.proxy }}</template
                 >
@@ -603,6 +796,8 @@ import type { Template } from '../types'
 import { parseFirstTemplateFromToml } from '../utils/templateTransfer'
 import { readZipEntries } from '../utils/zipReader'
 import { convertZipEntriesToTemplate } from '../utils/propsToTemplate'
+import { relayEndpoint } from '../backend'
+import type { EgressProbeVia, EgressProxySummary } from '../backend'
 
 const configStore = useConfigStore()
 const settingsStore = useSettingsStore()
@@ -830,6 +1025,30 @@ const lastProbeLabel = computed(() => {
   return `${result} · ${probe.latencyMs ?? 0} ms · ${probe.checkedAt}`
 })
 
+/**
+ * 代理定义走哪条链路：
+ * - 带凭据且正在中继 → 「经本机中继（127.0.0.1:port）」
+ * - 带凭据但没在监听 → 「凭据未生效（未中继）」
+ * - 无凭据 → 「直连上游」
+ */
+function proxyPathLabel(proxy: EgressProxySummary): string {
+  const path = egress.proxyPath(proxy)
+  if (path === 'relay') {
+    return t('settings.egress.proxy.path_relay', { endpoint: relayEndpoint(proxy.localPort) })
+  }
+  if (path === 'credentials-inactive') {
+    return t('settings.egress.proxy.path_credentials_off')
+  }
+  return t('settings.egress.proxy.path_upstream')
+}
+
+/** 探测链路文案：proxy / direct / relay。 */
+function probeViaLabel(via: EgressProbeVia): string {
+  if (via === 'relay') return t('settings.egress.modes.relay')
+  if (via === 'direct') return t('settings.egress.modes.direct')
+  return t('settings.egress.modes.proxy')
+}
+
 function toggleAdvanced() {
   egress.advancedOpen = !egress.advancedOpen
 }
@@ -848,6 +1067,10 @@ async function clearEgress() {
 
 async function loadEgress() {
   await egress.load()
+}
+
+async function restartRelay() {
+  await egress.restartRelay()
 }
 
 // 首次挂载时读一次服务状态（onActivated 只在 KeepAlive 场景触发，不能只靠它）
@@ -1087,6 +1310,129 @@ onActivated(() => {
   font-family: monospace;
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+/* 代理定义：一条一行，右侧标注实际链路（中继 / 直连上游 / 凭据未生效）。 */
+.egress-proxy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.egress-proxy-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--background);
+}
+
+.egress-proxy-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.egress-proxy-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.egress-proxy-addr {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.egress-path {
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.egress-path--relay {
+  background: rgba(22, 163, 74, 0.16);
+  color: #15803d;
+}
+
+.egress-path--upstream {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.egress-path--credentials-inactive,
+.egress-path--off {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+}
+
+/* 设备内中继（relay）区块：独立卡片，旧服务端没有 relay 时整块不渲染。 */
+.egress-relay {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+}
+
+.egress-relay-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.egress-relay-spacer {
+  flex: 1;
+}
+
+.egress-badge--off {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.egress-subtitle {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.egress-relay-listeners {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.egress-relay-listener {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--card-bg);
+}
+
+.egress-relay-listener-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.egress-relay-listener-meta {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .server-hint--warn {

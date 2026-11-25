@@ -1,0 +1,76 @@
+# app_http listener 因防火墙 -S 校验失败而不监听 —— 2026-11-25T04:03:53Z
+
+## GET /egress .relay（片段）
+{
+ "enabled": true,
+ "basePort": 17800,
+ "failOpen": false,
+ "at": "2026-11-25T04:03:28Z",
+ "limits": {
+  "maxConnections": 256,
+  "maxConnectionsPerUid": 64
+ },
+ "listeners": [
+  {
+   "proxy": "dev_http",
+   "port": 17800,
+   "scope": "device",
+   "listening": true,
+   "uidPolicy": "all",
+   "allowedUids": [],
+   "activeConnections": 2,
+   "lastError": null
+  },
+  {
+   "proxy": "app_http",
+   "port": 17835,
+   "scope": "app",
+   "listening": false,
+   "uidPolicy": "restricted",
+   "allowedUids": [],
+   "activeConnections": 0,
+   "lastError": {
+    "code": "egress_relay_firewall_failed",
+    "reason": "command_failed",
+    "at": "2026-11-25T04:03:28Z"
+   }
+  }
+ ],
+ "firewall": {
+  "applied": false,
+  "rules": 10,
+  "allowRules": 5,
+  "denyRules": 2,
+  "lastError": {
+   "code": "egress_relay_firewall_failed",
+   "reason": "state_mismatch",
+   "op": "apply",
+   "at": "2026-11-25T04:03:52Z"
+  }
+ },
+ "portChanges": [],
+ "restartRequiredApps": []
+}
+
+## iptables -S DF_EGRESS_RLY_ALLOW（注意 17835 的 uid 0 规则出现两次）
+-N DF_EGRESS_RLY_ALLOW
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+
+## iptables -S DF_EGRESS_RLY_DENY
+-N DF_EGRESS_RLY_DENY
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+
+## ss -ltn 178xx（只有 17800，17835 不监听）
+LISTEN      0      128    127.0.0.1:17800              0.0.0.0:*                  
+
+## 端口 17835 协议级探测（期望 05 00，实际应无响应）
+nc: connect: Connection refused
+rc=0
+
+## server.log 相关行
+/system/bin/sh: syntax error: unexpected '('

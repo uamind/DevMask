@@ -135,6 +135,9 @@ export function createReadOnlyBackend(): Backend {
     probeEgress: async () => {
       throw readOnlyError('探测出口 IP')
     },
+    restartEgressRelay: async () => {
+      throw readOnlyError('重启中继')
+    },
   }
 }
 
@@ -219,6 +222,7 @@ function createLazyBackend(): Backend {
     writeEgress: async (input: EgressUpdateInput) => (await resolve()).writeEgress(input),
     clearEgress: async () => (await resolve()).clearEgress(),
     probeEgress: async (request?: EgressProbeRequest) => (await resolve()).probeEgress(request),
+    restartEgressRelay: async () => (await resolve()).restartEgressRelay(),
   }
 }
 
