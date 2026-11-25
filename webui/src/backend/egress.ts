@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 
@@ -11,17 +11,17 @@ import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
  *
  * 三条硬规则（写在这里，任何实现都不要绕开）：
  * 1. 凭据只有一个信号：响应里没有 username / password，只有 hasCredentials；密码输入框永远不回显已存值。
- * 2. egress revision 只认 X-DF-Egress-Revision 响应头或响应体的 revision。
- *    X-DF-Revision / ETag 是 config revision，绝不能拿来当 egress revision，
+ * 2. egress revision 只认 X-DM-Egress-Revision 响应头或响应体的 revision。
+ *    X-DM-Revision / ETag 是 config revision，绝不能拿来当 egress revision，
  *    否则一次 egress 写会把 config revision 缓存弄脏，下一次写配置必然 412。
  * 3. 设备级（方案 A）只承载 host:port，不支持认证；带凭据的定义只对应用级有效。
  */
 
 /** egress.toml 的固定位置（与 config.toml 同目录，0600）。 */
-export const EGRESS_PATH = '/data/adb/device_faker/config/egress.toml'
+export const EGRESS_PATH = '/data/adb/devmask/config/egress.toml'
 
 /** egress revision 的专用响应头（契约 §1.1）。 */
-export const EGRESS_REVISION_HEADER = 'X-DF-Egress-Revision'
+export const EGRESS_REVISION_HEADER = 'X-DM-Egress-Revision'
 
 /** 强制直连标记（应用级用；设备级不允许）。 */
 export const DIRECT_MARKER = '__DIRECT__'
@@ -96,7 +96,7 @@ export interface EgressRelayListener {
   lastError: EgressRelayError | null
 }
 
-/** relay.firewall：uid 防火墙（iptables 链 DF_EGRESS_RLY）的落地状态。 */
+/** relay.firewall：uid 防火墙（iptables 链 DM_EGRESS_RLY）的落地状态。 */
 export interface EgressRelayFirewall {
   applied: boolean
   rules: number
@@ -636,7 +636,7 @@ export function renderEgressFile(model: EgressFileModel): string {
 
   const header = [
     '# egress.toml —— 出口代理定义与探测策略（权限 0600，含密码，请勿分享）。',
-    '# 由 device_faker 服务端 / WebUI 维护；手工编辑后重启服务生效。',
+    '# 由 devmask 服务端 / WebUI 维护；手工编辑后重启服务生效。',
   ].join('\n')
 
   return `${header}\n${stringifyToml(document).trimEnd()}\n`

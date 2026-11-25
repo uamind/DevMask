@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
@@ -32,8 +32,8 @@ import { useLazyMessageBox } from '../utils/elementPlus'
 import { useI18n } from '../utils/i18n'
 
 const CACHE_SCHEMA_VERSION = 2
-const SNAPSHOT_CACHE_KEY = 'device_faker_online_templates_snapshot_v2'
-const DETAIL_CACHE_PREFIX = 'device_faker_online_templates_details_v2'
+const SNAPSHOT_CACHE_KEY = 'devmask_online_templates_snapshot_v2'
+const DETAIL_CACHE_PREFIX = 'devmask_online_templates_details_v2'
 const NETWORK_REFRESH_INTERVAL_MS = 2 * 60 * 1000
 const DETAIL_CACHE_TTL_MS = 12 * 60 * 60 * 1000
 

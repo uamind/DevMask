@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! HTTP Basic 的 base64（契约 §4.5：标准字母表、带 `=` 填充、不换行）。
 //!

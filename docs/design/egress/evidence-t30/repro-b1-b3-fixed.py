@@ -10,7 +10,7 @@ import json, os, shutil, signal, subprocess, sys, time, urllib.error, urllib.req
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 MGR_PORT, MOCK_PORT = 18768, 18698
-DATA = "/tmp/dfm-t30"
+DATA = "/tmp/dm-t30"
 BASE = f"http://127.0.0.1:{MGR_PORT}/relay/api/v1"
 TOKEN = "admin123"
 MOCK_LOG = "/tmp/t30-mock.log"
@@ -64,7 +64,7 @@ def main():
              "--port", str(MOCK_PORT), "--mode", "ok"],
             stdout=subprocess.DEVNULL, stderr=log))
         procs.append(subprocess.Popen(
-            [os.path.join(ROOT, "target/debug/device_faker_manager"), "--bind", f"127.0.0.1:{MGR_PORT}",
+            [os.path.join(ROOT, "target/debug/devmask_manager"), "--bind", f"127.0.0.1:{MGR_PORT}",
              "--data-dir", DATA, "--token", TOKEN],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=mgr_log))
         for _ in range(100):

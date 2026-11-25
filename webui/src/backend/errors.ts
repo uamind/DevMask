@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 /**
  * /api/v1 错误信封与前端异常类型（契约见 docs/API.md §7）。

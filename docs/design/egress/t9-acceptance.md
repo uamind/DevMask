@@ -1,9 +1,9 @@
 # t9 真机验收：设备端出口代理（Pixel 9）
 
 - 设备：Pixel 9（`tokay`），序列号 `4A190DLAQ002QR`，Android 17（SDK 37），KernelSU root
-- 模块：`/data/adb/modules/device_faker`，`module.prop` version=v1.10.0 / versionCode=20261201
-- 设备端服务：`device_faker_server` 1.10.0，bind `127.0.0.1:8686`，capabilities 含 `egress`
-- 构建：工作区 HEAD `822bbc7` + 本增量未提交改动；`cargo ndk --platform 29 -t arm64-v8a build -p device_faker_server --release`、
+- 模块：`/data/adb/modules/devmask`，`module.prop` version=v1.10.0 / versionCode=20261201
+- 设备端服务：`devmask_server` 1.10.0，bind `127.0.0.1:8686`，capabilities 含 `egress`
+- 构建：工作区 HEAD `822bbc7` + 本增量未提交改动；`cargo ndk --platform 29 -t arm64-v8a build -p devmask_server --release`、
   `RUSTFLAGS="-C default-linker-libraries" cargo +nightly ndk --platform 31 -t arm64-v8a build --release`（两条均 exit 0）
 - 验收动作全部通过 `/api/v1/egress*` 与 `adb shell` 完成；**未修改任何实现代码**（server/、src/、core/、manager/、webui/ 均未触碰）
 
@@ -71,7 +71,7 @@ adb shell 'dumpsys connectivity | grep -i proxy'
 
 ```
 HTTP/1.1 200 OK
-x-df-egress-revision: 4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
+x-dm-egress-revision: 4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
 {
   "changed": true,
   "backupId": "toml.20261124T131637.080853588Z-f9f80df8",
@@ -206,7 +206,7 @@ $ adb shell 'dumpsys connectivity | grep -i proxy'
 重启服务：
 
 ```
-$ adb shell 'sh /data/adb/modules/device_faker/service.sh restart'
+$ adb shell 'sh /data/adb/modules/devmask/service.sh restart'
 [2026-11-24T13:17:29.092738Z] INFO egress reconcile 完成（读回与期望一致） wrote=true effective_mode="from_config"
 $ adb shell 'settings get global http_proxy'
 127.0.0.1:18080                      # ← 自愈
@@ -219,7 +219,7 @@ $ adb shell 'dumpsys connectivity | grep -i proxy'
 ```
 $ adb shell 'settings put global http_proxy 10.9.9.9:1; settings get global http_proxy'
 10.9.9.9:1
-$ adb shell 'sh /data/adb/modules/device_faker/service.sh restart'
+$ adb shell 'sh /data/adb/modules/devmask/service.sh restart'
 [2026-11-24T13:17:40.372598Z] INFO egress reconcile 完成（读回与期望一致） wrote=true effective_mode="from_config"
 $ adb shell 'settings get global http_proxy'
 127.0.0.1:18080
@@ -320,8 +320,8 @@ adb shell 'logcat -d -s EGRESSPROBE:I'
 ## 6) 卸载清理（PASS）
 
 ```bash
-adb shell 'tar -czf /data/local/tmp/device_faker-runtime.t9.tgz -C /data/adb device_faker'  # 先备份运行时目录
-adb shell 'sh /data/adb/modules/device_faker/uninstall.sh; echo exit=$?'
+adb shell 'tar -czf /data/local/tmp/devmask-runtime.t9.tgz -C /data/adb devmask'  # 先备份运行时目录
+adb shell 'sh /data/adb/modules/devmask/uninstall.sh; echo exit=$?'
 adb shell 'settings get global http_proxy; settings list global | grep -i proxy'
 adb shell 'dumpsys connectivity | grep -i proxy'
 ```
@@ -336,14 +336,14 @@ global_proxy_pac_url=
 http_proxy=:0
   Global proxy: none
   Default proxy: none
-$ adb shell 'ls -la /data/adb/device_faker'
-ls: /data/adb/device_faker: No such file or directory
+$ adb shell 'ls -la /data/adb/devmask'
+ls: /data/adb/devmask: No such file or directory
 ```
 
 随后把备份解回并重启服务，配置与代理一起恢复（说明 uninstall 只清运行时，不动模块本体）：
 
 ```
-$ adb shell 'sh /data/adb/modules/device_faker/service.sh restart'
+$ adb shell 'sh /data/adb/modules/devmask/service.sh restart'
 $ adb shell 'settings get global http_proxy'
 127.0.0.1:18080
 $ curl -s -H "Authorization: Bearer $QA_TOKEN" $DF_API/egress     | python3 -c 'import json,sys;d=json.load(sys.stdin);print(json.dumps({k:d[k] for k in ("mode","default","applied","readback")},ensure_ascii=False,indent=2))'
@@ -353,7 +353,7 @@ $ curl -s -H "Authorization: Bearer $QA_TOKEN" $DF_API/egress     | python3 -c '
 
 ## 7) 凭据边界（PASS）
 
-扫描对象：`server.log`、`api-audit.jsonl`、`device_faker.log`、以及本次全部 API 响应
+扫描对象：`server.log`、`api-audit.jsonl`、`devmask.log`、以及本次全部 API 响应
 （`GET /egress`、`GET /egress/proxies`、`GET /config`、`GET /overview`、`GET /status`、`PUT/DELETE /egress`、
 `POST /egress/probe`）与 `docs/design/egress/evidence/` 下所有证据文件，共 28 个文件。
 
@@ -440,10 +440,10 @@ ProxyTracker:
 
 ```bash
 # 0) 构建并装到设备（本仓库根目录）
-ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk cargo ndk --platform 29 -t arm64-v8a build -p device_faker_server --release
+ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk cargo ndk --platform 29 -t arm64-v8a build -p devmask_server --release
 RUSTFLAGS="-C default-linker-libraries" cargo +nightly ndk --platform 31 -t arm64-v8a build --release
-adb push target/aarch64-linux-android/release/device_faker_server /data/adb/modules/device_faker/bin/
-adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+adb push target/aarch64-linux-android/release/devmask_server /data/adb/modules/devmask/bin/
+adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/devmask/zygisk/arm64-v8a.so
 adb reboot   # zygisk .so 需要开机重新加载
 
 # 1) 起 fixture 与隧道（Mac 侧）

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 本地 HTTP 代理数据面（契约 §4.1 / §4.3 / §4.5 / §4.6 / §4.7）。
 //!

@@ -1,7 +1,7 @@
 === templatePayload.ts ===
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 模板下发载荷构造（t8 review R1）：
 // /templates 返回的聚合 config 里 packages 只用于 WebUI 展示/筛选，
@@ -37,7 +37,7 @@ manager/webui/src/stores/manager.ts:556:        // packages 只是 /templates �
 manager/webui/src/stores/manager.ts:583:            // 与 bulk 同一 helper：剔除展示性 packages，避免跨设备包绑定泄漏
 === check script output ===
 
-> device-faker-manager-webui@0.1.0 check:template-payload
+> devmask-manager-webui@0.1.0 check:template-payload
 > node scripts/check-template-payload.mjs
 
 OK: bulk/assignments apply body has no packages; input config untouched

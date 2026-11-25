@@ -1,4 +1,4 @@
-# Device Faker 最小可用配置 fixture
+# DevMask 最小可用配置 fixture
 # 供 core / server 单测引用：字段覆盖全局开关、模板与内联应用。
 # 注意：模板 packages 与 [[apps]] 不共用包名，避免产生重复包名冲突。
 

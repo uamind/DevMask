@@ -4,19 +4,19 @@
 === [1-1] cargo fmt --check ===
 FMT_EXIT=0
 
-=== [1-2] cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings ===
+=== [1-2] cargo clippy --workspace --exclude devmask --all-targets -- -D warnings ===
 CLIPPY_EXIT=0
-    Checking device_faker_server v1.10.0 (/Users/crymang/Works/device_faker/server)
-    Checking device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
-    Checking device_faker_module_tests v1.10.0 (/Users/crymang/Works/device_faker/module-tests)
+    Checking devmask_server v1.10.0 (/Users/crymang/Works/devmask/server)
+    Checking devmask_manager v0.2.0 (/Users/crymang/Works/devmask/manager)
+    Checking devmask_module_tests v1.10.0 (/Users/crymang/Works/devmask/module-tests)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.89s
 
-=== [1-3] cargo test -p device_faker_core -p device_faker_server -p device_faker_manager ===
+=== [1-3] cargo test -p devmask_core -p devmask_server -p devmask_manager ===
 TEST_EXIT=0
 TOTAL passed: 483
 TOTAL failed: 0
 
-=== [1-4] cargo check -p device_faker --target aarch64-linux-android ===
+=== [1-4] cargo check -p devmask --target aarch64-linux-android ===
 AARCH64_CHECK_EXIT=0
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s
 
@@ -24,7 +24,7 @@ AARCH64_CHECK_EXIT=0
 BUILD_WEBUI_EXIT=0
 ==================================================
 ✅ 构建完成！
-构建产物位于 /Users/crymang/Works/device_faker/webui/../module/webroot 目录
+构建产物位于 /Users/crymang/Works/devmask/webui/../module/webroot 目录
 
 构建产物已集成到模块中
 ==================================================

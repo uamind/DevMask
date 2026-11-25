@@ -169,10 +169,10 @@ WebUI 侧：
 
 二进制探针（[t14-probe.log](t14-probe.log)）：
 
-    mkdir /tmp/dfm-t14-unreadable
+    mkdir /tmp/dm-t14-unreadable
     echo unreadable-token-123 > .../manager.token
     chmod 000 .../manager.token
-    ./target/debug/device_faker_manager --data-dir ... --bind 127.0.0.1:18781
+    ./target/debug/devmask_manager --data-dir ... --bind 127.0.0.1:18781
     exit=1
     error: 加载配置失败: 读取 .../manager.token 失败：Permission denied (os error 13)
 
@@ -216,7 +216,7 @@ t9 同名单测也保留在全量测试中。
 | 根 /healthz 405 JSON | 测试 + 二进制：405 `method_not_allowed`，`Cache-Control: no-store`，JSON 信封（非纯文本/HTML） |
 | 模板 PUT 412 重试一次 | `low_template_put_412_retries_once`：2 个 template_put 步骤（首个 412，第二个 ok），job succeeded |
 | bind 404 template skipped | `low_bind_404_template_is_skipped`：job partial，result skipped / template_not_found / httpStatus 404，`details.resource=template` |
-| 数据目录权限（附带） | 二进制数据目录 0700；manager.db/-wal/-shm 与 key/token 均 0600（[t14-meta.log](t14-meta.log)） |
+| 数据目录权限（附带） | 二进制数据目录 0700；devmask-manager.db/-wal/-shm 与 key/token 均 0600（[t14-meta.log](t14-meta.log)） |
 
 **结论：PASS。**
 
@@ -225,8 +225,8 @@ t9 同名单测也保留在全量测试中。
 | 命令 | 结果 |
 | --- | --- |
 | `cargo fmt --check` | exit 0 |
-| `cargo clippy -p device_faker_manager --all-targets -- -D warnings` | exit 0 |
-| `cargo test -p device_faker_manager` | exit 0：**56 unit + 70 integration = 126 tests**，0 failed |
+| `cargo clippy -p devmask_manager --all-targets -- -D warnings` | exit 0 |
+| `cargo test -p devmask_manager` | exit 0：**56 unit + 70 integration = 126 tests**，0 failed |
 | `cd manager/webui && npm run check:template-payload` | exit 0：body 无 packages，入参未改 |
 | `npx vue-tsc --noEmit` | exit 0 |
 | `npm run build` | exit 0，dist 构建成功 |
@@ -266,4 +266,4 @@ t9 同名单测也保留在全量测试中。
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

@@ -1,10 +1,10 @@
 # WebUI
 
-Device Faker provides a modern web-based management interface. Open it directly from the Magisk / KernelSU / APatch module page — no need to hand-edit TOML.
+DevMask provides a modern web-based management interface. Open it directly from the Magisk / KernelSU / APatch module page — no need to hand-edit TOML.
 
 ## How to Open
 
-After installing the module, find **Device Faker** in your module manager and tap the "WebUI" or "Settings" entry.
+After installing the module, find **DevMask** in your module manager and tap the "WebUI" or "Settings" entry.
 
 ::: info Compatibility
 The WebUI is implemented using the pure KernelSU WebUI API (the old WebUI-X API has been removed). It works with the WebUI entry points in KernelSU, Magisk and APatch.
@@ -73,12 +73,12 @@ When several templates declare the same package, only the one written **first** 
 
 The WebUI has a built-in online template source. Import community templates with one click:
 
-- Repository: [device_faker_config](https://github.com/Seyud/device_faker_config)
+- Repository: [devmask_config](https://github.com/uamind/DevMask_config)
 - Browse by brand/model category
 - Search by brand, model, template name or **template description**; space-separated keywords must all match
 
 ::: tip Contribute
-If you have a well-organized device config, submit it to `device_faker_config` to help others.
+If you have a well-organized device config, submit it to `devmask_config` to help others.
 :::
 
 ### Rename Existing Templates

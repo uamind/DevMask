@@ -13,10 +13,10 @@
 | 主机 | macOS（本地 loopback 验收） |
 | Rust | rustc 1.99.0 / cargo 1.99.0 |
 | Node / npm | v26.13.1 / 11.20.0 |
-| 真机 | Pixel 9（`4A190DLAQ002QR`），Android 17 / SDK 37，Device Faker 1.9.0 |
+| 真机 | Pixel 9（`4A190DLAQ002QR`），Android 17 / SDK 37，DevMask 1.9.0 |
 | 真机接入 | `adb forward tcp:18686 tcp:8686`（只读） |
 | Mock 设备 | `manager/docs/mock_device.py 18687` |
-| Manager | `http://127.0.0.1:8765`，数据目录 `/tmp/dfm-acceptance`（干净创建，0700） |
+| Manager | `http://127.0.0.1:8765`，数据目录 `/tmp/dm-acceptance`（干净创建，0700） |
 | WebUI | `manager/webui/dist`，由 Manager 同进程托管 |
 
 ## 2. 构建
@@ -25,7 +25,7 @@
 
 | 命令 | 结果 |
 | --- | --- |
-| `cargo build -p device_faker_manager` | exit 0 |
+| `cargo build -p devmask_manager` | exit 0 |
 | `cd manager/webui && npm install` | exit 0（仅 fsevents 安装脚本提示，无错误） |
 | `npx vue-tsc --noEmit` | exit 0 |
 | `npm run build` | exit 0，产物 `dist/index.html` + `assets/*`（Vite 8.3.8，1624 modules，约 375–416 ms） |
@@ -36,24 +36,24 @@
     python3 manager/docs/mock_device.py 18687
 
     # Manager（干净数据目录；默认 Token admin123，仅 loopback）
-    ./target/debug/device_faker_manager \
+    ./target/debug/devmask_manager \
       --bind 127.0.0.1:8765 \
-      --data-dir /tmp/dfm-acceptance \
+      --data-dir /tmp/dm-acceptance \
       --static-dir manager/webui/dist
 
 启动日志（[t7-manager.log](t7-manager.log)）：
 
     WARN 正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换
-    INFO Device Faker Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dfm-acceptance token_source="default"
-    INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dfm-acceptance/manager.key
+    INFO DevMask Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dm-acceptance token_source="default"
+    INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dm-acceptance/devmask-manager.key
     INFO 静态托管已启用 dir=manager/webui/dist
     INFO Manager 已就绪 address=127.0.0.1:8765
 
 数据目录（首次启动自动创建，`ls -la` 见 [t7-meta.log](t7-meta.log)）：
 
-    drwx------  /tmp/dfm-acceptance
-    manager.db / manager.db-wal / manager.db-shm   # schemaVersion=1，WAL
-    manager.key                                    # 32 B，0600
+    drwx------  /tmp/dm-acceptance
+    devmask-manager.db / devmask-manager.db-wal / devmask-manager.db-shm   # schemaVersion=1，WAL
+    devmask-manager.key                                    # 32 B，0600
 
 DB 计数（验收结束时）：`devices=2`、`overviews=2`、`jobs=1`、`job_results=1`、`audit=11`（其中 7 条为 401 测试产生的 `auth.failed`，4 条为设备/下发操作）。截图中的操作日志页在 401 测试前采集，显示 5 条（4 成功 / 1 失败）。
 
@@ -143,7 +143,7 @@ DB 计数（验收结束时）：`devices=2`、`overviews=2`、`jobs=1`、`job_r
 | 命令 | 结果 |
 | --- | --- |
 | `cargo fmt --check` | exit 0 |
-| `cargo test -p device_faker_manager` | exit 0；**53 unit + 52 integration**（manager_api 16、devices_flow 13、apply_flow 11、ops_endpoints 8、e2e_flow 4），0 failed |
+| `cargo test -p devmask_manager` | exit 0；**53 unit + 52 integration**（manager_api 16、devices_flow 13、apply_flow 11、ops_endpoints 8、e2e_flow 4），0 failed |
 | `cd manager/webui && npx vue-tsc --noEmit` | exit 0 |
 | `cd manager/webui && npm run build` | exit 0；1624 modules，dist 生成成功 |
 | 检查后 healthz | 200，`devices.total=2`，`jobs.queued=0` |
@@ -162,7 +162,7 @@ DB 计数（验收结束时）：`devices=2`、`overviews=2`、`jobs=1`、`job_r
 - WebUI 尚未提供 PATCH 设备、独立 jobs 列表页、audit 服务端过滤 UI；设备列表一次拉取较多数据，未做分页 UI（见 t5 交付说明）。
 - Manager 使用默认 Token `admin123` 仅因监听 loopback；部署到局域网必须换 Token 并前置 TLS/隧道。
 - 本次截图在 2800×1608 视口（DPR 2）下采集，已统一缩放为宽 1800 的 JPEG。
-- `/tmp/dfm-acceptance`、`/tmp/t7-*.log` 为本地临时产物，验收结束后可删除；仓库内只保留本报告、日志副本与截图。
+- `/tmp/dm-acceptance`、`/tmp/t7-*.log` 为本地临时产物，验收结束后可删除；仓库内只保留本报告、日志副本与截图。
 
 ## 9. 验收清单
 

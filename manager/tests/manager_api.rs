@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! Manager 骨架验收：健康检查、Bearer 鉴权、错误信封、静态托管与 SPA fallback。
 
@@ -296,7 +296,7 @@ async fn auth_failure_is_audited_without_token() {
 #[tokio::test]
 async fn key_file_is_generated_private() {
     let app = start_app(None).await;
-    let key_path = app.state.cfg.data_dir.join("manager.key");
+    let key_path = app.state.cfg.data_dir.join("devmask-manager.key");
     let bytes = std::fs::read(&key_path).expect("密钥文件");
     assert_eq!(bytes.len(), 32);
 
@@ -313,7 +313,7 @@ async fn key_file_is_generated_private() {
             & 0o777;
         assert_eq!(dir_mode, 0o700, "dir={dir_mode:o}");
 
-        let db_path = app.data_dir.join("manager.db");
+        let db_path = app.data_dir.join("devmask-manager.db");
         let db_mode = std::fs::metadata(&db_path).unwrap().permissions().mode() & 0o777;
         assert_eq!(db_mode, 0o600, "db={db_mode:o}");
     }

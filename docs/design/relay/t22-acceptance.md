@@ -14,12 +14,12 @@
 
 真机 `iptables -S`（语义比较已能吸收选项顺序与隐式 `-m tcp`）：
 
-    -A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
-    -A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
-    -A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
-    -A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
-    -A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
-    -A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+    -A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+    -A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+    -A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+    -A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+    -A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+    -A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
 
 应用内探针（uid 10325）经 17835：`fetch.app=status=200 body=198.51.100.8`、`fetch.ip=200`；
 fixture 侧 `listener=18082 GET http://app.fixture/ ... auth=ok digest=7213dc66f53c`（凭据只出现在上游握手）。
@@ -73,7 +73,7 @@ fixture 侧 `listener=18082 GET http://app.fixture/ ... auth=ok digest=7213dc66f
 - **bind 面**：`ss -ltn` 仅 127.0.0.1；`ss -ltn6` 空；`::1` / `127.0.0.2` / `192.168.30.2` 全部 Connection refused。
 - **凭据零泄漏**：5/5 路扫描命中 0（device server.log / api-audit / GET egress / GET proxies / fixture log）。
 - **验收开始 DELETE /egress**：`If-Match: *` → 200；warnings 按 code 过滤。
-- **设备恢复**：`settings=:0`、`DF_EGRESS_RLY` 链不存在、178xx 无监听、adb reverse 已撤、fixture 已停、server 正常运行。
+- **设备恢复**：`settings=:0`、`DM_EGRESS_RLY` 链不存在、178xx 无监听、adb reverse 已撤、fixture 已停、server 正常运行。
 
 ## 6. 观察（非阻塞，供 t10 评审）
 

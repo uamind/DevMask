@@ -2,14 +2,14 @@
 ## cargo fmt --check
 EXIT=0
 
-## cargo clippy -p device_faker_manager --all-targets -- -D warnings
+## cargo clippy -p devmask_manager --all-targets -- -D warnings
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s
 EXIT=0
 
-## cargo test -p device_faker_manager
-   Compiling device_faker_manager v0.1.0 (/Users/crymang/Works/device_faker/manager)
+## cargo test -p devmask_manager
+   Compiling devmask_manager v0.1.0 (/Users/crymang/Works/devmask/manager)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 4.11s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-ef33d6ec8213c0d5)
+     Running unittests src/lib.rs (target/debug/deps/devmask_manager-ef33d6ec8213c0d5)
 
 running 56 tests
 test api::job_dto::tests::accepted_response_exposes_queued ... ok
@@ -71,7 +71,7 @@ test db::tests::recovers_interrupted_jobs ... ok
 
 test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_manager-beeebe0a9f880f2c)
+     Running unittests src/main.rs (target/debug/deps/devmask_manager-beeebe0a9f880f2c)
 
 running 0 tests
 
@@ -183,7 +183,7 @@ test r6_oversized_device_reads_are_rejected ... ok
 
 test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
 
-   Doc-tests device_faker_manager
+   Doc-tests devmask_manager
 
 running 0 tests
 

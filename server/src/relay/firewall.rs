@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
-//! uid 防火墙（契约 §5）：三链 `DF_EGRESS_RLY` / `_ALLOW` / `_DENY`，
+//! uid 防火墙（契约 §5）：三链 `DM_EGRESS_RLY` / `_ALLOW` / `_DENY`，
 //! `relay.firewall.applied` 由一次 `iptables -S` **现算**（不缓存、不猜）。
 //!
 //! 冻结口径（memo R1/R3/R4/R14）：
@@ -21,11 +21,11 @@ use std::time::Duration;
 use crate::commands::{CommandOutcome, CommandRunner};
 
 /// 入口/分派链（名字 K2 冻结）。
-pub const ENTRY_CHAIN: &str = "DF_EGRESS_RLY";
+pub const ENTRY_CHAIN: &str = "DM_EGRESS_RLY";
 /// 只有 ACCEPT 的叶子链（可重建）。
-pub const ALLOW_CHAIN: &str = "DF_EGRESS_RLY_ALLOW";
+pub const ALLOW_CHAIN: &str = "DM_EGRESS_RLY_ALLOW";
 /// 只有 REJECT 的叶子链（只增删、永不 -F）。
-pub const DENY_CHAIN: &str = "DF_EGRESS_RLY_DENY";
+pub const DENY_CHAIN: &str = "DM_EGRESS_RLY_DENY";
 /// iptables 程序名。
 const PROGRAM: &str = "iptables";
 /// 拿锁等待（毫秒）。
@@ -676,8 +676,8 @@ mod tests {
         assert_eq!(
             spec().entry_rules(),
             vec![
-                "-j DF_EGRESS_RLY_ALLOW".to_owned(),
-                "-j DF_EGRESS_RLY_DENY".to_owned(),
+                "-j DM_EGRESS_RLY_ALLOW".to_owned(),
+                "-j DM_EGRESS_RLY_DENY".to_owned(),
                 "-j RETURN".to_owned()
             ]
         );
@@ -714,8 +714,8 @@ mod tests {
 
     #[test]
     fn chain_parsing_strips_chain_prefix_and_normalizes() {
-        let output = "-N DF_EGRESS_RLY_ALLOW
--A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -j ACCEPT
+        let output = "-N DM_EGRESS_RLY_ALLOW
+-A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -j ACCEPT
 -A OTHER_CHAIN -j DROP
 ";
         assert_eq!(
@@ -906,14 +906,14 @@ mod tests {
     fn device_s(allow: &str) -> DeviceS {
         DeviceS {
             allow: allow.to_owned(),
-            deny: "-A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+            deny: "-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
 ".to_owned(),
             entry: concat!(
-                "-A DF_EGRESS_RLY -j DF_EGRESS_RLY_ALLOW
+                "-A DM_EGRESS_RLY -j DM_EGRESS_RLY_ALLOW
 ",
-                "-A DF_EGRESS_RLY -j DF_EGRESS_RLY_DENY
+                "-A DM_EGRESS_RLY -j DM_EGRESS_RLY_DENY
 ",
-                "-A DF_EGRESS_RLY -j RETURN
+                "-A DM_EGRESS_RLY -j RETURN
 ",
             )
             .to_owned(),
@@ -940,9 +940,9 @@ mod tests {
     fn device_dash_s_is_semantically_equal_to_expected() {
         // 真机形态：-d 在 -o 之前，且 --dport/--uid-owner 前有隐式模块标记
         let commands = device_s(concat!(
-            "-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 0 -m tcp --dport 17835 -j ACCEPT
+            "-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 0 -m tcp --dport 17835 -j ACCEPT
 ",
-            "-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 10325 -m tcp --dport 17835 -j ACCEPT
+            "-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 10325 -m tcp --dport 17835 -j ACCEPT
 ",
         ));
         let state = Firewall::new().sample(&commands, &app_spec());
@@ -956,7 +956,7 @@ mod tests {
     fn semantic_compare_still_catches_a_real_difference() {
         // 少一条 root 规则：语义比较必须仍判不一致
         let commands = device_s(
-            "-A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 10325 -m tcp --dport 17835 -j ACCEPT
+            "-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m owner --uid-owner 10325 -m tcp --dport 17835 -j ACCEPT
 ",
         );
         let state = Firewall::new().sample(&commands, &app_spec());

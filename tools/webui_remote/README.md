@@ -1,6 +1,6 @@
 # WebUI 外部访问桥接
 
-Device Faker 的 WebUI 是给 KernelSU / Magisk 管理器 WebView 用的：页面本身是纯静态的
+DevMask 的 WebUI 是给 KernelSU / Magisk 管理器 WebView 用的：页面本身是纯静态的
 module/webroot，但所有能力（读配置、写配置、枚举应用、模块信息）都依赖宿主注入的
 window.ksu 桥接。把 webroot 丢到任意静态服务器上只能看到空壳页面。
 
@@ -62,7 +62,7 @@ Vite 开发模式自带 mock 数据，不需要 adb：
 
 可用：
 
-- 读取、保存 /data/adb/device_faker/config/config.toml（模板、应用配置）；
+- 读取、保存 /data/adb/devmask/config/config.toml（模板、应用配置）；
 - 应用列表，包括多用户分身（包名带 @userId 后缀）；
 - 模块信息（版本、作者、描述、启用状态，来自 module.prop）；
 - toast 提示、shell 命令（在线模板抓取、getprop 等）。

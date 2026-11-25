@@ -2,7 +2,7 @@
 
 - 结论：**needs_revision**（1 high / 1 low）。实现与文档均已闭环，但 H1 的「写入序列」用例**不能失败在旧实现上**，
   属于假绿；需要改成真正能复现直连窗口的场景。
-- 验证：cargo test -p device_faker_server 全 target ok（lib 184、relay_api 33）、module-tests 60 passed。
+- 验证：cargo test -p devmask_server 全 target ok（lib 184、relay_api 33）、module-tests 60 passed。
 
 ## 1. H1（PUT 直连窗口）
 
@@ -77,8 +77,8 @@ contract:30/:1211 与 §6.4 均为 5；§6.4 静默条件已把 device_socks5 �
 
 ## 7. 已执行核对
 
-    cargo test -p device_faker_server            # 全 target ok（lib 184、relay_api 33）
-    cargo test -p device_faker_module_tests      # 60 passed
+    cargo test -p devmask_server            # 全 target ok（lib 184、relay_api 33）
+    cargo test -p devmask_module_tests      # 60 passed
     grep -n 'SystemProxy::new' server/src/api/egress.rs        # put_egress 内仅 :1070 一处 apply
     grep -n 'put_never_writes_direct_proxy_while_activating_relay' -A 45 server/tests/relay_api.rs
     grep -rn '4 个警告码\\|4 个扁平\\|4 个 relay' docs/ manager/docs/   # 0 命中

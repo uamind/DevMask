@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -33,7 +33,7 @@
               <div class="page-scroll-content">
                 <header class="app-header">
                   <h1 class="header-title">
-                    Device Faker
+                    DevMask
                     <span class="version">{{ nav.versionDisplay.value }}</span>
                   </h1>
                 </header>

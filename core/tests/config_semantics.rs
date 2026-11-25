@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 抽取前后「解析 / 合并」语义回归：这些断言直接锁住模块原来的行为，
 //! core 与 zygisk 共用同一份实现，任何一条改动都意味着线上伪装结果会变。
 
-use device_faker_core::config::{Config, NumberSetting, is_patch_only_key};
+use devmask_core::config::{Config, NumberSetting, is_patch_only_key};
 
 const CONFIG: &str = r#"debug = true
 default_force_denylist_unmount = true

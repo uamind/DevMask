@@ -1,10 +1,10 @@
 # WebUI 管理界面
 
-Device Faker 提供现代化的 Web 管理界面，可以直接在 WeaveMask / KernelSU / APatch 等root管理器的模块页面中打开，不必手改 TOML。
+DevMask 提供现代化的 Web 管理界面，可以直接在 WeaveMask / KernelSU / APatch 等root管理器的模块页面中打开，不必手改 TOML。
 
 ## 打开方式
 
-安装模块后，在模块管理器中找到 **Device Faker**，点击「WebUI」或「设置」入口即可打开。
+安装模块后，在模块管理器中找到 **DevMask**，点击「WebUI」或「设置」入口即可打开。
 
 ::: info 兼容说明
 WebUI 采用纯 KernelSU WebUI API 实现，支持 KernelSU、WeaveMask 和 APatch 等兼容 API 的root管理器的模块 WebUI 入口。
@@ -73,12 +73,12 @@ WebUI 采用纯 KernelSU WebUI API 实现，支持 KernelSU、WeaveMask 和 APat
 
 WebUI 内置在线模板源，可以从社区模板仓库一键导入：
 
-- 仓库地址：[device_faker_config](https://github.com/Seyud/device_faker_config)
+- 仓库地址：[devmask_config](https://github.com/uamind/DevMask_config)
 - 支持按品牌、型号分类浏览
 - 支持按品牌、型号、模板名或**模板描述**搜索；多个关键词以空白分隔，需全部命中
 
 ::: tip 欢迎贡献
-如果你有整理好的机型配置，可以提交到 `device_faker_config`，帮助更多用户。
+如果你有整理好的机型配置，可以提交到 `devmask_config`，帮助更多用户。
 :::
 
 ### 重命名已存在模板

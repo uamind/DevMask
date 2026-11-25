@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口代理（egress）控制面：存储、系统代理应用、出口 IP 探测与启动自愈。
 //!
@@ -22,7 +22,7 @@
 //!    读时自愈权限、备份同样 0600；
 //! 2. 清除系统代理只有 [`system::SystemProxy::clear`] 一份实现（写 `:0`，**禁止** settings delete）；
 //! 3. 密码不进响应 / 日志 / 审计 / 错误 details，响应只有 `hasCredentials`；
-//! 4. egress 端点不设置 `X-DF-Revision` / `ETag`，只用 `X-DF-Egress-Revision`。
+//! 4. egress 端点不设置 `X-DM-Revision` / `ETag`，只用 `X-DM-Egress-Revision`。
 
 pub mod dto;
 pub mod file;
@@ -31,8 +31,8 @@ pub mod request;
 pub mod state;
 pub mod system;
 
-use device_faker_core::config::{Config, DIRECT_MARKER};
-use device_faker_core::revision::sha256_hex;
+use devmask_core::config::{Config, DIRECT_MARKER};
+use devmask_core::revision::sha256_hex;
 use toml_edit::{DocumentMut, Item};
 
 pub use file::{
@@ -265,7 +265,7 @@ fn ensure_apps(document: &mut DocumentMut) -> &mut toml_edit::ArrayOfTables {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use device_faker_core::config::EgressSection;
+    use devmask_core::config::EgressSection;
 
     #[test]
     fn revision_is_sha256_of_config_revision_newline_and_bytes() {

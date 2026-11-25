@@ -1,17 +1,17 @@
 ---
-name: device-faker-api
-description: 通过 Device Faker 原生 /api/v1 管理 Android 机型伪装：查看状态、模板、应用配置，创建/绑定模板，开启外部访问，重启应用；用户要改某个 App 的伪装机型、排查未生效、或自动化调用 device_faker HTTP API 时使用。
-whenToUse: 用户提到 device_faker、机型伪装、修改 Build 字段、模板绑定、外部访问/API Token，或要求用 HTTP API 批量管理伪装配置时。
+name: devmask-api
+description: 通过 DevMask 原生 /api/v1 管理 Android 机型伪装：查看状态、模板、应用配置，创建/绑定模板，开启外部访问，重启应用；用户要改某个 App 的伪装机型、排查未生效、或自动化调用 devmask HTTP API 时使用。
+whenToUse: 用户提到 devmask、机型伪装、修改 Build 字段、模板绑定、外部访问/API Token，或要求用 HTTP API 批量管理伪装配置时。
 metadata:
   api: http://127.0.0.1:8686/api/v1
   docs: docs/API.md
   auth: Bearer token
-  requires: 已安装 device_faker 1.8+ 的 Root Android 设备
+  requires: 已安装 devmask 1.8+ 的 Root Android 设备
 ---
 
-# Device Faker /api/v1 使用手册
+# DevMask /api/v1 使用手册
 
-Device Faker 是 Zygisk 机型伪装模块。device_faker_server 随模块启动，默认只监听
+DevMask 是 Zygisk 机型伪装模块。devmask_server 随模块启动，默认只监听
 127.0.0.1:8686；在管理器 WebUI 的设置 → External Access 里可改为 0.0.0.0，让局域网访问。
 所有 API 都要 Bearer Token。
 
@@ -21,8 +21,8 @@ TLS 尚未实现，见第 9 节。
 ## 1. 环境检查
 
     adb devices
-    adb shell 'cat /data/adb/modules/device_faker/module.prop | head -5'
-    adb shell 'sh /data/adb/modules/device_faker/service.sh status'
+    adb shell 'cat /data/adb/modules/devmask/module.prop | head -5'
+    adb shell 'sh /data/adb/modules/devmask/service.sh status'
 
 期望 supervisor 与 server 都是 running。旧版模块没有 service.sh/bin 时先安装新模块 zip。
 
@@ -50,7 +50,7 @@ Token：
 
 ## 3. 数据模型与 revision
 
-- 唯一事实来源：/data/adb/device_faker/config/config.toml。
+- 唯一事实来源：/data/adb/devmask/config/config.toml。
 - templates：命名机型模板，packages 是绑定包名。
 - apps：内联应用配置，package 唯一；同一包既有内联又命中模板时内联优先。
 - revision：配置文件原始字节的 SHA-256（裸 64 位小写十六进制，可带 sha256: 前缀）。
@@ -194,7 +194,7 @@ detachFromTemplates 默认 true：从其它模板移除该包，并删除同包�
 - 破坏性操作先展示变更并得到用户确认；能用 PATCH 就不要 PUT 整条。
 - Token 只放环境变量，不写入 Skill、脚本、日志或 git。
 - 不提供任意 shell/文件接口；只有本文列出的端点。
-- 失败保留 requestId，查 /data/adb/device_faker/logs/server.log 与 api-audit.jsonl。
+- 失败保留 requestId，查 /data/adb/devmask/logs/server.log 与 api-audit.jsonl。
 
 ## 9. 当前限制
 

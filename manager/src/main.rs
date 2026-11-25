@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 可执行入口：参数、日志、初始化、监听与优雅退出。
 
@@ -8,7 +8,7 @@ use std::{env, process::ExitCode};
 
 use anyhow::Context as _;
 use axum::serve;
-use device_faker_manager::{Config, VERSION, args, build_router, initialize};
+use devmask_manager::{Config, VERSION, args, build_router, initialize};
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
@@ -30,14 +30,14 @@ async fn run() -> anyhow::Result<()> {
         return Ok(());
     }
     if parsed.version {
-        println!("device_faker_manager {VERSION}");
+        println!("devmask_manager {VERSION}");
         return Ok(());
     }
 
     init_tracing(parsed.log_level.as_deref());
 
     let config = Config::load(parsed).context("加载配置失败")?;
-    if config.token.source == device_faker_manager::state::TokenSource::Default {
+    if config.token.source == devmask_manager::state::TokenSource::Default {
         tracing::warn!(
             "正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换"
         );
@@ -47,7 +47,7 @@ async fn run() -> anyhow::Result<()> {
         bind = %config.bind,
         data_dir = %config.data_dir.display(),
         token_source = config.token.source.as_str(),
-        "Device Faker Manager 启动中"
+        "DevMask Manager 启动中"
     );
 
     let state = initialize(config).await?;

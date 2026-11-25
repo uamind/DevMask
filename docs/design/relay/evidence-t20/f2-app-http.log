@@ -1,4 +1,4 @@
 11-25 12:21:33.550 19321 19321 I EGRESSPROBE: http.proxyPort=17835
 11-25 12:21:33.550 19321 19321 I EGRESSPROBE: fetch.app=error=SocketException
-/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:21:10.209627Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
-/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:21:27.719110Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"
+/data/adb/devmask/logs/server.log:[2m2026-11-25T04:21:10.209627Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
+/data/adb/devmask/logs/server.log:[2m2026-11-25T04:21:27.719110Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"

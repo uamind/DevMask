@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { OnlineTemplateSource, Settings } from '../types'
 
-const SETTINGS_KEY = 'device_faker_settings'
+const SETTINGS_KEY = 'devmask_settings'
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings>({

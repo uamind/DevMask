@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 契约测试：路由注册必须与 docs/openapi.yaml 的 30 个操作**完全一致**。
 //!
@@ -15,7 +15,7 @@ mod common;
 use std::collections::BTreeSet;
 
 use axum::http::{Method, StatusCode};
-use device_faker_server::api::CONTRACT_OPERATIONS;
+use devmask_server::api::CONTRACT_OPERATIONS;
 use serde_json::{Value, json};
 
 use common::{ADMIN_TOKEN, body_json, fixture, header};

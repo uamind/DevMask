@@ -6,7 +6,7 @@
 # 于是「把某个应用级绑定从 Manager 里删掉」永远到不了设备。
 #
 # 用法：python3 docs/design/egress/evidence-t12/repro-device-apps-merge.py
-# 依赖：target/debug/device_faker_server（host 上可跑；settings 命令缺失 → 写路径 503，但文件已落盘）。
+# 依赖：target/debug/devmask_server（host 上可跑；settings 命令缺失 → 写路径 503，但文件已落盘）。
 
 import json
 import os
@@ -65,7 +65,7 @@ def main():
     os.makedirs(os.path.join(DATA, "config"), exist_ok=True)
     log = open("/tmp/t12-device.log", "w+", encoding="utf-8")
     proc = subprocess.Popen(
-        [os.path.join(ROOT, "target/debug/device_faker_server"),
+        [os.path.join(ROOT, "target/debug/devmask_server"),
          "--config-path", CONFIG, "--bind", f"127.0.0.1:{PORT}",
          "--server-config", os.path.join(DATA, "config", "server.toml")],
         cwd=ROOT, stdout=subprocess.DEVNULL, stderr=log,

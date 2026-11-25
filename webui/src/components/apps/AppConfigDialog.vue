@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -91,7 +91,7 @@
     <!-- 自定义配置界面 -->
     <div v-if="activeTab === 'custom'" class="custom-config">
       <el-form :model="formData" label-width="120px" label-position="top">
-        <DeviceFakerFormFields />
+        <DevMaskFormFields />
       </el-form>
 
       <!-- 自定义配置操作按钮 -->
@@ -115,8 +115,8 @@ import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../utils/i18n'
 import { toast } from 'kernelsu-alt'
 import type { InstalledApp, AppConfig } from '../../types'
-import { provideDeviceFakerForm } from '../../composables/useDeviceFakerForm'
-import DeviceFakerFormFields from '../shared/DeviceFakerFormFields.vue'
+import { provideDevMaskForm } from '../../composables/useDevMaskForm'
+import DevMaskFormFields from '../shared/DevMaskFormFields.vue'
 import {
   configKeyScope,
   configWriteKey,
@@ -188,7 +188,7 @@ const scopeText = computed(() => {
 const selectedTemplate = ref('')
 const templateSearch = ref('')
 
-const { formData, resetForm, fillFromAppConfig, toAppConfig } = provideDeviceFakerForm()
+const { formData, resetForm, fillFromAppConfig, toAppConfig } = provideDevMaskForm()
 
 const dialogTitle = computed(() =>
   t('apps.dialog.config_title', { name: props.app?.appName || '' })

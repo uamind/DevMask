@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Device Faker API 测试公共库（tests/api/*.sh 共用）。
+# DevMask API 测试公共库（tests/api/*.sh 共用）。
 #
 # 兼容 bash 3.2（macOS 自带）与 bash 5.x；不依赖 jq，JSON 解析统一走 python3。
 # 通过 source 使用：
@@ -110,7 +110,7 @@ df_init() {
   df_require_cmd python3
   DF_TMP="$(mktemp -d "${TMPDIR:-/tmp}/df-api-test.XXXXXX")"
   trap df_cleanup EXIT
-  DF_AUTH=(-H 'X-DF-Test-Harness: 1')
+  DF_AUTH=(-H 'X-DM-Test-Harness: 1')
   if [ -n "$TOKEN" ]; then
     DF_AUTH+=(-H "Authorization: Bearer $TOKEN")
     df_log "BASE=$BASE  TOKEN=${TOKEN:0:4}…(${#TOKEN} chars)"
@@ -159,7 +159,7 @@ _df_request() {
   if [ "$use_auth" = "1" ]; then
     args=("${DF_AUTH[@]}")
   else
-    args=(-H 'X-DF-Test-Harness: 1')
+    args=(-H 'X-DM-Test-Harness: 1')
   fi
   args+=("$@")
 
@@ -490,7 +490,7 @@ df_ensure_server() {
     df_fail "无法连接 $BASE/healthz。
   可选做法：
     1) 已运行服务：BASE=http://127.0.0.1:8686/api/v1 TOKEN=<token> bash $0
-    2) 本机二进制：SERVER_BIN=target/debug/device_faker_server [SERVER_ARGS='--config ...'] ...
+    2) 本机二进制：SERVER_BIN=target/debug/devmask_server [SERVER_ARGS='--config ...'] ...
     3) 契约自测：MOCK=1 bash $0
   详见 tests/api/README.md"
   fi

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 运行时健康状态（只有内存，不落盘）与启动自愈（契约 §3.4 / §3.5 / §4.6）。
 //!
@@ -12,8 +12,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use device_faker_core::config::Config;
-use device_faker_core::revision::FileLock;
+use devmask_core::config::Config;
+use devmask_core::revision::FileLock;
 
 use crate::app::AppState;
 use crate::egress::EGRESS_FILE_NAME;

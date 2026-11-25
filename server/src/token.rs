@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 首次启动的 Token 引导（docs/API.md 3.4）。
 //!
@@ -26,7 +26,7 @@ pub const INITIAL_TOKEN_ID: &str = "default";
 /// 自动生成 Token 的名字。
 pub const INITIAL_TOKEN_NAME: &str = "owner";
 /// 明文横幅前缀（logs/server.log 中 grep 这一行）。
-pub const BANNER_PREFIX: &str = "[device-faker-server] initial token = ";
+pub const BANNER_PREFIX: &str = "[devmask-server] initial token = ";
 
 /// 引导结果。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +111,7 @@ pub fn bootstrap(settings: &mut Settings) -> Result<BootstrapOutcome> {
             .with_context(|| format!("创建 {} 失败", parent.display()))?;
     }
     // 0600：只有 root 能读；原子写避免出现半截文件。
-    device_faker_core::revision::atomic_write(&server_config_path, text.as_bytes(), 0o600)
+    devmask_core::revision::atomic_write(&server_config_path, text.as_bytes(), 0o600)
         .with_context(|| format!("写入 {} 失败", server_config_path.display()))?;
 
     settings.tokens.push(entry);
@@ -125,7 +125,7 @@ pub fn bootstrap(settings: &mut Settings) -> Result<BootstrapOutcome> {
 /// 新建 server.toml 时的默认内容。
 fn default_file_text(settings: &Settings) -> String {
     let mut text = String::from(
-        "# device_faker_server 服务设置（首次启动自动生成）。\n\
+        "# devmask_server 服务设置（首次启动自动生成）。\n\
          # 修改后重启服务生效；Token 只存 sha256，明文仅在生成时输出一次。\n\
          # 局域网访问需要 allow_lan = true 且 bind 不是 loopback（且必须配置 Token）。\n",
     );
@@ -270,7 +270,7 @@ mod tests {
         };
         assert_eq!(
             outcome.banner().unwrap(),
-            "[device-faker-server] initial token = df_test"
+            "[devmask-server] initial token = df_test"
         );
         let none = BootstrapOutcome {
             plaintext: None,

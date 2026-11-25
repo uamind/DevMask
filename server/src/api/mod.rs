@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! /api/v1 的端点实现与共享响应工具。
 //!
 //! 契约：docs/API.md 5（端点明细）、6（数据结构）、7（错误信封）。
 //! 所有响应头约定集中在 [`with_revision`] / [`with_etag`]：
-//! - `X-DF-Revision`：不带引号的 revision；
+//! - `X-DM-Revision`：不带引号的 revision；
 //! - `ETag`：带引号的强校验值，可直接作为 If-Match 回传。
 
 use std::collections::{HashMap, HashSet};
@@ -17,7 +17,7 @@ use axum::{
     http::{HeaderName, HeaderValue, Method, StatusCode},
     response::{IntoResponse, Response},
 };
-use device_faker_core::Config;
+use devmask_core::Config;
 use serde::Serialize;
 
 use crate::app::AppState;
@@ -85,26 +85,26 @@ pub const CAPABILITIES: [&str; 8] = [
     "egress",
 ];
 
-const X_DF_REVISION: HeaderName = HeaderName::from_static("x-df-revision");
+const X_DM_REVISION: HeaderName = HeaderName::from_static("x-dm-revision");
 const ETAG: HeaderName = HeaderName::from_static("etag");
-const X_DF_EGRESS_REVISION: HeaderName = HeaderName::from_static("x-df-egress-revision");
+const X_DM_EGRESS_REVISION: HeaderName = HeaderName::from_static("x-dm-egress-revision");
 
-/// 给 egress 响应加 X-DF-Egress-Revision。
+/// 给 egress 响应加 X-DM-Egress-Revision。
 ///
 /// **不要**在 egress 端点上用 [with_revision] / [with_etag]：既有 WebUI 的传输层会把任何
-/// 响应上的 X-DF-Revision / ETag 当成 config revision 缓存，一次 GET /egress 就会让
+/// 响应上的 X-DM-Revision / ETag 当成 config revision 缓存，一次 GET /egress 就会让
 /// 下一次 PUT /config 必然 412（契约 §1.1）。
 pub fn with_egress_revision(mut response: Response, revision: &str) -> Response {
     if let Ok(value) = HeaderValue::from_str(revision) {
-        response.headers_mut().insert(X_DF_EGRESS_REVISION, value);
+        response.headers_mut().insert(X_DM_EGRESS_REVISION, value);
     }
     response
 }
 
-/// 给响应加 `X-DF-Revision`（不带引号）。
+/// 给响应加 `X-DM-Revision`（不带引号）。
 pub fn with_revision(mut response: Response, revision: &str) -> Response {
     if let Ok(value) = HeaderValue::from_str(revision) {
-        response.headers_mut().insert(X_DF_REVISION, value);
+        response.headers_mut().insert(X_DM_REVISION, value);
     }
     response
 }
@@ -117,7 +117,7 @@ pub fn with_etag(mut response: Response, revision: &str) -> Response {
     response
 }
 
-/// 同时加 `X-DF-Revision` 与 `ETag`。
+/// 同时加 `X-DM-Revision` 与 `ETag`。
 pub fn with_revision_etag(response: Response, revision: &str) -> Response {
     with_etag(with_revision(response, revision), revision)
 }
@@ -164,7 +164,7 @@ pub struct StatusResponse {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerInfo {
-    /// device_faker_server 版本。
+    /// devmask_server 版本。
     pub version: &'static str,
     /// 实际监听地址。
     pub bind: String,

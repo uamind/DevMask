@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 模板下发载荷构造（t8 review R1）：
 // /templates 返回的聚合 config 里 packages 只用于 WebUI 展示/筛选，

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 静态托管与 SPA 回退的集成测试（docs/API.md 10.1、11）。
 
@@ -9,7 +9,7 @@ mod common;
 use axum::http::{Method, StatusCode};
 
 use common::{body_text, fixture, get, header, send};
-use device_faker_server::static_files::{ASSET_CACHE_CONTROL, RUNTIME_SCRIPT};
+use devmask_server::static_files::{ASSET_CACHE_CONTROL, RUNTIME_SCRIPT};
 
 #[tokio::test]
 async fn root_serves_index_with_runtime_injection() {
@@ -54,7 +54,7 @@ async fn assets_are_long_cached_with_mime() {
         header(js.headers(), "cache-control"),
         Some(ASSET_CACHE_CONTROL)
     );
-    assert_eq!(body_text(js).await, "console.log('device-faker')\n");
+    assert_eq!(body_text(js).await, "console.log('devmask')\n");
 
     let css = get(&fixture.router, "/assets/site.css").await;
     assert_eq!(css.status(), StatusCode::OK);

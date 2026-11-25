@@ -1,13 +1,13 @@
-# Device Faker API
+# DevMask API
 
-> Device Faker 是 Android 上的机型伪装模块（Zygisk / KernelSU / Magisk）。它自带一个原生 HTTP 服务（device_faker_server），
+> DevMask 是 Android 上的机型伪装模块（Zygisk / KernelSU / Magisk）。它自带一个原生 HTTP 服务（devmask_server），
 > 在设备本机 http://127.0.0.1:8686 提供 WebUI 与 /api/v1 机器接口。本文是第一增量（配置 / 模板 / 应用 / 包 / 设备）的 AI 使用说明。
 > 完整契约见 docs/API.md，机器可读契约见 docs/openapi.yaml。
 
 ## 认证
 
 - 所有请求（除 /api/v1/healthz）都需要 `Authorization: Bearer <token>`。
-- 首次启动的默认 Token 是 `admin123`；可在管理器 WebUI → 设置 → 外部访问里改成任意值（只存 sha256）。日志里会有一行 `[device-faker-server] initial token = admin123`。
+- 首次启动的默认 Token 是 `admin123`；可在管理器 WebUI → 设置 → 外部访问里改成任意值（只存 sha256）。日志里会有一行 `[devmask-server] initial token = admin123`。
 - 作用域：`read` / `write` / `ops` / `admin`，互不隐含；`admin` 是其余的超集。
   - 典型 Agent 用 `["read","write"]`；要重启应用再加 `ops`。
 - 401 = Token 缺失或无效；403 = 作用域不足（`details.required` 告诉你缺哪个）。
@@ -59,9 +59,9 @@
 - `GET /packages?names=a,b&user=0` — 已安装包元数据（`label` 本增量恒 null）。
 - `GET /device`、`GET /device/props?keys=ro.product.model,ro.build.fingerprint`（白名单前缀：`ro.product.`、`ro.build.`、`ro.soc.`、`ro.hardware`、`ro.board.`、`ro.vendor.`）、`GET /device/users`。
 
-出口代理（egress，v1.10.0 起；v1.11.0 起带认证代理经设备内中继）
+出口代理（egress，v1.10.0 起；v0.0.1 起带认证代理经设备内中继）
 
-- `GET /egress` — 当前模式 / 设备读回的生效值 / 脱敏上游 / 各应用覆盖 / 最近探测。响应体的 `revision` 是 **egress revision**（两个文件的合成值），写端点用它做 `If-Match`；响应头是 `X-DF-Egress-Revision`（**不是** `X-DF-Revision`）。
+- `GET /egress` — 当前模式 / 设备读回的生效值 / 脱敏上游 / 各应用覆盖 / 最近探测。响应体的 `revision` 是 **egress revision**（两个文件的合成值），写端点用它做 `If-Match`；响应头是 `X-DM-Egress-Revision`（**不是** `X-DM-Revision`）。
 - `PUT /egress` — 写代理定义（`egress.toml`，0600）与设备级 / 应用级出口。**省略 = 不改，`null` = 清空，数组 = 整体替换**；`If-Match` 必填；期望态与现状一致时返回 `changed:false` 且不落盘。
 - `DELETE /egress?confirm=true` — 恢复直连：清全部定义 + `settings put global http_proxy :0`（`settings delete` 在 Android 17 上清不掉）。`If-Match` 必填。
 - `POST /egress/probe` — `{"package":null,"url":"http://..."}` 经当前链路探测出口 IP（5 s，只接受 http://）；未配置 → 409 `egress.not_configured`，失败 → 502 `egress.probe_failed`。
@@ -99,7 +99,7 @@ D. 安全变更
 - 稳定错误码：`unauthorized`(401)、`forbidden_scope`(403)、`not_found`(404)、`method_not_allowed`(405)、`confirmation_required`(400)、`conflict_duplicate_package`(409)、`config_revision_mismatch`(412)、`precondition_required`(428)、`validation_failed`(422，`details.errors[]` 为字段级原因)、`body_too_large`(413)、`unsupported_media_type`(415)、`rate_limited`(429)、`internal_error`(500)、`upstream_unavailable`(503)、`egress.not_configured`(409)、`egress.probe_failed`(502)。
 - 只有 `retryable:true` 才考虑重试（429/500/503）：指数退避，尊重 `Retry-After`，最多 3 次。
 - 412 必须重读 revision 后重建变更；409 需显式 `allow_duplicate_package=true`；422 按 `path` 修正字段。
-- 排查请求用响应头 `X-Request-Id`（= `error.requestId`）对照 `/data/adb/device_faker/logs/`。
+- 排查请求用响应头 `X-Request-Id`（= `error.requestId`）对照 `/data/adb/devmask/logs/`。
 
 ## 限制
 

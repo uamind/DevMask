@@ -4,7 +4,7 @@
 > 版本：manager 0.2.0（egress 增量：schema v2 + 代理池）
 > 日期：2026-11-24
 > 接口契约：[API.md](API.md)；类型定义：[api-types.ts](api-types.ts)；计划书：[../docs/plans/manager-relay-plan.md](../../docs/plans/manager-relay-plan.md)
-> 上游设备端：`../../docs/API.md`（device_faker_server 1.9.0）
+> 上游设备端：`../../docs/API.md`（devmask_server 1.9.0）
 
 本文冻结 Manager 的 crate 布局、SQLite 表结构、设备 Token 加密、监听与数据目录、静态托管、
 以及与设备端 `/api/v1` 的映射。接口字段以 [API.md](API.md) 为准，本文只解释「怎么实现」。
@@ -54,7 +54,7 @@
 ### 2.3 Crate 布局（冻结）
 
     manager/
-    ├── Cargo.toml                 # package device_faker_manager, bin 同名, edition 2024
+    ├── Cargo.toml                 # package devmask_manager, bin 同名, edition 2024
     ├── README.md                  # 使用说明（t1 更新）
     ├── docs/
     │   ├── API.md                 # Relay 接口契约（t1）
@@ -67,7 +67,7 @@
     │   ├── config.rs              # manager.toml 解析、优先级合并、默认值与校验
     │   ├── state.rs               # AppState、TokenState、并发信号量、设备级串行锁
     │   ├── db.rs                  # 连接、迁移、DAO（devices/device_overviews/jobs/job_results/audit + egress_proxies/device_egress/egress_checks）
-    │   ├── crypto.rs              # AES-256-GCM 加解密、manager.key 读写与权限
+    │   ├── crypto.rs              # AES-256-GCM 加解密、devmask-manager.key 读写与权限
     │   ├── auth.rs                # Bearer 校验、Token 来源解析、POST /token/rotate
     │   ├── error.rs               # ApiError、IntoResponse、错误信封、ValidationError
     │   ├── ids.rs                 # device id slug、job id、request id、RFC 3339 时间
@@ -181,20 +181,20 @@ dev-dependencies：`tower` 0.5（`util`）、`tempfile` 3。
 | --- | --- |
 | 1 | `--data-dir <PATH>` |
 | 2 | `DFM_DATA_DIR` |
-| 3 | 平台默认：Linux / 其它用 `$XDG_DATA_HOME/device-faker-manager`（未设置则 `$HOME/.local/share/device-faker-manager`）；macOS 用 `$HOME/Library/Application Support/device-faker-manager`；Windows 用 `%LOCALAPPDATA%\device-faker-manager` |
+| 3 | 平台默认：Linux / 其它用 `$XDG_DATA_HOME/devmask-manager`（未设置则 `$HOME/.local/share/devmask-manager`）；macOS 用 `$HOME/Library/Application Support/devmask-manager`；Windows 用 `%LOCALAPPDATA%\devmask-manager` |
 
 目录内容：
 
     <data-dir>/
-    ├── manager.db          # SQLite 主库（运行时伴随 manager.db-wal / manager.db-shm）
-    ├── manager.key         # 32 字节 AES-256 密钥，权限 0600，首次启动生成
+    ├── devmask-manager.db          # SQLite 主库（运行时伴随 devmask-manager.db-wal / devmask-manager.db-shm）
+    ├── devmask-manager.key         # 32 字节 AES-256 密钥，权限 0600，首次启动生成
     └── manager.token       # 可选：POST /token/rotate 写入的 Token 明文，权限 0600
 
 - 目录权限始终收敛为 0700（Unix，已存在也会收紧）；数据库文件与 `-wal`/`-shm` 尽力设为 0600。
 - 数据目录只允许本进程读写；日志与错误信息只出现相对文件名，不出现绝对路径。
-- 备份 = 停服后复制 `manager.db` **与** `manager.key`（缺密钥则设备 Token 不可恢复）；
-  运行中备份用 `sqlite3 manager.db ".backup manager.db.bak"`，密钥单独复制。
-- Windows 无 Unix 权限位，`manager.key` / `manager.token` 仅提示用户自行保护，文档注明。
+- 备份 = 停服后复制 `devmask-manager.db` **与** `devmask-manager.key`（缺密钥则设备 Token 不可恢复）；
+  运行中备份用 `sqlite3 devmask-manager.db ".backup devmask-manager.db.bak"`，密钥单独复制。
+- Windows 无 Unix 权限位，`devmask-manager.key` / `manager.token` 仅提示用户自行保护，文档注明。
 
 ### 4.2 配置文件 manager.toml
 
@@ -202,7 +202,7 @@ dev-dependencies：`tower` 0.5（`util`）、`tempfile` 3。
 
     # Manager / Relay 配置（全部可省略）
     bind = "127.0.0.1:8765"
-    static_dir = "/opt/device-faker-manager/webui/dist"
+    static_dir = "/opt/devmask-manager/webui/dist"
     token = "admin123"
     apply_concurrency = 4
     sync_concurrency = 4
@@ -229,7 +229,7 @@ dev-dependencies：`tower` 0.5（`util`）、`tempfile` 3。
 | Token | `--token` | `DFM_TOKEN` | `[manager].token` / `token` | `admin123` |
 | Token 文件 | `--token-file` | `DFM_TOKEN_FILE` | — | `<data-dir>/manager.token` |
 | 配置文件 | `--config` | `DFM_CONFIG` | — | `<data-dir>/manager.toml` |
-| 密钥文件 | `--key-file` | `DFM_KEY_FILE` | — | `<data-dir>/manager.key` |
+| 密钥文件 | `--key-file` | `DFM_KEY_FILE` | — | `<data-dir>/devmask-manager.key` |
 | 日志级别 | `--log-level` | `DFM_LOG` / `RUST_LOG` | — | `info` |
 | 下发并发 | — | `DFM_APPLY_CONCURRENCY` | `apply_concurrency` | 4 |
 | 同步并发 | — | `DFM_SYNC_CONCURRENCY` | `sync_concurrency` | 4 |
@@ -237,7 +237,7 @@ dev-dependencies：`tower` 0.5（`util`）、`tempfile` 3。
 Token 的**完整**优先级（高 → 低）：`--token` → `DFM_TOKEN` → `manager.token` 文件 → `manager.toml` → 默认 `admin123`。
 `--token-file` 只改文件位置，不改变优先级。
 
-其它 CLI：`--help`、`--version`（输出 `device_faker_manager 0.1.0` 后退出）。
+其它 CLI：`--help`、`--version`（输出 `devmask_manager 0.1.0` 后退出）。
 
 ---
 
@@ -427,7 +427,7 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 - v1 即 §5.2 全量 DDL；后续版本只追加 `CREATE/ALTER`，不修改历史迁移。
 - 迁移失败 → 启动失败、不接受请求；错误是 `DbError::Migration`，message 里带
   `op=migrate, current=<from>, target=<to>` 与底层原因（v2 的 DDL + jobs 重建 + 版本行在同一事务内）。
-- 不提供降级迁移；回滚 = 用备份的 `manager.db` + `manager.key` 覆盖。
+- 不提供降级迁移；回滚 = 用备份的 `devmask-manager.db` + `devmask-manager.key` 覆盖。
 - **v2 的作业顺序（冻结）**：
 
       1) PRAGMA foreign_keys = OFF;         -- 连接级；必须先关
@@ -467,7 +467,7 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 
 ### 6.1 密钥文件
 
-- 路径：`<data-dir>/manager.key`（可用 `--key-file` / `DFM_KEY_FILE` 覆盖）。
+- 路径：`<data-dir>/devmask-manager.key`（可用 `--key-file` / `DFM_KEY_FILE` 覆盖）。
 - 内容：**恰好 32 字节原始二进制**（AES-256 密钥），不是 hex / base64。
 - 首次启动：`OsRng` 生成 32 字节，`OpenOptions::new().create_new(true).mode(0o600)` 写入并 `fsync`；
   已存在则读取，长度不是 32 → 启动失败（明确提示「密钥文件损坏，请恢复备份」）。
@@ -481,7 +481,7 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 | 项 | 值 |
 | --- | --- |
 | 算法 | AES-256-GCM |
-| 密钥 | `manager.key` 的 32 字节 |
+| 密钥 | `devmask-manager.key` 的 32 字节 |
 | nonce | 每次加密随机 12 字节（`OsRng`），**绝不重用** |
 | AAD（设备 Token） | 设备 id 的 UTF-8 字节（绑定行，防止密文搬迁） |
 | AAD（egress 凭据） | `"egress_proxy:" ‖ proxy_id ‖ ":" ‖ field`，`field ∈ {username, password}`：在绑定 proxy id 之上再绑字段名，防止两列密文互换后仍能解密 |
@@ -503,10 +503,10 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 - 不把 Token 写入 `audit.detail`；`PATCH` 审计只记录字段名。
 - 异常路径（reqwest 错误、设备 401）不得把请求头拼进 message。
 - WebUI 只在添加设备表单里**输入** Token，从不读取展示；列表 / 详情无 Token 字段。
-- egress 代理凭据沿用同一把 `manager.key`：DTO **没有** `username` / `password` 字段（唯一信号 `hasCredentials`），
+- egress 代理凭据沿用同一把 `devmask-manager.key`：DTO **没有** `username` / `password` 字段（唯一信号 `hasCredentials`），
   审计 `detail` 只允许 `{proxyId, name, deviceId, app, changed}`，日志不打印解密后的值，错误 message 不回显凭据。
-- 设备内认证中继（relay，设备端 v1.11.0）：`DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`（`active = enabled && 至少一个 listener listening`，来源设备 `GET /egress` 的 `relay`；设备离线 / 旧设备为 `null`）；`/devices/{id}/egress` 的 `deviceState` **原样透传** `relay` 与 `proxies[].localPort` / `relayActive`，不重算。
-- Manager 侧探测自 v1.11.0 开启 reqwest 的 `socks` feature：`socks5` 代理用 `socks5h://`（DNS 交给代理解析）+ RFC 1929 真连，不再返回 `unsupported_proxy_type`。
+- 设备内认证中继（relay，设备端 v0.0.1）：`DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`（`active = enabled && 至少一个 listener listening`，来源设备 `GET /egress` 的 `relay`；设备离线 / 旧设备为 `null`）；`/devices/{id}/egress` 的 `deviceState` **原样透传** `relay` 与 `proxies[].localPort` / `relayActive`，不重算。
+- Manager 侧探测自 v0.0.1 开启 reqwest 的 `socks` feature：`socks5` 代理用 `socks5h://`（DNS 交给代理解析）+ RFC 1929 真连，不再返回 `unsupported_proxy_type`。
 
 密钥丢失 = 所有设备 Token 不可解密：只能删除并重新添加设备（文档明示，不做「找回」）。
 
@@ -574,7 +574,7 @@ v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHEC
 
 ### 8.2 请求构造
 
-- 单例 `reqwest::Client`：`connect_timeout(3s)`、`pool_idle_timeout(90s)`、`user_agent("device-faker-manager/0.1.0")`、
+- 单例 `reqwest::Client`：`connect_timeout(3s)`、`pool_idle_timeout(90s)`、`user_agent("devmask-manager/0.1.0")`、
   `redirect(Policy::none())`（避免设备误配跳转把 Token 带到别的主机）。
 - 每次请求设置 `timeout`：读 10 s、写 15 s、restart 10 s（来自配置，见 §4.2）。
 - 请求头固定：`Authorization: Bearer <device token>`、`Accept: application/json`、
@@ -855,11 +855,11 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
   回查 `find_job_by_idempotency` 并重放，回查不到才 500。
 - **egress 专属结果码**：`egress_unsupported`（旧设备无 `/egress`）、`egress_not_configured`
   （设备 409 `egress.not_configured`）、`decrypt_failed`（代理凭据解密失败，`details.op="decrypt"`，
-  不是 `device_error`）、`device_token_invalid`（设备 Token 解密失败，message 提示 `manager.key` 可能已变更）。
+  不是 `device_error`）、`device_token_invalid`（设备 Token 解密失败，message 提示 `devmask-manager.key` 可能已变更）。
 - **探测结果写入失败不静默**：`egress_checks` 写失败时 job 结果追加 warning `egress_check_not_recorded`；
   `POST /egress-proxies/{id}/probe` 的响应体同样带该 warning。
 - **egress_checks 清理**：`prune()` 每个 `(device_id, app)` 只保留最近 500 条（`checked_at DESC, id DESC`）。
-- **Manager 侧探测自 v1.11.0 支持 `http` 与 `socks5`**：`socks5` 用 `socks5h://` + RFC 1929 真连（reqwest `socks` feature），失败同样落一条 `ok=0`
+- **Manager 侧探测自 v0.0.1 支持 `http` 与 `socks5`**：`socks5` 用 `socks5h://` + RFC 1929 真连（reqwest `socks` feature），失败同样落一条 `ok=0`
   记录（reqwest 未启用 socks feature）；probe URL 必须是 `http://`。
 
 ---
@@ -901,7 +901,7 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 
 - `GET /` 返回 200 `text/html`：
 
-      <h1>Device Faker Manager</h1>
+      <h1>DevMask Manager</h1>
       <p>WebUI 尚未构建。运行：cd manager/webui && npm install && npm run build</p>
 
 - 其它静态路径 404 `text/plain`；API 完全可用（便于后端联调与集成测试）。
@@ -926,7 +926,7 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 - 初始化：`tracing_subscriber::fmt()` + `EnvFilter`；默认 `info`，`DFM_LOG=debug`
   （或 `--log-level`）打开详细日志。
 - 启动日志：`version`、`bind`、`data_dir`、`token_source`、`address`；静态托管命中 / 未命中各一行；
-  首次生成 `manager.key` 时一行 info。
+  首次生成 `devmask-manager.key` 时一行 info。
 - 请求日志由 `tower_http::trace::TraceLayer` 输出，默认级别 `debug`（`DFM_LOG=debug` 可见），
   字段含 method / path / status / latency。
 - 使用默认 Token 时打印一行 warn（唯一一次出现默认值）：
@@ -939,7 +939,7 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 | `Authorization` 请求头 | 永不记录 |
 | 设备 Token / `token_cipher` | 永不记录；`Zeroizing` 清零 |
 | 请求 / 响应体 | 不记录（debug 也不记录） |
-| 绝对路径 | API 响应与错误只出现相对文件名（`manager.db`）；启动 / 文件读写日志会打印完整路径 |
+| 绝对路径 | API 响应与错误只出现相对文件名（`devmask-manager.db`）；启动 / 文件读写日志会打印完整路径 |
 | 设备 401 响应体 | 只记录 `code`（如 `unauthorized`），不记录设备 message 与响应体 |
 
 ### 12.3 审计
@@ -1074,9 +1074,9 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 ### 14.3 命令
 
     cargo fmt --check
-    cargo test -p device_faker_manager
-    cargo test -p device_faker_manager --test e2e_flow
-    cargo clippy -p device_faker_manager --all-targets -- -D warnings
+    cargo test -p devmask_manager
+    cargo test -p devmask_manager --test e2e_flow
+    cargo clippy -p devmask_manager --all-targets -- -D warnings
 
 WebUI（frontend-dev / test-verifier）：
 
@@ -1097,28 +1097,28 @@ WebUI（frontend-dev / test-verifier）：
 ### 15.1 构建
 
     # 开发
-    cargo build -p device_faker_manager
+    cargo build -p devmask_manager
     # 发布（工作区 profile：lto=fat、strip、panic=abort）
-    cargo build -p device_faker_manager --release
+    cargo build -p devmask_manager --release
     # WebUI
     cd manager/webui && npm install && npm run build
 
-产物：`target/release/device_faker_manager`（单文件）+ `manager/webui/dist`。
+产物：`target/release/devmask_manager`（单文件）+ `manager/webui/dist`。
 
 ### 15.2 运行
 
     # 默认：127.0.0.1:8765，数据目录按平台默认，Token=admin123
-    ./device_faker_manager
+    ./devmask_manager
 
     # 显式指定
-    ./device_faker_manager \
+    ./devmask_manager \
       --bind 127.0.0.1:8765 \
-      --data-dir ~/.local/share/device-faker-manager \
+      --data-dir ~/.local/share/devmask-manager \
       --static-dir manager/webui/dist \
       --token 'S3cure-manager-token'
 
     # 局域网访问（必须换 Token，否则拒绝启动）
-    DFM_TOKEN='S3cure-manager-token' ./device_faker_manager --bind 0.0.0.0:8765
+    DFM_TOKEN='S3cure-manager-token' ./devmask_manager --bind 0.0.0.0:8765
 
 完整步骤（WebUI 构建、数据目录、Token、Mock 设备、端到端冒烟、常见错误）见
 [RUN.md](RUN.md)。
@@ -1128,16 +1128,16 @@ WebUI（frontend-dev / test-verifier）：
 systemd（Linux）：
 
     [Unit]
-    Description=Device Faker Manager
+    Description=DevMask Manager
     After=network-online.target
 
     [Service]
-    ExecStart=/opt/device-faker-manager/device_faker_manager --data-dir /var/lib/device-faker-manager --static-dir /opt/device-faker-manager/webui/dist
+    ExecStart=/opt/devmask-manager/devmask_manager --data-dir /var/lib/devmask-manager --static-dir /opt/devmask-manager/webui/dist
     Environment=DFM_TOKEN=__REPLACE__
-    User=device-faker
+    User=devmask
     NoNewPrivileges=true
     ProtectSystem=strict
-    ReadWritePaths=/var/lib/device-faker-manager
+    ReadWritePaths=/var/lib/devmask-manager
     Restart=on-failure
 
     [Install]
@@ -1147,7 +1147,7 @@ macOS launchd 与 Windows 服务只写 README 的等价说明（本增量不打�
 
 ### 15.4 升级与备份
 
-1. 停服 → 备份 `manager.db` + `manager.key`（+ `manager.token`）。
+1. 停服 → 备份 `devmask-manager.db` + `devmask-manager.key`（+ `manager.token`）。
 2. 替换二进制与 `webui/dist`。
 3. 启动 → 自动迁移（只前进）→ 检查 `/healthz` 的 `db.schemaVersion`。
 4. 回滚 = 恢复备份文件 + 旧二进制。
@@ -1201,4 +1201,4 @@ macOS launchd 与 Windows 服务只写 README 的等价说明（本增量不打�
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

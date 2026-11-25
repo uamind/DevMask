@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 前台观察者（UidObserver）：companion 内嵌的"事件驱动前台真值"。
 //!
@@ -228,7 +228,7 @@ fn register_observer(sink: FgSink) -> anyhow::Result<()> {
         // 会丢掉非配置 app 首次进入 TOP 的事件，导致前台门控不恢复 density/props。
         // 正确性优先：全量回调 + on_top_change 的 proc_state==TOP 判断。
         -1,
-        "device_faker",
+        "devmask",
     )?;
 
     // 启动 binder 线程池接收 onUidStateChanged/onUidGone 回调。

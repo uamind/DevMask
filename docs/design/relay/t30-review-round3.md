@@ -2,7 +2,7 @@
 
 - 对象：t29 修复 + t31 文档 + t28 收尾；结论：**needs_revision**（1 high / 1 medium / 2 low）。
 - 第二轮 high 均已修复并有可失败用例；本轮唯一 high 是 t29 新引入的 PUT 顺序问题：**重建前先把 settings 写成直连**。
-- 验证：cargo test -p device_faker_server 连跑 3 次全 target ok（lib 184、relay_api 29）、cargo test -p device_faker_module_tests 60 passed。
+- 验证：cargo test -p devmask_server 连跑 3 次全 target ok（lib 184、relay_api 29）、cargo test -p devmask_module_tests 60 passed。
 
 ## 1. 第二轮 findings 复核
 
@@ -68,8 +68,8 @@
 
 ## 4. 已执行核对
 
-    cargo test -p device_faker_server            # 连跑 3 次全 target ok（lib 184、relay_api 29）
-    cargo test -p device_faker_module_tests      # 60 passed
+    cargo test -p devmask_server            # 连跑 3 次全 target ok（lib 184、relay_api 29）
+    cargo test -p devmask_module_tests      # 60 passed
     grep -n 'settings 的读回/补写与文件是否变化无关' server/src/api/egress.rs   # :1037 首次 apply
     grep -n 'relay 重建完再补一次 settings' server/src/api/egress.rs            # :1086 第二次 apply
     grep -n 'device_socks5_warning' -A 12 server/src/api/egress.rs              # 条件含 relay_enabled && has_credentials

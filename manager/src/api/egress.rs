@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口代理（egress）：代理池 CRUD、设备绑定、Manager 侧探测与批量下发。
 //!
@@ -1557,7 +1557,7 @@ pub async fn get_device_egress(
             warnings.push(Warning::new(
                 "device_token_invalid",
                 format!(
-                    "设备 Token 解密失败（manager.key 可能已变更，需要重新登记设备的 Token）：{error}"
+                    "设备 Token 解密失败（devmask-manager.key 可能已变更，需要重新登记设备的 Token）：{error}"
                 ),
                 json!({
                     "deviceId": device_id,

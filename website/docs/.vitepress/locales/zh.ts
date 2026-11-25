@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { defineConfig } from 'vitepress'
 
@@ -25,8 +25,8 @@ export default defineConfig({
     darkModeSwitchTitle: '切换到深色模式',
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/Seyud/device_faker' },
-      { icon: 'telegram', link: 'https://t.me/device_faker' }
+      { icon: 'github', link: 'https://github.com/uamind/DevMask' },
+      { icon: 'telegram', link: 'https://t.me/devmask' }
     ],
 
     footer: {
@@ -35,7 +35,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/Seyud/device_faker/edit/main/website/docs/:path',
+      pattern: 'https://github.com/uamind/DevMask/edit/main/website/docs/:path',
       text: '在 GitHub 上编辑此页'
     },
 
@@ -73,15 +73,15 @@ function nav() {
     {
       text: '社区',
       items: [
-        { text: '💬 Telegram 群组', link: 'https://t.me/device_faker' },
+        { text: '💬 Telegram 群组', link: 'https://t.me/devmask' },
         {
           text: '🐧 QQ 群：854188252',
           link: 'https://qun.qq.com/universal-share/share?ac=1&authKey=ls4nlfcsF%2Bxp5SPnVsXRgpbeV1axPZb%2FmJCMXms6ZCHjgAwvOyl1LV%2BDNVL1btgL&busi_data=eyJncm91cENvZGUiOiI4NTQxODgyNTIiLCJ0b2tlbiI6IlE1WVVyZTZxUXVjZUtGUUxWSGFmbzkvMEd3UWNRSiszdklTZDhHejU0RDRyT0lWRTFqS3d4UGJSM1ltaXpkS3MiLCJ1aW4iOiIxMTA1NzgzMDMzIn0%3D&data=IbvhTKt9HwCSsCsl_610-rQ8p6H2NgLmxhEKkMcn-BMWPb86jygWBZJfWLQGm7J8LwpVV2yhPafxTMXYGkjRVA&svctype=4&tempid=h5_group_info'
         },
-        { text: '📦 模板贡献仓库', link: 'https://github.com/Seyud/device_faker_config' }
+        { text: '📦 模板贡献仓库', link: 'https://github.com/uamind/DevMask_config' }
       ]
     },
-    { text: '下载', link: 'https://github.com/Seyud/device_faker/releases/latest' }
+    { text: '下载', link: 'https://github.com/uamind/DevMask/releases/latest' }
   ]
 }
 

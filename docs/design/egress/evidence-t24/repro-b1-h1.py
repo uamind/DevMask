@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# t24 复验（B-1 / H-1）：用真实 device_faker_server 证明
+# t24 复验（B-1 / H-1）：用真实 devmask_server 证明
 #   1) 仅改 probeUrl 的 dry_run 响应里没有既有密码子串，且**上下文行**里的凭据被替换为 <redacted>；
 #   2) config.toml 的 diff 仍然正常输出（脱敏没有把 config 段吃掉）；
 #   3) 轮换密码的 diff 里没有新旧密码（两条 password 行都脱敏）；
@@ -7,7 +7,7 @@
 #      （settings 在 host 上不可用，「settings get 不变」由 egress_api 的集成测试断言）
 #
 # 用法：python3 docs/design/egress/evidence-t24/repro-b1-h1.py
-# 依赖：target/debug/device_faker_server（host 可跑；settings 缺失 → 写路径 503，但文件已落盘）。
+# 依赖：target/debug/devmask_server（host 可跑；settings 缺失 → 写路径 503，但文件已落盘）。
 
 import json
 import os
@@ -68,7 +68,7 @@ def main():
     os.makedirs(os.path.join(DATA, "config"), exist_ok=True)
     log = open("/tmp/t24-device.log", "w+", encoding="utf-8")
     proc = subprocess.Popen(
-        [os.path.join(ROOT, "target/debug/device_faker_server"),
+        [os.path.join(ROOT, "target/debug/devmask_server"),
          "--config-path", CONFIG, "--bind", f"127.0.0.1:{PORT}",
          "--server-config", os.path.join(DATA, "config", "server.toml")],
         cwd=ROOT, stdout=subprocess.DEVNULL, stderr=log,

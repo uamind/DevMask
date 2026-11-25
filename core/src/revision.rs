@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! revision、原子写、flock 与备份轮转。
 //!
 //! 设备端约束（docs/dev/server-api-plan.md 8.3 / 9.2）：
 //!
-//! - 配置文件 `/data/adb/device_faker/config/config.toml` 必须是 0644，
+//! - 配置文件 `/data/adb/devmask/config/config.toml` 必须是 0644，
 //!   否则 zygisk 模块与 companion 可能读不到；
 //! - 写配置必须**原子**：先写同目录临时文件、`fsync`、`rename` 覆盖、再 `fsync` 目录，
 //!   避免断电/并发读到半截 TOML；
@@ -34,7 +34,7 @@ pub const BACKUP_FILE_MODE: u32 = 0o600;
 /// 锁文件权限。
 pub const LOCK_FILE_MODE: u32 = 0o600;
 /// 临时文件后缀前缀（便于排障与清理）。
-const TEMP_PREFIX: &str = ".device_faker.tmp";
+const TEMP_PREFIX: &str = ".devmask.tmp";
 /// 备份文件后缀。
 const BACKUP_SUFFIX: &str = ".bak";
 

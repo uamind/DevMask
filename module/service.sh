@@ -1,29 +1,29 @@
 #!/system/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 #
-# device_faker_server 开机启动脚本。
+# devmask_server 开机启动脚本。
 #
 # Magisk / KernelSU 在 late_start service 阶段以 root 执行本脚本（每次开机一次）：
 #   1. 等 sys.boot_completed（最多 10 分钟；超时也照常启动，只记一行日志）；
 #   2. 单实例：守护循环已经在跑就直接退出，不重复拉起；
-#   3. 拉起 bin/device_faker_server，进程退出后 5 秒重新拉起；
-#   4. 日志写 /data/adb/device_faker/logs/server.log（0600，超过 1 MiB 轮转成 .1）；
-#   5. pid 落 /data/adb/device_faker/server.pid（server 进程）与
+#   3. 拉起 bin/devmask_server，进程退出后 5 秒重新拉起；
+#   4. 日志写 /data/adb/devmask/logs/server.log（0600，超过 1 MiB 轮转成 .1）；
+#   5. pid 落 /data/adb/devmask/server.pid（server 进程）与
 #      server.supervisor.pid（守护循环）。
 #
 # 手动用法（需要 root）：
-#   sh /data/adb/modules/device_faker/service.sh            # 等价 start
-#   sh /data/adb/modules/device_faker/service.sh start
-#   sh /data/adb/modules/device_faker/service.sh stop
-#   sh /data/adb/modules/device_faker/service.sh restart
-#   sh /data/adb/modules/device_faker/service.sh status
+#   sh /data/adb/modules/devmask/service.sh            # 等价 start
+#   sh /data/adb/modules/devmask/service.sh start
+#   sh /data/adb/modules/devmask/service.sh stop
+#   sh /data/adb/modules/devmask/service.sh restart
+#   sh /data/adb/modules/devmask/service.sh status
 
 MODDIR=${0%/*}
 [ -d "$MODDIR" ] || MODDIR=$(pwd)
 
-RUNTIME_DIR=/data/adb/device_faker
+RUNTIME_DIR=/data/adb/devmask
 CONFIG_DIR=$RUNTIME_DIR/config
 LOG_DIR=$RUNTIME_DIR/logs
 BACKUP_DIR=$CONFIG_DIR/backups
@@ -34,7 +34,7 @@ SUPERVISOR_PID_FILE=$RUNTIME_DIR/server.supervisor.pid
 CONFIG_FILE=$CONFIG_DIR/config.toml
 SERVER_CONFIG=$CONFIG_DIR/server.toml
 DEFAULT_SERVER_CONFIG=$MODDIR/server.default.toml
-SERVER_BIN=$MODDIR/bin/device_faker_server
+SERVER_BIN=$MODDIR/bin/devmask_server
 STATIC_DIR=$MODDIR/webroot
 
 # 崩溃重启间隔（秒）与单个日志文件上限（字节）。
@@ -151,14 +151,14 @@ clean_stale_pid() {
     return 0
 }
 # relay 的三条 iptables 链（与 server/src/relay/firewall.rs 的常量同名，改名要两边一起改）。
-RELAY_CHAIN=DF_EGRESS_RLY
-RELAY_ALLOW_CHAIN=DF_EGRESS_RLY_ALLOW
-RELAY_DENY_CHAIN=DF_EGRESS_RLY_DENY
+RELAY_CHAIN=DM_EGRESS_RLY
+RELAY_ALLOW_CHAIN=DM_EGRESS_RLY_ALLOW
+RELAY_DENY_CHAIN=DM_EGRESS_RLY_DENY
 
 # 为什么要清 relay 防火墙链：
-# 中继只放行 127.0.0.1:17800-17899 上的授权 uid，其余流量落到 DF_EGRESS_RLY_DENY 的
+# 中继只放行 127.0.0.1:17800-17899 上的授权 uid，其余流量落到 DM_EGRESS_RLY_DENY 的
 # REJECT。卸载/停服后若把规则留在设备上，这段端口会**永久不可用**（下一次装回来的中继
-# 自己也会被自己的旧规则挡住），而且 OUTPUT 仍有 -j DF_EGRESS_RLY 跳转时，任何连这些
+# 自己也会被自己的旧规则挡住），而且 OUTPUT 仍有 -j DM_EGRESS_RLY 跳转时，任何连这些
 # 端口的新连接都会被内核直接拒绝——看不到监听进程，现象是「端口莫名 rejection」。
 #
 # 顺序固定：先摘 OUTPUT 跳转（此后新连接不进链）→ 再 -F 叶子链/入口链 → 最后 -X 删链。
@@ -213,7 +213,7 @@ status_server() {
     fi
 
     server_pid=$(read_pid "$PID_FILE")
-    if pid_alive "$server_pid" && pid_is_ours "$server_pid" "device_faker_server"; then
+    if pid_alive "$server_pid" && pid_is_ours "$server_pid" "devmask_server"; then
         echo "server: running (pid=$server_pid)"
     elif pid_alive "$server_pid"; then
         echo "server: stale pid $server_pid（重启前的旧值，start 时会清理）"
@@ -238,13 +238,13 @@ stop_server() {
     sleep 1
 
     server_pid=$(read_pid "$PID_FILE")
-    if pid_alive "$server_pid" && pid_is_ours "$server_pid" "device_faker_server"; then
+    if pid_alive "$server_pid" && pid_is_ours "$server_pid" "devmask_server"; then
         kill "$server_pid" 2>/dev/null
         sleep 1
         if pid_alive "$server_pid"; then
             kill -9 "$server_pid" 2>/dev/null
         fi
-        log "已停止 device_faker_server（pid=$server_pid）"
+        log "已停止 devmask_server（pid=$server_pid）"
     elif pid_alive "$server_pid"; then
         log "stale server pid=$server_pid cleaned（不属于本模块，不发送信号）"
     fi
@@ -259,7 +259,7 @@ start_server() {
     # 重启（reboot 或模块重新启用）后 pid 文件往往还是上一轮的值，pid 复用会让
     # kill -0 假阳性 → 必须先校验归属，陈旧就清理并照常启动（QA t20 实测的 bug）。
     clean_stale_pid "$SUPERVISOR_PID_FILE" "service.sh" "supervisor"
-    clean_stale_pid "$PID_FILE" "device_faker_server" "server"
+    clean_stale_pid "$PID_FILE" "devmask_server" "server"
 
     supervisor_pid=$(read_pid "$SUPERVISOR_PID_FILE")
     if pid_alive "$supervisor_pid"; then
@@ -283,13 +283,13 @@ start_server() {
                 >> "$LOG_FILE" 2>&1 &
             server_pid=$!
             printf '%s\n' "$server_pid" > "$PID_FILE"
-            log "device_faker_server 已启动（pid=$server_pid，bind 见 $SERVER_CONFIG）"
+            log "devmask_server 已启动（pid=$server_pid，bind 见 $SERVER_CONFIG）"
 
             wait "$server_pid"
             code=$?
             server_pid=0
             rm -f "$PID_FILE"
-            log "device_faker_server 退出（status=$code），${RESTART_DELAY} 秒后重启"
+            log "devmask_server 退出（status=$code），${RESTART_DELAY} 秒后重启"
             sleep "$RESTART_DELAY"
         done
     ) >> "$LOG_FILE" 2>&1 &
@@ -307,7 +307,7 @@ case "$ACTION" in
         # 禁用模块不会跑 uninstall.sh，但会跑本脚本的 stop，所以这里必须一起清，
         # 否则 17800-17899 会被残留的 REJECT 规则永久挡住。
         clear_relay_firewall
-        log "stop: device_faker_server 已停止，relay 防火墙链已清理"
+        log "stop: devmask_server 已停止，relay 防火墙链已清理"
         exit 0
         ;;
     status)

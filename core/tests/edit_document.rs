@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 文档级编辑回归：注释、空行、键顺序、未知字段必须原样保留；
 //! 重复执行同一操作必须是无操作（幂等）。
 
-use device_faker_core::config::{AppConfig, Config, DeviceTemplate};
-use device_faker_core::edit::{
+use devmask_core::config::{AppConfig, Config, DeviceTemplate};
+use devmask_core::edit::{
     EditError, bind_package, delete_app, delete_template, parse_document, set_app, unbind_package,
     upsert_template,
 };

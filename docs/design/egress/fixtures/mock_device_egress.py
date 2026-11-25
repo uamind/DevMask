@@ -228,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(
                     200,
                     {
-                        "module": {"id": "device_faker", "version": "v1.10.0", "versionCode": 20261201},
+                        "module": {"id": "devmask", "version": "v1.10.0", "versionCode": 20261201},
                         "device": DEVICE,
                         "server": {
                             "version": "1.10.0",

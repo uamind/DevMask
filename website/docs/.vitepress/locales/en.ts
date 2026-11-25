@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { defineConfig } from 'vitepress'
 
@@ -25,8 +25,8 @@ export default defineConfig({
     darkModeSwitchTitle: 'Switch to dark theme',
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/Seyud/device_faker' },
-      { icon: 'telegram', link: 'https://t.me/device_faker' }
+      { icon: 'github', link: 'https://github.com/uamind/DevMask' },
+      { icon: 'telegram', link: 'https://t.me/devmask' }
     ],
 
     footer: {
@@ -35,7 +35,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/Seyud/device_faker/edit/main/website/docs/:path',
+      pattern: 'https://github.com/uamind/DevMask/edit/main/website/docs/:path',
       text: 'Edit this page on GitHub'
     },
 
@@ -56,11 +56,11 @@ function nav() {
     {
       text: 'Community',
       items: [
-        { text: '💬 Telegram Group', link: 'https://t.me/device_faker' },
-        { text: '📦 Template Repository', link: 'https://github.com/Seyud/device_faker_config' }
+        { text: '💬 Telegram Group', link: 'https://t.me/devmask' },
+        { text: '📦 Template Repository', link: 'https://github.com/uamind/DevMask_config' }
       ]
     },
-    { text: 'Downloads', link: 'https://github.com/Seyud/device_faker/releases/latest' }
+    { text: 'Downloads', link: 'https://github.com/uamind/DevMask/releases/latest' }
   ]
 }
 

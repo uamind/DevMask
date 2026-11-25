@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 """
-Device Faker WebUI 构建脚本
+DevMask WebUI 构建脚本
 这个脚本自动化了 Vue.js 项目的常见构建任务
 """
 
@@ -406,7 +406,7 @@ class WebUIBuilder:
         return f"{total_size:.1f} TB"
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description="Device Faker WebUI 构建脚本")
+    parser = argparse.ArgumentParser(description="DevMask WebUI 构建脚本")
     parser.add_argument(
         "command",
         nargs='?',  # 可选参数

@@ -1,7 +1,7 @@
 # 出口代理（Egress）契约与数据模型冻结
 
 > 文档版本：**egress contract v1**（第一增量冻结）
-> 状态：**冻结**。本文件是设备端 `device_faker_server`、Zygisk 注入、Manager、双侧 WebUI 与验收脚本的唯一口径。
+> 状态：**冻结**。本文件是设备端 `devmask_server`、Zygisk 注入、Manager、双侧 WebUI 与验收脚本的唯一口径。
 > 日期：2026-11-24
 > 上游依据：[proxy-support-plan.md](proxy-support-plan.md)（需求与实测记录）、[../API.md](../API.md) §2.2 / §2.5 / §7 / §9、[../../manager/docs/API.md](../../manager/docs/API.md) §2.2 / §2.6 / §2.7 / §2.8 / §5.7 / §7、[../../manager/docs/ARCH.md](../../manager/docs/ARCH.md) §5 / §6
 > 实现落点：`server/src/`（新增 `egress` 模块）、`core/src/`（配置模型）、`manager/src/`、`webui/src/`、`manager/webui/src/`
@@ -36,7 +36,7 @@
 | `egress.toml` / `config.toml` 的键 | **snake_case**，与文件同名同义 | `timeout_seconds`、`fail_open`、`default`、`egress` |
 | 查询参数 | **snake_case** | `confirm`、`dry_run`、`diff`、`limit`、`cursor`、`probe` |
 | 路径参数 | 原文，必要时百分号编码 | `egp_3f1c…`、`pixel-9`、`com.example.app` |
-| 请求 / 响应头 | 标准 HTTP 大小写 | `If-Match`、`X-DF-Egress-Revision`、`X-Request-Id` |
+| 请求 / 响应头 | 标准 HTTP 大小写 | `If-Match`、`X-DM-Egress-Revision`、`X-Request-Id` |
 
 **新增规则（egress 专属，只此一条）**：设备端 egress 领域的**错误码**用点分命名空间 `egress.*`（只有 `egress.not_configured`、`egress.probe_failed` 两个），其余错误码保持既有扁平码；**警告码**一律扁平（`egress_*`），与既有 8 个警告码同风格。两处不同写法是**刻意**的：错误码表要向需求文档对齐，警告码表要与既有表同构。
 
@@ -88,8 +88,8 @@ Manager `/relay/api/v1`（本增量 **+9 个方法级操作 / +5 个路径**，�
 - 认证与控制面约定沿用 [docs/API.md](../API.md) §3：`Authorization: Bearer <token>`；作用域按总览表；不足 → `403 forbidden_scope`。
 - 所有响应带 `Cache-Control: no-store`、`X-Request-Id`。
 - 4xx/5xx 一律使用统一错误信封（[docs/API.md](../API.md) §7.1），不新增信封字段。
-- **响应头规则（重要，防跨端点污染）**：egress 端点**不设置** `X-DF-Revision`，也**不设置** `ETag`。egress revision 只出现在响应体的 `revision` 字段，并以附加头 `X-DF-Egress-Revision: <64 位小写十六进制>` 出现。
-  - 理由：既有 WebUI 传输层会在**任何**响应上读取 `X-DF-Revision` / `ETag` 并覆盖本地缓存的 config revision（`webui/src/api/*` 的统一拦截器）。若 egress 端点复用这两个头，一次 `GET /egress` 就会把 config revision 覆盖成 egress revision，下一次 `PUT /config` 必然 412。属于必须避免的集成事故。
+- **响应头规则（重要，防跨端点污染）**：egress 端点**不设置** `X-DM-Revision`，也**不设置** `ETag`。egress revision 只出现在响应体的 `revision` 字段，并以附加头 `X-DM-Egress-Revision: <64 位小写十六进制>` 出现。
+  - 理由：既有 WebUI 传输层会在**任何**响应上读取 `X-DM-Revision` / `ETag` 并覆盖本地缓存的 config revision（`webui/src/api/*` 的统一拦截器）。若 egress 端点复用这两个头，一次 `GET /egress` 就会把 config revision 覆盖成 egress revision，下一次 `PUT /config` 必然 412。属于必须避免的集成事故。
 - 写端点（PUT/DELETE）的 `If-Match` 比较对象是 **egress revision**（§1.2），不是 config revision。
 
 ### 1.2 egress revision 的定义
@@ -473,10 +473,10 @@ egress 状态跨两个文件（`config.toml` 的 `[egress]` + `[[apps]].egress`�
 
 ### 2.1 `egress.toml` 完整结构
 
-路径：`/data/adb/device_faker/config/egress.toml`（与 `config.toml` 同目录；目录权限 0700 root）。
+路径：`/data/adb/devmask/config/egress.toml`（与 `config.toml` 同目录；目录权限 0700 root）。
 
     # egress.toml —— 代理定义与探测策略。权限 0600，进不了 API 明文、进不了导出。
-    # 本文件由 device_faker_server 维护；手工编辑后重启服务生效。
+    # 本文件由 devmask_server 维护；手工编辑后重启服务生效。
     version = 1
 
     [proxies.us_la_01]
@@ -515,14 +515,14 @@ egress 状态跨两个文件（`config.toml` 的 `[egress]` + `[[apps]].egress`�
 
 | 项 | 值 | 说明 |
 | --- | --- | --- |
-| 目录 | `/data/adb/device_faker/config`：`0700 root` | 已存在；本增量不改 |
+| 目录 | `/data/adb/devmask/config`：`0700 root` | 已存在；本增量不改 |
 | 文件 | `egress.toml`：**`0600 root`** | 与 `config.toml` 的 0644 **刻意不同**（§7.2） |
 | 创建 | 先以 `0600` 创建临时文件（`O_CREAT\|O_EXCL, 0o600`），再写入 | 避免「先 0644 后 chmod」的窗口 |
 | 落盘 | `write → fsync(file) → rename → fsync(dir)` | 与 `config.toml` 写路径同构；永不出现半截文件 |
-| 读时自愈 | 若 `mode & 0o077 != 0` → `chmod 0600` + 日志 warn + 响应 warning `egress_perm_fixed` | 参照 `manager.key` 的自愈做法 |
-| 备份 | `/data/adb/device_faker/config/backups/egress.toml.<YYYYMMDDTHHMMSS.nnnnnnnnnZ>-<revision 前 8 位>.bak`（例 `egress.toml.20261201T030000.987654321Z-5b1f2c3d.bak`），权限 `0600`，保留最近 10 份；响应里的 `backupId` 就是中间那段 `<stamp>-<rev8>` | 备份里也有密码，因此同样 0600 |
+| 读时自愈 | 若 `mode & 0o077 != 0` → `chmod 0600` + 日志 warn + 响应 warning `egress_perm_fixed` | 参照 `devmask-manager.key` 的自愈做法 |
+| 备份 | `/data/adb/devmask/config/backups/egress.toml.<YYYYMMDDTHHMMSS.nnnnnnnnnZ>-<revision 前 8 位>.bak`（例 `egress.toml.20261201T030000.987654321Z-5b1f2c3d.bak`），权限 `0600`，保留最近 10 份；响应里的 `backupId` 就是中间那段 `<stamp>-<rev8>` | 备份里也有密码，因此同样 0600 |
 | 导出 | **不进** `GET /config?format=toml`、**不进** WebUI 导出、**不进**任何 API 明文 | §7.2 |
-| 卸载 | `uninstall.sh` 在停服后执行 `settings put global http_proxy :0`，再 `rm -rf /data/adb/device_faker` | 见 §3.2 |
+| 卸载 | `uninstall.sh` 在停服后执行 `settings put global http_proxy :0`，再 `rm -rf /data/adb/devmask` | 见 §3.2 |
 | 模块禁用 | 只在服务运行时才能清 settings；因此**禁用前必须先在 WebUI/API 执行 `DELETE /egress`**（文档写入 CONFIG.md，t8） | 已知限制 |
 
 ### 2.3 `config.toml` 的 `[egress]` 段
@@ -618,7 +618,7 @@ egress  = "__DIRECT__"      # 强制直连，不受设备级影响
 | 可选项 | `settings put global global_http_proxy_exclusion_list "<a,b,c>"`（`exclusionList` 非空时） |
 | 生效范围 | 尊重系统代理的应用（OkHttp / HttpURLConnection / WebView / 多数 SDK 默认链路）；**仅 HTTP/HTTPS CONNECT，不支持 SOCKS5** |
 | 生效时机 | 新建立的连接；已建立的连接需应用重连（§3.7） |
-| 执行身份 | 服务进程 uid 0 / 域 `u:r:ksu:s0`，与 `device_faker_server` 同域同 uid，可直接 exec `settings`（Pixel 9 已实测） |
+| 执行身份 | 服务进程 uid 0 / 域 `u:r:ksu:s0`，与 `devmask_server` 同域同 uid，可直接 exec `settings`（Pixel 9 已实测） |
 | 命令通道 | 必须走既有 `server/src/commands.rs` 的命令抽象（新增 `settings` / `dumpsys` 两个程序的语义化封装），**不新增任意 exec 端点** |
 
 ### 3.2 清除必须用 `:0`（`settings delete` 无效）
@@ -770,7 +770,7 @@ egress  = "__DIRECT__"      # 强制直连，不受设备级影响
 | 协议限制 | **必须 `http://`**：拒绝 `https://`（避免新增 TLS 依赖与证书校验语义）→ `422 invalid_probe_url` |
 | 超时 | **默认 5 s**；`[probe].timeout_seconds` / 请求体不改超时（只有 `[probe].timeout_seconds` 可配）；硬上限 30 s |
 | 重定向 | 不跟随（`30x` 视为 `http_status` 失败） |
-| 请求头 | 仅 `Host`、`User-Agent: device_faker/<version>`、`Accept: text/plain, application/json`；**不带**任何凭据头 |
+| 请求头 | 仅 `Host`、`User-Agent: devmask/<version>`、`Accept: text/plain, application/json`；**不带**任何凭据头 |
 | 响应体上限 | 4 KiB（防大响应拖死探测） |
 | 响应字段 | `exitIp` / `latencyMs` / `checkedAt`（+ 本节 §1.6 的辅助字段） |
 
@@ -1109,7 +1109,7 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 
 - 用途：看该设备「绑了什么」+「设备上实际是什么」。
 - 实拉设备：设备在线时实时 `GET /api/v1/egress`（读超时 10 s）；离线/失败不报错，`deviceState:null` + warning `device_offline`（沿用 §4.7「离线是预期结果」的口径）；旧版本（404）给 `egress_unsupported`。
-- **设备 Token 无法解密**时（`manager.key` 变更 / 密文损坏）**不归入 `device_offline`**：`warnings` 给 `device_token_invalid`（`details={deviceId, code:"device_token_invalid", op:"decrypt"}`，与 job 结果码同名同根因），`deviceState` 仍为 `null`，但 **`bindings` 照常返回**（绑定先查库、再解密 Token），HTTP 状态仍是 `200`。
+- **设备 Token 无法解密**时（`devmask-manager.key` 变更 / 密文损坏）**不归入 `device_offline`**：`warnings` 给 `device_token_invalid`（`details={deviceId, code:"device_token_invalid", op:"decrypt"}`，与 job 结果码同名同根因），`deviceState` 仍为 `null`，但 **`bindings` 照常返回**（绑定先查库、再解密 Token），HTTP 状态仍是 `200`。
 
 响应 `200`：
 
@@ -1347,8 +1347,8 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 | 422 | `failed` | `validation_failed` | 设备（既有，`details.errors` 原样） |
 | 503 `upstream_unavailable`（`settings`） | `failed` | `upstream_unavailable` | 设备（既有） |
 | 其它 4xx/5xx、响应非 JSON | `failed` | `device_error` | Manager（既有） |
-| 组装期望态时代理凭据解密失败（`manager.key` 变更 / 密文损坏） | `failed` | `decrypt_failed` | Manager（`details={deviceId, op:"decrypt", reason:"credential_decrypt_failed", message, detail}`） |
-| 设备 Token 解密失败（`manager.key` 变更，需重新登记设备 Token） | `failed` | `device_token_invalid` | Manager（job 结果 `details={deviceId, op:"decrypt"}`；`GET /devices/{id}/egress` 的警告同为该码、`details` 额外带 `code`；**不是** `device_offline`） |
+| 组装期望态时代理凭据解密失败（`devmask-manager.key` 变更 / 密文损坏） | `failed` | `decrypt_failed` | Manager（`details={deviceId, op:"decrypt", reason:"credential_decrypt_failed", message, detail}`） |
+| 设备 Token 解密失败（`devmask-manager.key` 变更，需重新登记设备 Token） | `failed` | `device_token_invalid` | Manager（job 结果 `details={deviceId, op:"decrypt"}`；`GET /devices/{id}/egress` 的警告同为该码、`details` 额外带 `code`；**不是** `device_offline`） |
 | 设备返回 `changed:false`（内容未变，幂等短路） | `ok` | `egress_unchanged` | 设备（响应体 `changed`） |
 | 探测失败（可选步骤） | 结果不变 | — | warning `egress_probe_failed` |
 
@@ -1373,7 +1373,7 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 | `egress_proxy_in_use` | 409 | false | `{proxyId, name, total, devices, apps}` | 仍有绑定引用，拒绝删除 |
 | `egress_probe_failed` | 502 | true | `{proxyId, url, reason, timeoutMs, upstreamStatus?}` | Manager 直连探测失败 |
 
-> `POST /egress-proxies/{id}/probe` 在**解密代理凭据**失败时不是新码：返回既有 `500 internal_error`，`details.op="decrypt"`（`retryable:true`，但重试无意义——`manager.key` 变更只能重新录入凭据）。这条路径与 job 的 `decrypt_failed` 是同一根因、不同表达。
+> `POST /egress-proxies/{id}/probe` 在**解密代理凭据**失败时不是新码：返回既有 `500 internal_error`，`details.op="decrypt"`（`retryable:true`，但重试无意义——`devmask-manager.key` 变更只能重新录入凭据）。这条路径与 job 的 `decrypt_failed` 是同一根因、不同表达。
 
 ### 6.13 与既有 Relay 契约的衔接
 
@@ -1433,19 +1433,19 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 
 验收断言（t9 执行）：
 
-    adb shell su -c 'ls -l /data/adb/device_faker/config/egress.toml'      # -rw------- 1 root root
-    adb shell su -c 'ls -ld /data/adb/device_faker/config'                 # drwx------ 1 root root
-    adb shell su -c 'ls -l /data/adb/device_faker/config/config.toml'      # -rw-r--r--（保持 0644）
-    adb shell su -c 'grep -c password /data/adb/device_faker/config/config.toml'   # 0
+    adb shell su -c 'ls -l /data/adb/devmask/config/egress.toml'      # -rw------- 1 root root
+    adb shell su -c 'ls -ld /data/adb/devmask/config'                 # drwx------ 1 root root
+    adb shell su -c 'ls -l /data/adb/devmask/config/config.toml'      # -rw-r--r--（保持 0644）
+    adb shell su -c 'grep -c password /data/adb/devmask/config/config.toml'   # 0
 
 ### 7.3 约束三：Manager 侧 AES-256-GCM（复用 DeviceKey，AAD 绑 proxy id）
 
-复用 [manager/docs/ARCH.md](../../manager/docs/ARCH.md) §6 的 `manager.key`（32 字节）与 `crypto.rs`，**不引入第二把密钥**：
+复用 [manager/docs/ARCH.md](../../manager/docs/ARCH.md) §6 的 `devmask-manager.key`（32 字节）与 `crypto.rs`，**不引入第二把密钥**：
 
 | 项 | 冻结值 |
 | --- | --- |
 | 算法 | AES-256-GCM |
-| 密钥 | `<data-dir>/manager.key` 的 32 字节（与设备 Token 加密同一把） |
+| 密钥 | `<data-dir>/devmask-manager.key` 的 32 字节（与设备 Token 加密同一把） |
 | 密文格式 | `"v1:" + BASE64_STANDARD( nonce[12] ‖ ciphertext ‖ tag[16] )`（与 `token_cipher` 完全同构） |
 | nonce | 每次加密随机 12 字节（`OsRng`），**绝不重用** |
 | AAD | `"egress_proxy:" ‖ proxy_id ‖ ":" ‖ field`，`field ∈ {"username","password"}`（UTF-8 字节）——在「绑定 proxy id」基础上再绑字段名，防止两列密文互换后仍能解密 |
@@ -1489,8 +1489,8 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
     # 3) 源码级：DTO 里没有凭据字段（白名单外出现即为缺陷）
     grep -rn "password" server/src/dto.rs manager/src/api/dto.rs | grep -v "///" # 期望无命中
     # 4) 日志/审计无凭据（跑完一轮增删改后）
-    adb shell su -c 'grep -ci password /data/adb/device_faker/logs/*.log'      # 期望 0
-    adb shell su -c 'grep -ci password /data/adb/device_faker/logs/api-audit.jsonl'  # 期望 0
+    adb shell su -c 'grep -ci password /data/adb/devmask/logs/*.log'      # 期望 0
+    adb shell su -c 'grep -ci password /data/adb/devmask/logs/api-audit.jsonl'  # 期望 0
     grep -ci password <data-dir>/manager.log 2>/dev/null                        # 期望 0
     # 5) WebUI 只以 type=password 出现
     grep -rn 'password' manager/webui/src webui/src | grep -v 'type="password"' | grep -v 'hasCredentials'
@@ -1504,7 +1504,7 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 | # | 计划书原文 / 位置 | 本契约 | 理由 | 冲突 |
 | --- | --- | --- | --- | --- |
 | 1 | §9「PUT /egress 支持 If-Match/412」，未定义 egress 的 revision 域 | `egressRevision` = `sha256(configRevisionHex ‖ "\n" ‖ egressTomlBytes)`（§1.2） | 一次写跨两个文件，必须有一个能同时覆盖两者的前置条件；否则只改密码的并发写会静默覆盖 | 否（补足） |
-| 2 | 未规定 egress 端点能否复用 `X-DF-Revision`/`ETag` | **禁止**复用；改用 `X-DF-Egress-Revision`（§1.1） | 既有 WebUI 拦截器会在任何响应上缓存 `X-DF-Revision` 作为 config revision，复用会直接导致后续 `PUT /config` 412 | 否（补足，防集成事故） |
+| 2 | 未规定 egress 端点能否复用 `X-DM-Revision`/`ETag` | **禁止**复用；改用 `X-DM-Egress-Revision`（§1.1） | 既有 WebUI 拦截器会在任何响应上缓存 `X-DM-Revision` 作为 config revision，复用会直接导致后续 `PUT /config` 412 | 否（补足，防集成事故） |
 | 3 | §8「egress_checks \| id, device_id, app, proxy_id, exit_ip, latency_ms, ok, error_code, checked_at」 | 追加 `source`（`device`/`manager`）、`scope`，且 `device_id` 可空（§6.11） | FR-3 要求 Manager 独立探测，两条来源必须可区分；Manager 直连探测没有设备 | 否（补足） |
 | 4 | §8 egress.toml 示例无版本键 | 追加 `version = 1`（缺省视为 1，见 §2.1） | 唯一能安全演进文件结构的办法；缺省兼容 | 否（补足） |
 | 5 | FR-3「默认明文 HTTP 服务」，未给默认值 | 默认 `http://checkip.amazonaws.com/`；只接受 `http://`（§4.2/§4.3） | 需要一个可用的零配置默认值；限 http 是 FR-3 的原意（不引 TLS 栈） | 否（补足） |
@@ -1625,7 +1625,7 @@ JSON Merge Patch 风格（沿用 [docs/API.md](../API.md) §5.11 的口径），
 | 项 | 当前 | 本增量后 | 说明 |
 | --- | --- | --- | --- |
 | 设备端 `/api/v1` 端点数 | 24 | **29** | +`GET/PUT/DELETE /egress`、`POST /egress/probe`、`GET /egress/proxies`；`CONTRACT_OPERATIONS` 常量与契约测试同步 +5，`CAPABILITIES` 追加 `egress` |
-| 设备端 `device_faker_server` 版本 | 1.9.0 | **1.10.0** | 新增端点属可选增量，`/api/v1` 前缀不变 |
+| 设备端 `devmask_server` 版本 | 1.9.0 | **1.10.0** | 新增端点属可选增量，`/api/v1` 前缀不变 |
 | Manager `/relay/api/v1` 端点数 | 18 | **27** | +9 个方法级操作 |
 | Manager 版本 | 0.1.0 | **0.2.0** | `/healthz` 的 `db.schemaVersion` → `2` |
 | SQLite schema | v1 | **v2** | 3 新表 + `jobs` 重建（§6.11） |

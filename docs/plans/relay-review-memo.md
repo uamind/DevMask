@@ -4,7 +4,7 @@
 > 对象：docs/plans/relay-contract.md（t1 已冻结）+ 现有基线代码。
 > 状态：t2/t5/t9 未完成，设备端 relay 代码尚未落地；以下是**契约层**必改项与 t9 验收口径修正，
 > 代码落地后按第 4 节逐条核对，t10 出正式 verdict。
-> 已接受前提（不重复报）：K1 应用级 spec 不带凭据、K2 新增 DF_EGRESS_RLY、K3 设备级经中继承载认证。
+> 已接受前提（不重复报）：K1 应用级 spec 不带凭据、K2 新增 DM_EGRESS_RLY、K3 设备级经中继承载认证。
 
 ## 1. 结论摘要
 
@@ -36,8 +36,8 @@
 
 **要求修法（三选一，建议 a）**：
 
-a. **两条链**：静态 DF_EGRESS_RLY_DENY（每端口一条 REJECT，只在端口集合变化时改）+ 可重建 DF_EGRESS_RLY_ALLOW（ACCEPT）。挂接顺序 OUTPUT → ALLOW → DENY。重建只 -F ALLOW，空链时流量落到 DENY → 全拒（fail-closed，只有短暂不可用，没有裸奔窗口）。新增端口顺序：先加 DENY 端口规则 → 再加 ACCEPT → 最后才让 listener accept。
-b. 代际链 + 单条原子换跳转：新链 DF_EGRESS_RLY_G<N> 建满，再 iptables -R OUTPUT <n> -j <新链>（单条规则替换在 xtables 锁内原子），最后清旧链。
+a. **两条链**：静态 DM_EGRESS_RLY_DENY（每端口一条 REJECT，只在端口集合变化时改）+ 可重建 DM_EGRESS_RLY_ALLOW（ACCEPT）。挂接顺序 OUTPUT → ALLOW → DENY。重建只 -F ALLOW，空链时流量落到 DENY → 全拒（fail-closed，只有短暂不可用，没有裸奔窗口）。新增端口顺序：先加 DENY 端口规则 → 再加 ACCEPT → 最后才让 listener accept。
+b. 代际链 + 单条原子换跳转：新链 DM_EGRESS_RLY_G<N> 建满，再 iptables -R OUTPUT <n> -j <新链>（单条规则替换在 xtables 锁内原子），最后清旧链。
 c. 只用 iptables-restore 单事务提交（注意 --noflush 不能原子替换单链，需要整表快照，实施成本最高）。
 
 另外两条必须写进契约的硬约束：
@@ -80,7 +80,7 @@ c. 只用 iptables-restore 单事务提交（注意 --noflush 不能原子替换
 | 绑定 | 后果 |
 | --- | --- |
 | 0.0.0.0 | device 级规则 -d 127.0.0.0/8 覆盖 127.0.0.2，且 **INPUT 无任何规则** → wlan0 上任何设备可白用上游凭据（LAN 开放代理，最严重） |
-| ::（双栈） | ::1 完全绕过 DF_EGRESS_RLY（无 ip6tables），应用级 uid 白名单失效；::ffff:127.0.0.1 走 v4 映射通常仍受 iptables 约束，需实测确认 |
+| ::（双栈） | ::1 完全绕过 DM_EGRESS_RLY（无 ip6tables），应用级 uid 白名单失效；::ffff:127.0.0.1 走 v4 映射通常仍受 iptables 约束，需实测确认 |
 | localhost（解析） | 结果取决于解析顺序，可能落到 ::1 |
 
 **要求修法**：
@@ -156,7 +156,7 @@ R5 采纳后，restricted 端口归属失败会 close，问题自然消失；dev
     adb shell su -c 'settings get global http_proxy'
 
     # E. 端口稳定性（R6）
-    adb shell su -c 'grep local_port /data/adb/device_faker/config/egress.toml'
+    adb shell su -c 'grep local_port /data/adb/devmask/config/egress.toml'
     # 两次 restart 前后逐行 diff，必须完全一致；响应 portChanges / restartRequiredApps 均为空
 
 ## 4. 代码落地后的核对清单（t10 用）
@@ -178,7 +178,7 @@ R5 采纳后，restricted 端口归属失败会 close，问题自然消失；dev
 ## 5. t4 追加评审（模块注入的两处「降级即直连」）
 
 前提：t4 已合入（src/egress.rs / src/spec.rs / src/hooks.rs）；本机复跑
-cargo test -p device_faker_module_tests 为 49 passed / 0 failed。以下按 captain 提问判。
+cargo test -p devmask_module_tests 为 49 passed / 0 failed。以下按 captain 提问判。
 
 ### R12 [high] 非法 relay 视图按「未配置」处理 = fail-open
 

@@ -7,7 +7,7 @@
 
 ## 1. 背景
 
-Device Faker 目前只改「机型指纹」，不改「网络出口」。而在真实风控里，机型与 IP 的一致性是最常见的关联维度：
+DevMask 目前只改「机型指纹」，不改「网络出口」。而在真实风控里，机型与 IP 的一致性是最常见的关联维度：
 
 - 同一局域网出口下挂着 N 台不同机型的设备，设备互相可被关联；
 - 机型伪装成海外版，出口 IP 却是国内 IDC，属于一眼假；
@@ -49,7 +49,7 @@ Device Faker 目前只改「机型指纹」，不改「网络出口」。而在�
 
 | 验证项 | 结果 |
 | --- | --- |
-| root | su -c id → uid=0，域 u:r:ksu:s0（与 device_faker_server 同域同 uid） |
+| root | su -c id → uid=0，域 u:r:ksu:s0（与 devmask_server 同域同 uid） |
 | settings put global http_proxy host:port | ✅ 立即生效，dumpsys connectivity 显示 Global proxy: [host] port |
 | 清除 | ⚠️ settings delete global http_proxy **不清除**：global_http_proxy_host/port 仍在，代理继续生效。必须 settings put global http_proxy :0（已实测恢复 Global proxy: none） |
 | 相关键 | http_proxy、global_http_proxy_host、global_http_proxy_port、global_http_proxy_exclusion_list、global_proxy_pac_url |
@@ -269,5 +269,5 @@ iptables + tun2socks 全流量（含 UDP/QUIC）；Manager 出站代理（B 类�
 ```text
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025-2026 Seyud
-Device Faker: https://github.com/Seyud/device_faker
+DevMask: https://github.com/uamind/DevMask
 ```

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -109,7 +109,7 @@ curl -s -X DELETE "{{ relayBase }}/devices/pixel-9/proxy/api/v1/apps/com.xingin.
             <el-icon><Connection /></el-icon>
           </div>
           <div>
-            <strong>Device Faker Relay</strong>
+            <strong>DevMask Relay</strong>
             <span>127.0.0.1:8765 · 鉴权 / 路由 / 重试 / 审计</span>
           </div>
         </div>

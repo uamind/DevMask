@@ -32,7 +32,7 @@ HTTP 502 total=0.020945s
     "retryable": true
   }
 }
-fixture pid=19516 log=/Users/crymang/Works/device_faker/docs/design/egress/evidence/fixture-proxy.log
+fixture pid=19516 log=/Users/crymang/Works/devmask/docs/design/egress/evidence/fixture-proxy.log
 ===== T2-a2 probe again (fixture up) + fixture log 证明走了代理 =====
 HTTP 200 total=0.037876s
 {"ok": true, "exitIp": "198.51.100.7", "latencyMs": 5, "checkedAt": "2026-11-24T13:16:58Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}

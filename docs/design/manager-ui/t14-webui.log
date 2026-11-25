@@ -1,6 +1,6 @@
 === npm run check:template-payload ===
 
-> device-faker-manager-webui@0.1.0 check:template-payload
+> devmask-manager-webui@0.1.0 check:template-payload
 > node scripts/check-template-payload.mjs
 
 OK: bulk/assignments apply body has no packages; input config untouched

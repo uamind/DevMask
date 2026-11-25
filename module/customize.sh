@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 # Language detection: Chinese if the system locale starts with "zh", otherwise English.
 LOCALE_VALUE=""
@@ -41,7 +41,7 @@ check_zygisk() {
 
 check_zygisk
 
-CONFIG_DIR="/data/adb/device_faker/config"
+CONFIG_DIR="/data/adb/devmask/config"
 CONFIG_FILE="$CONFIG_DIR/config.toml"
 
 chooseport() {
@@ -57,7 +57,7 @@ chooseport() {
     return 1
 }
 
-tr_print "- 安装 Device Faker 模块" "- Installing Device Faker module"
+tr_print "- 安装 DevMask 模块" "- Installing DevMask module"
 mkdir -p "$CONFIG_DIR"
 chmod 755 "$CONFIG_DIR"
 
@@ -90,8 +90,8 @@ fi
 
 rm -f "$MODPATH/config.toml"
 
-# 原生 Web 服务（bin/device_faker_server）的运行时目录与默认设置。
-RUNTIME_DIR="/data/adb/device_faker"
+# 原生 Web 服务（bin/devmask_server）的运行时目录与默认设置。
+RUNTIME_DIR="/data/adb/devmask"
 SERVER_CONFIG_DIR="$RUNTIME_DIR/config"
 SERVER_CONFIG_FILE="$SERVER_CONFIG_DIR/server.toml"
 SERVER_LOG_DIR="$RUNTIME_DIR/logs"
@@ -121,7 +121,7 @@ tr_print "- 修改配置后无需重启，仅需重启对应应用" "- No reboot
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm_recursive "$MODPATH/zygisk" 0 0 0755 0644
 # 上面一行把 $MODPATH 下所有文件都设成 0644，会抹掉服务二进制与启动脚本的执行位，
-# 这里补回来：service.sh 由 init 执行，bin/device_faker_server 由 service.sh 执行。
+# 这里补回来：service.sh 由 init 执行，bin/devmask_server 由 service.sh 执行。
 if [ -d "$MODPATH/bin" ]; then
     set_perm_recursive "$MODPATH/bin" 0 0 0755 0755
 fi
@@ -130,8 +130,8 @@ for _script in service.sh customize.sh uninstall.sh; do
         set_perm "$MODPATH/$_script" 0 0 0755
     fi
 done
-# TODO(remove-cli): device_faker_cli 已不随模块打包（WebUI 转换已纯前端实现）。
-# 若确认无人再手动使用，可连同 device_faker_cli/ crate 一起删除。
+# TODO(remove-cli): devmask_cli 已不随模块打包（WebUI 转换已纯前端实现）。
+# 若确认无人再手动使用，可连同 devmask_cli/ crate 一起删除。
 
 tr_print "- 安装完成！" "- Installation complete!"
 tr_print "- 重启设备后生效" "- Reboot device to take effect"

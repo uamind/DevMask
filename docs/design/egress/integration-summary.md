@@ -10,9 +10,9 @@
 | # | 命令 | 退出码 | 备注 |
 | --- | --- | --- | --- |
 | 1-1 | cargo fmt --check | **0** | 全仓 79 个改动文件均 fmt 干净 |
-| 1-2 | cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings | **0** | core/server/manager/module-tests/xtask 全绿，无 warning |
-| 1-3 | cargo test -p device_faker_core -p device_faker_server -p device_faker_manager | **0** | **483 passed / 0 failed** |
-| 1-4 | cargo check -p device_faker --target aarch64-linux-android | **0** | ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk |
+| 1-2 | cargo clippy --workspace --exclude devmask --all-targets -- -D warnings | **0** | core/server/manager/module-tests/xtask 全绿，无 warning |
+| 1-3 | cargo test -p devmask_core -p devmask_server -p devmask_manager | **0** | **483 passed / 0 failed** |
+| 1-4 | cargo check -p devmask --target aarch64-linux-android | **0** | ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk |
 
 ## 2. 第 2 组命令（全部 exit 0）
 
@@ -28,11 +28,11 @@
 
 | crate / 套件 | 用例数 | 说明 |
 | --- | --- | --- |
-| device_faker_core | **65** | lib 0 + config_semantics 10 + edit_document 19 + **egress_config 14** + real_config 2 + store 11 + validate_schema 9 |
-| device_faker_server | **258** | lib 123 + apps_api 9 + config_api 21 + contract 3 + **egress_api 45** + overview_api 3 + packages_device_api 9 + skeleton 15 + static_site 8 + templates_api 13 + write_semantics 9 |
-| device_faker_manager | **160** | lib 71 + apply_flow 14 + devices_flow 14 + e2e_flow 4 + **egress_flow 17** + manager_api 17 + ops_endpoints 8 + review_reverify 15 |
+| devmask_core | **65** | lib 0 + config_semantics 10 + edit_document 19 + **egress_config 14** + real_config 2 + store 11 + validate_schema 9 |
+| devmask_server | **258** | lib 123 + apps_api 9 + config_api 21 + contract 3 + **egress_api 45** + overview_api 3 + packages_device_api 9 + skeleton 15 + static_site 8 + templates_api 13 + write_semantics 9 |
+| devmask_manager | **160** | lib 71 + apply_flow 14 + devices_flow 14 + e2e_flow 4 + **egress_flow 17** + manager_api 17 + ops_endpoints 8 + review_reverify 15 |
 | 小计（1-3 命令） | **483** | 0 failed |
-| device_faker_module_tests | **32** | 独立可跑（cargo test -p device_faker_module_tests = 0）：注入计划 / 重放调度 / 降级分支 / 凭据脱敏 |
+| devmask_module_tests | **32** | 独立可跑（cargo test -p devmask_module_tests = 0）：注入计划 / 重放调度 / 降级分支 / 凭据脱敏 |
 | **egress 专项合计** | **108** | core 14 + server 45 + manager 17 + module 32 |
 | 真机（非本机命令） | — | t9 / t15 / t18 三份报告 + evidence 目录：设备侧 egress 全链路（5 端点、settings 读写、探测、__DIRECT__、零注入、hook fired / 重放窗口） |
 
@@ -40,10 +40,10 @@
 
 | 项 | 值 | 一致性 |
 | --- | --- | --- |
-| 根 crate device_faker | 1.10.0 | 模块版本 v1.10.0 / versionCode 20261201（module/module.prop） |
-| device_faker_server | 1.10.0 | GET /api/v1/status 报 server.version=1.10.0 |
-| device_faker_core | 1.7.0 | 内部库版本，不对外暴露 |
-| device_faker_manager | 0.2.0 | GET /healthz 报 version=0.2.0（另一条版本线，schemaVersion=2） |
+| 根 crate devmask | 1.10.0 | 模块版本 v1.10.0 / versionCode 20261201（module/module.prop） |
+| devmask_server | 1.10.0 | GET /api/v1/status 报 server.version=1.10.0 |
+| devmask_core | 1.7.0 | 内部库版本，不对外暴露 |
+| devmask_manager | 0.2.0 | GET /healthz 报 version=0.2.0（另一条版本线，schemaVersion=2） |
 | CHANGELOG | [v1.9.0 → v1.10.0] - 2026-12-01 首条即 egress 全量说明 | 与实现一致（新功能 / 改进 / 修复三节） |
 | CONTRACT_OPERATIONS | [(&str,&str); 29]（server/src/api/mod.rs:42） | **29** |
 | docs/openapi.yaml 操作数 | 29（21 个 path，方法级 29） | **与 CONTRACT_OPERATIONS 相等**；其中 egress 5 个（/egress GET/PUT/DELETE、/egress/probe POST、/egress/proxies GET） |
@@ -101,7 +101,7 @@ Manager 不再做本地比较，每次 apply 都对每台设备发一次 PUT /ap
 2. **Manager 侧探测只支持 HTTP**：socks5 → 422 unsupported_proxy_type（egress_checks 落 ok=0）。
 3. **settings delete 在 Android 17 清不掉代理**：清除只走 settings put global http_proxy :0（脏状态由启动 reconcile 自愈）。
 4. **en 文档缺口（不影响代码，已开 t36 跟进）**：replay not fired 的文案/时机已在 zh 对齐（docs/CONFIG.md:344/350、docs/SERVER.md:305，全仓 grep「never fired / 进程退出时判定」zh 0 命中）；en 侧 docs/en/CONFIG.md:313 的 Observability 块仍缺 never-fired 行，docs/en/SERVER.md 无该段落。captain 已开 **t36（architect）** 专门补，本任务不返工。
-5. **设备现场状态（captain 同步；t13 未连真机）**：t26 修过真机 server.toml 的重复 token 块（两个 id="t17-qa" 导致服务启动即退出），现已清理为单个 default token。后续跑真机用例前先 adb shell ps -A | grep device_faker_server 确认服务在跑，避免把「服务没起」误判成实现失败。
+5. **设备现场状态（captain 同步；t13 未连真机）**：t26 修过真机 server.toml 的重复 token 块（两个 id="t17-qa" 导致服务启动即退出），现已清理为单个 default token。后续跑真机用例前先 adb shell ps -A | grep devmask_server 确认服务在跑，避免把「服务没起」误判成实现失败。
 
 ## 8. 交付状态
 

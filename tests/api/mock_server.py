@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Device Faker /api/v1 契约 mock server（测试用，不是产品实现）。
+"""DevMask /api/v1 契约 mock server（测试用，不是产品实现）。
 
 按 docs/API.md 第一增量实现最小可校验的契约，供 tests/api/smoke.sh 与
 tests/api/concurrency.sh 在没有 host server 时自证脚本与断言：
@@ -254,7 +254,7 @@ def validate_template(payload: dict, fields: set[str]) -> list[dict]:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "device-faker-mock/0.2"
+    server_version = "devmask-mock/0.2"
     protocol_version = "HTTP/1.1"
 
     # ------------------------------------------------------------ 基础
@@ -273,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("X-Request-Id", request_id or self._request_id())
-        self.send_header("X-DF-Revision", revision)
+        self.send_header("X-DM-Revision", revision)
         self.send_header("ETag", '"' + revision + '"')
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -731,7 +731,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _status_doc(self) -> dict:
         return {
-            "module": {"id": "device_faker", "version": "v1.7.0", "versionCode": 20261109},
+            "module": {"id": "devmask", "version": "v1.7.0", "versionCode": 20261109},
             "device": {
                 "manufacturer": "Google",
                 "brand": "google",
@@ -783,7 +783,7 @@ class Server(ThreadingHTTPServer):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Device Faker API contract mock")
+    parser = argparse.ArgumentParser(description="DevMask API contract mock")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18686)
     parser.add_argument("--token", default="")

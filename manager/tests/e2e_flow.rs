@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 端到端验收：一个 Manager 实例 + Mock 设备，按 RUN.md 的顺序走完全部 18 个端点。
 //!
@@ -26,7 +26,7 @@ use common::{
     mock_device::{MockDevice, MockOptions},
     send, send_json, start_app, start_app_with_token,
 };
-use device_faker_manager::state::{TokenSource, TokenState};
+use devmask_manager::state::{TokenSource, TokenState};
 use serde_json::{Value, json};
 
 const API: &str = "/relay/api/v1";

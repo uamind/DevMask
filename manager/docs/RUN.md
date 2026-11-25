@@ -3,7 +3,7 @@
 面向「从干净 checkout 跑起来」的最小步骤、真实设备接入、端到端冒烟与排错。
 接口与字段以 [API.md](API.md) 为准，内部结构见 [ARCH.md](ARCH.md)。
 
-> 所有命令默认在仓库根目录执行（即 `device_faker/`）。
+> 所有命令默认在仓库根目录执行（即 `devmask/`）。
 
 ---
 
@@ -16,7 +16,7 @@
     cd ../..
 
     # 2) 构建并启动 Manager（默认 127.0.0.1:8765）
-    cargo run -p device_faker_manager
+    cargo run -p devmask_manager
 
     # 3) 浏览器打开 http://127.0.0.1:8765
     #    Token 对话框输入 admin123（默认值，仅 loopback）
@@ -24,12 +24,12 @@
 另开一个终端确认：
 
     curl -s http://127.0.0.1:8765/healthz | jq '{status, version, db, devices}'
-    # {"status":"ok","version":"0.1.0","db":{"status":"ok","schemaVersion":1,"path":"manager.db"},...}
+    # {"status":"ok","version":"0.1.0","db":{"status":"ok","schemaVersion":1,"path":"devmask-manager.db"},...}
 
-首次启动会创建数据目录与 `manager.key`；默认数据目录会打印在启动日志里
-（macOS `~/Library/Application Support/device-faker-manager`，Linux
-`$XDG_DATA_HOME/device-faker-manager` 或 `~/.local/share/device-faker-manager`，
-Windows `%LOCALAPPDATA%\device-faker-manager`）。
+首次启动会创建数据目录与 `devmask-manager.key`；默认数据目录会打印在启动日志里
+（macOS `~/Library/Application Support/devmask-manager`，Linux
+`$XDG_DATA_HOME/devmask-manager` 或 `~/.local/share/devmask-manager`，
+Windows `%LOCALAPPDATA%\devmask-manager`）。
 
 ---
 
@@ -49,7 +49,7 @@ Windows `%LOCALAPPDATA%\device-faker-manager`）。
 | --- | --- | --- |
 | 8765 | Manager | `--bind` 可改；默认只监听 loopback |
 | 5180 | Vite dev/preview | `npm run dev` / `npm run preview` |
-| 8686 | Device Faker 设备端 | 可选；USB 用 `adb forward tcp:8686 tcp:8686` |
+| 8686 | DevMask 设备端 | 可选；USB 用 `adb forward tcp:8686 tcp:8686` |
 | 18686 | `mock_device.py` | 冒烟用；被占用时换端口 |
 
 ---
@@ -57,10 +57,10 @@ Windows `%LOCALAPPDATA%\device-faker-manager`）。
 ## 2. 构建
 
     # Manager（debug）
-    cargo build -p device_faker_manager
+    cargo build -p devmask_manager
 
-    # Manager（release，单文件产物 target/release/device_faker_manager）
-    cargo build -p device_faker_manager --release
+    # Manager（release，单文件产物 target/release/devmask_manager）
+    cargo build -p devmask_manager --release
 
     # WebUI：类型检查 + 构建（产物 manager/webui/dist）
     cd manager/webui
@@ -80,28 +80,28 @@ Windows `%LOCALAPPDATA%\device-faker-manager`）。
 ### 3.1 常用命令
 
     # 默认：127.0.0.1:8765，数据目录按平台默认，Token=admin123
-    cargo run -p device_faker_manager
+    cargo run -p devmask_manager
 
     # 显式指定（推荐：数据目录放固定位置，便于备份）
-    cargo run -p device_faker_manager -- \
+    cargo run -p devmask_manager -- \
       --bind 127.0.0.1:8765 \
       --data-dir ./tmp/manager-data \
       --static-dir manager/webui/dist \
       --token 'admin123'
 
     # 发布二进制
-    ./target/release/device_faker_manager --data-dir /var/lib/device-faker-manager
+    ./target/release/devmask_manager --data-dir /var/lib/devmask-manager
 
     # 局域网 / 其它机器访问：必须换成至少 8 字符的非默认 Token
     DFM_TOKEN='S3cure-manager-token' \
-      ./target/release/device_faker_manager --bind 0.0.0.0:8765
+      ./target/release/devmask_manager --bind 0.0.0.0:8765
 
     # 调试日志
-    DFM_LOG=debug cargo run -p device_faker_manager
+    DFM_LOG=debug cargo run -p devmask_manager
 
     # 看帮助 / 版本
-    cargo run -p device_faker_manager -- --help
-    cargo run -p device_faker_manager -- --version
+    cargo run -p devmask_manager -- --help
+    cargo run -p devmask_manager -- --version
 
 `Ctrl-C` 或 `SIGTERM` 优雅退出；SQLite 使用 WAL，异常退出后下次启动会自动恢复
 （把遗留 `queued/running` job 标记为 `failed/interrupted`）。
@@ -111,11 +111,11 @@ Windows `%LOCALAPPDATA%\device-faker-manager`）。
 | 参数 | 环境变量 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `--bind <ADDR>` | `DFM_BIND` | `127.0.0.1:8765` | 监听地址 |
-| `--data-dir <PATH>` | `DFM_DATA_DIR` | 平台默认 | `manager.db` / `manager.key` / `manager.token` 所在目录 |
+| `--data-dir <PATH>` | `DFM_DATA_DIR` | 平台默认 | `devmask-manager.db` / `devmask-manager.key` / `manager.token` 所在目录 |
 | `--static-dir <PATH>` | `DFM_STATIC_DIR` | 自动查找 | WebUI `dist` 目录 |
 | `--token <TOKEN>` | `DFM_TOKEN` | `admin123` | Manager Token |
 | `--token-file <PATH>` | `DFM_TOKEN_FILE` | `<data-dir>/manager.token` | 轮换后写入的 Token 文件 |
-| `--key-file <PATH>` | `DFM_KEY_FILE` | `<data-dir>/manager.key` | 设备 Token 加密密钥（32 B） |
+| `--key-file <PATH>` | `DFM_KEY_FILE` | `<data-dir>/devmask-manager.key` | 设备 Token 加密密钥（32 B） |
 | `--config <PATH>` | `DFM_CONFIG` | `<data-dir>/manager.toml` | 配置文件 |
 | `--log-level <LEVEL>` | `DFM_LOG` / `RUST_LOG` | `info` | tracing 过滤规则 |
 
@@ -147,8 +147,8 @@ Token 优先级：`--token` > `DFM_TOKEN` > `manager.token` 文件 > `manager.to
 ### 3.4 安全边界
 
 - 监听非 loopback 地址时，Token 必须**不是** `admin123` 且长度 ≥ 8，否则拒绝启动。
-- Manager Token 拥有全部权限；WebUI 把它存在 `localStorage.dfm_token`。
-- 设备 Token 用 AES-256-GCM 加密存库，密钥是 `<data-dir>/manager.key`（0600）；
+- Manager Token 拥有全部权限；WebUI 把它存在 `localStorage.dm_token`。
+- 设备 Token 用 AES-256-GCM 加密存库，密钥是 `<data-dir>/devmask-manager.key`（0600）；
   API 响应、错误、审计、日志都不会出现设备 Token。
 - Manager 本身不提供 TLS；跨机器访问请走内网 / `adb forward` / Tailscale 等隧道，
   或在前面加反向代理。
@@ -161,7 +161,7 @@ Token 优先级：`--token` > `DFM_TOKEN` > `manager.token` 文件 > `manager.to
 2. 首次会弹出 Token 对话框；输入启动时的 Manager Token（默认 `admin123`）。
 3. 顶部显示 Relay 在线状态；Token 错误时接口返回 401，页面会重新弹对话框。
 4. 需要换 Token 时点「重新登录」清除本地 Token，或在浏览器控制台
-   `localStorage.removeItem('dfm_token')`。
+   `localStorage.removeItem('dm_token')`。
 
 页面：总览 / 设备 / 应用矩阵 / 批量配置 / 接入 AI / 操作日志。
 「接入 AI」页给出 Relay Base URL、Token、curl 示例与端点表。
@@ -185,7 +185,7 @@ Manager 没启动时页面显示「Relay 请求失败」与启动提示（不是
 
 ## 5. 接入真实设备
 
-设备端要求：Device Faker 模块 v1.9.0+，设备端 HTTP 服务已启动（默认
+设备端要求：DevMask 模块 v1.9.0+，设备端 HTTP 服务已启动（默认
 `127.0.0.1:8686`）。三种常见接法：
 
 | 场景 | 做法 |
@@ -235,7 +235,7 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
     python3 manager/docs/mock_device.py 18686
 
     # 终端 B：Manager（新数据目录，避免污染真实数据）
-    cargo run -p device_faker_manager -- --data-dir /tmp/dfm-smoke
+    cargo run -p devmask_manager -- --data-dir /tmp/dm-smoke
 
     # 终端 C：冒烟脚本
     set -euo pipefail
@@ -316,11 +316,11 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 | 11 | 旧 Token `401`，新 Token `200` |
 | 12 | `204`，随后 `GET /devices` 为 0 |
 
-> 冒烟会创建 `/tmp/dfm-smoke`，第 11 步还会轮换 Token；同一数据目录重跑前先
-> `rm -rf /tmp/dfm-smoke`（或把 `TOKEN` 设成 `<data-dir>/manager.token` 的当前值），否则会 401。
+> 冒烟会创建 `/tmp/dm-smoke`，第 11 步还会轮换 Token；同一数据目录重跑前先
+> `rm -rf /tmp/dm-smoke`（或把 `TOKEN` 设成 `<data-dir>/manager.token` 的当前值），否则会 401。
 > 独立运行 e2e 集成测试（进程内，无需端口）：
 
-    cargo test -p device_faker_manager --test e2e_flow
+    cargo test -p devmask_manager --test e2e_flow
 
 ### 6.1 用 mock 设备验证 egress 下发（代理池 → 绑定 → 批量下发 → 探测）
 
@@ -332,7 +332,7 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
     python3 manager/docs/mock_device.py 18786
 
     # 终端 B：Manager（独立数据目录，避免污染）
-    ./target/debug/device_faker_manager --bind 127.0.0.1:18765 --data-dir /tmp/dfm-egress
+    ./target/debug/devmask_manager --bind 127.0.0.1:18765 --data-dir /tmp/dm-egress
 
     # 终端 C：一条链路跑完
     set -euo pipefail
@@ -399,7 +399,7 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 - **绑定值**：`proxyId` 接受代理 id、`"__DIRECT__"`（强制直连）或 `null`（清掉该行）。把应用绑成
   `"__DIRECT__"` 后重新 apply，可以验证「设备级有代理时该应用仍直连」。
 - **mock 的 egress revision** = `sha256(configRevision ‖ "\n" ‖ egress 文档字节)`；egress 端点只回
-  `X-DF-Egress-Revision`（**不回** `X-DF-Revision` / `ETag`）。直接用 curl 摸 mock 时：`PUT` / `DELETE /egress`
+  `X-DM-Egress-Revision`（**不回** `X-DM-Revision` / `ETag`）。直接用 curl 摸 mock 时：`PUT` / `DELETE /egress`
   不带 `If-Match` → `428`，值不对 → `412`（`details.resource="egress"`），`DELETE` 还必须带 `?confirm=true`。
 - **凭据不会回显**：mock 与真实服务一致，响应里只有 `hasCredentials`；`PUT /egress` 里的
   `username` / `password` 只把 `hasCredentials` 置真（示例值请用占位符）。本版**不支持带认证的代理**：
@@ -423,14 +423,14 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 ## 8. 数据目录、备份与重置
 
     <data-dir>/
-    ├── manager.db          # SQLite 主库（运行时伴随 -wal / -shm）
-    ├── manager.key         # 设备 Token 加密密钥（32 B，0600）
+    ├── devmask-manager.db          # SQLite 主库（运行时伴随 -wal / -shm）
+    ├── devmask-manager.key         # 设备 Token 加密密钥（32 B，0600）
     ├── manager.token       # 轮换后写入的 Manager Token（0600）
     └── manager.toml        # 可选配置
 
-- 备份：停服后复制 `manager.db` **和** `manager.key`；缺密钥时已存设备 Token 无法解密。
-  运行中备份可用 `sqlite3 manager.db ".backup manager.db.bak"`（密钥仍需单独复制）。
-- 重置：停止 Manager，删除整个数据目录（或只删 `manager.db`，但保留 `manager.key` 才能继续用旧设备 Token）。
+- 备份：停服后复制 `devmask-manager.db` **和** `devmask-manager.key`；缺密钥时已存设备 Token 无法解密。
+  运行中备份可用 `sqlite3 devmask-manager.db ".backup devmask-manager.db.bak"`（密钥仍需单独复制）。
+- 重置：停止 Manager，删除整个数据目录（或只删 `devmask-manager.db`，但保留 `devmask-manager.key` 才能继续用旧设备 Token）。
 - 自动清理：启动时删除 7 天前 / 超过 200 条的 job，并只保留最近 5000 条审计。
 - 同一个数据目录只能有一个 Manager 进程，否则 SQLite 会报 `database is locked`。
 
@@ -439,14 +439,14 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 ## 9. 测试与验收
 
     # 全部测试（单元 + 集成 5 个文件）
-    cargo test -p device_faker_manager
+    cargo test -p devmask_manager
 
     # 只看端到端
-    cargo test -p device_faker_manager --test e2e_flow
+    cargo test -p devmask_manager --test e2e_flow
 
     # 静态检查
     cargo fmt --check
-    cargo clippy -p device_faker_manager --all-targets -- -D warnings
+    cargo clippy -p devmask_manager --all-targets -- -D warnings
 
     # WebUI
     cd manager/webui && npx vue-tsc --noEmit && npm run build
@@ -478,7 +478,7 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 | 页面显示「WebUI dist 未就绪」 | 先 `cd manager/webui && npm run build`，或 `--static-dir` 指向正确 `dist` |
 | Vite 页面提示 Relay 请求失败（502） | Manager 未启动或端口不是 8765；启动 Manager 或设置 `DFM_DEV_RELAY` |
 | `database is locked` | 同一数据目录跑了两个 Manager；停掉一个 |
-| 设备 Token 全部解不开 / 设备列表仍在但请求 500 | `manager.key` 丢失或被替换；恢复备份，或删除设备后重新添加 |
+| 设备 Token 全部解不开 / 设备列表仍在但请求 500 | `devmask-manager.key` 丢失或被替换；恢复备份，或删除设备后重新添加 |
 
 ---
 
@@ -487,7 +487,7 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
     # Manager：Ctrl-C（或 kill -TERM <pid>）
     # Mock 设备：Ctrl-C
     # 冒烟数据
-    rm -rf /tmp/dfm-smoke
+    rm -rf /tmp/dm-smoke
 
 服务托管（systemd / launchd）示例见 [ARCH.md §15.3](ARCH.md#153-服务托管示例)。
 
@@ -497,4 +497,4 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

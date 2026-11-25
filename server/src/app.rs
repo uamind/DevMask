@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 应用状态、路由装配与服务启动。
 //!
@@ -25,7 +25,7 @@ use axum::{
     middleware,
     routing::{delete, get, post, put},
 };
-use device_faker_core::revision::{ConfigStore, StoreOptions};
+use devmask_core::revision::{ConfigStore, StoreOptions};
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
 use crate::{

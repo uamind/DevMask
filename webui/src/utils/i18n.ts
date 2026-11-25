@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { computed } from 'vue'
 import { useSettingsStore } from '../stores/settings'
@@ -442,8 +442,8 @@ export const messages = {
           apply_failed: '保存服务设置失败',
           read_failed: '读取 server.toml 失败',
           token_failed: 'Token 生成失败',
-          server_not_running: '服务未运行：请确认模块已安装、bin/device_faker_server 存在',
-          binary_missing: '找不到 device_faker_server 或 service.sh，请重新安装模块',
+          server_not_running: '服务未运行：请确认模块已安装、bin/devmask_server 存在',
+          binary_missing: '找不到 devmask_server 或 service.sh，请重新安装模块',
           unsupported: '当前模式不支持直接修改服务设置',
         },
       },
@@ -624,7 +624,7 @@ export const messages = {
           probe_unsupported: '管理器模式无法探测出口 IP：请改用原生服务地址访问 WebUI',
           relay_restart_failed: '重启中继失败',
           relay_restart_unsupported: '当前运行时不支持重启中继：请改用原生服务地址访问 WebUI',
-          server_not_running: '服务未运行：请确认模块已安装且 bin/device_faker_server 存在',
+          server_not_running: '服务未运行：请确认模块已安装且 bin/devmask_server 存在',
         },
       },
       dialog: {
@@ -1088,8 +1088,8 @@ export const messages = {
           read_failed: 'Failed to read server.toml',
           token_failed: 'Failed to generate token',
           server_not_running:
-            'Service is not running: check the module install and bin/device_faker_server',
-          binary_missing: 'device_faker_server or service.sh not found; reinstall the module',
+            'Service is not running: check the module install and bin/devmask_server',
+          binary_missing: 'devmask_server or service.sh not found; reinstall the module',
           unsupported: 'This mode does not allow changing service settings',
         },
       },
@@ -1283,7 +1283,7 @@ export const messages = {
           relay_restart_unsupported:
             'This runtime cannot restart the relay; open the WebUI from the service address',
           server_not_running:
-            'The service is not running: check the module install and bin/device_faker_server',
+            'The service is not running: check the module install and bin/devmask_server',
         },
       },
       dialog: {
@@ -1753,8 +1753,8 @@ export const messages = {
           read_failed: 'server.toml okunamadı',
           token_failed: 'Anahtar oluşturulamadı',
           server_not_running:
-            'Servis çalışmıyor: modül kurulumunu ve bin/device_faker_server dosyasını kontrol edin',
-          binary_missing: 'device_faker_server veya service.sh bulunamadı; modülü yeniden kurun',
+            'Servis çalışmıyor: modül kurulumunu ve bin/devmask_server dosyasını kontrol edin',
+          binary_missing: 'devmask_server veya service.sh bulunamadı; modülü yeniden kurun',
           unsupported: 'Bu modda servis ayarları değiştirilemez',
         },
       },
@@ -1951,7 +1951,7 @@ export const messages = {
           relay_restart_unsupported:
             'Bu çalışma ortamı aktarmayı yeniden başlatamaz; WebUI adresini servis adresiyle açın',
           server_not_running:
-            'Servis çalışmıyor: modül kurulumunu ve bin/device_faker_server dosyasını kontrol edin',
+            'Servis çalışmıyor: modül kurulumunu ve bin/devmask_server dosyasını kontrol edin',
         },
       },
       dialog: {

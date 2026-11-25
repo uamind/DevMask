@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口代理（egress）集成测试：代理池 CRUD、绑定、探测与批量下发。
 
@@ -1111,9 +1111,9 @@ async fn credential_decrypt_failure_is_its_own_result_code() {
     let proxy_id = proxy["id"].as_str().unwrap().to_string();
     put_bindings(&app, "pixel-9", json!([{ "app": "", "proxyId": proxy_id }])).await;
 
-    // 模拟「manager.key 变了」：已存密文与当前密钥不匹配（等价于换 key 后旧密文解不开）。
+    // 模拟「devmask-manager.key 变了」：已存密文与当前密钥不匹配（等价于换 key 后旧密文解不开）。
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     db.call(|connection| {
         connection.execute(
             "UPDATE egress_proxies SET password_cipher = 'v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'",
@@ -1135,7 +1135,7 @@ async fn credential_decrypt_failure_is_its_own_result_code() {
         result["error"]["message"]
             .as_str()
             .unwrap_or_default()
-            .contains("manager.key"),
+            .contains("devmask-manager.key"),
         "{result}"
     );
     // 设备端不应该收到任何 egress 写入。
@@ -1194,7 +1194,7 @@ async fn probe_check_proxy_id_only_for_proxy_rows() {
     assert_eq!(job["status"], "succeeded", "{job}");
 
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     let rows = db
         .call(|connection| {
             let mut statement = connection.prepare(
@@ -1230,9 +1230,9 @@ async fn device_token_decrypt_failure_has_own_code() {
     let mock = MockDevice::start(MockOptions::default()).await;
     add_device(&app, &mock, "Pixel 9").await;
 
-    // 模拟 manager.key 变更：设备 Token 密文与当前密钥不匹配。
+    // 模拟 devmask-manager.key 变更：设备 Token 密文与当前密钥不匹配。
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     db.call(|connection| {
         connection.execute(
             "UPDATE devices SET token_cipher = 'v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'",
@@ -1252,7 +1252,7 @@ async fn device_token_decrypt_failure_has_own_code() {
         result["error"]["message"]
             .as_str()
             .unwrap_or_default()
-            .contains("manager.key"),
+            .contains("devmask-manager.key"),
         "{result}"
     );
     // 设备端全程没被请求过。
@@ -1267,9 +1267,9 @@ async fn device_token_invalid_on_both_get_and_job_paths() {
     let proxy_id = proxy["id"].as_str().unwrap().to_string();
     put_bindings(&app, "pixel-9", json!([{ "app": "", "proxyId": proxy_id }])).await;
 
-    // 模拟 manager.key 变更：设备 Token 密文与当前密钥不匹配。
+    // 模拟 devmask-manager.key 变更：设备 Token 密文与当前密钥不匹配。
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     db.call(|connection| {
         connection.execute(
             "UPDATE devices SET token_cipher = 'v1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'",
@@ -1301,7 +1301,7 @@ async fn device_token_invalid_on_both_get_and_job_paths() {
         warning["message"]
             .as_str()
             .unwrap_or_default()
-            .contains("manager.key"),
+            .contains("devmask-manager.key"),
         "{fetched_body}"
     );
     assert!(
@@ -1328,7 +1328,7 @@ async fn probe_failure_response_reports_check_not_recorded_when_write_fails() {
 
     // 让 egress_checks 写入失败：直接删表（等价于探测结果没法落库）。
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     db.call(|connection| connection.execute("DROP TABLE egress_checks", []))
         .await
         .expect("删除 egress_checks");
@@ -1374,7 +1374,7 @@ async fn job_probe_failure_reports_check_not_recorded_when_write_fails() {
     put_bindings(&app, "pixel-9", json!([{ "app": "", "proxyId": proxy_id }])).await;
 
     let db =
-        device_faker_manager::db::Db::open(app.data_dir.join("manager.db")).expect("重开数据库");
+        devmask_manager::db::Db::open(app.data_dir.join("devmask-manager.db")).expect("重开数据库");
     db.call(|connection| connection.execute("DROP TABLE egress_checks", []))
         .await
         .expect("删除 egress_checks");

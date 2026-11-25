@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 use std::{
     ffi::{c_int, c_void},
@@ -204,7 +204,7 @@ fn set_build_int_field(
 // 也拉不回直连。zygisk 的 pre/post_app_specialize 都早于它，所以必须**再写一次**——
 // 见 [arm_egress_replay]：注入后起一个短命线程，按 [crate::egress::replay_offsets_ms]
 // 的节奏读回属性，一发现不符（= 框架刚写过）就重放，直到稳定或窗口用尽。
-// 真机时间序证据走 logcat（标签 `DeviceFaker`），见 [emit_logcat]。
+// 真机时间序证据走 logcat（标签 `DevMask`），见 [emit_logcat]。
 //
 // 三条硬约束：
 //   1. **未配置 = 零动作**：[apply_egress_proxy] 的第一个分支就是 return，连一次 JNI
@@ -634,8 +634,8 @@ pub(crate) fn arm_egress_replay(api: &mut ZygiskApi<V4>, arming: ReplayArming) {
     //    排障开关（**仅排障 / QA 用**）：真机上「hook unavailable」的两条触发条件
     //    （镜像缺失 / PLT commit 失败）都不可制造，所以留一个显式开关，让链路**完全**退到
     //    「没挂上 hook」的状态——不登记任务、不置位、不保留模块代码页，只记一行同族日志。
-    //       adb shell setprop debug.device_faker.egress.disable_replay 1    # 重启应用生效
-    //       adb shell setprop debug.device_faker.egress.disable_replay ""   # 恢复（空值 = 关闭）
+    //       adb shell setprop debug.devmask.egress.disable_replay 1    # 重启应用生效
+    //       adb shell setprop debug.devmask.egress.disable_replay ""   # 恢复（空值 = 关闭）
     //    护栏：必须同时 config.toml 里 debug = true 才生效（debug 关闭时不改变行为）；
     //    值只认 1/true/yes/on（大小写不敏感），空值与其它值一律视为关闭；需要 root/shell 写；
     //    测试完务必 setprop "" 并**重启应用**；属性名会残留在进程属性表里、可被枚举。
@@ -797,7 +797,7 @@ fn install_never_fired_probe(package: &str) {
     // 信号上下文不能分配：tag 与整行消息在这里预构建成 C 字符串（进程级生命周期）。
     let line = crate::egress::replay_not_fired_line(window_ms, window_ms, package);
     if let (Ok(tag), Ok(message)) = (
-        std::ffi::CString::new("DeviceFaker"),
+        std::ffi::CString::new("DevMask"),
         std::ffi::CString::new(line.as_str()),
     ) {
         SIGNAL_TAG.store(tag.into_raw(), Ordering::Release);
@@ -909,14 +909,14 @@ fn replay_unavailable(outcome: crate::egress::ArmOutcome) {
     }
 }
 
-/// 读 Android 系统属性 `debug.device_faker.egress.disable_replay`：`1/true/yes/on` 视为开启。
+/// 读 Android 系统属性 `debug.devmask.egress.disable_replay`：`1/true/yes/on` 视为开启。
 ///
 /// 用 Android 属性（`setprop`）而不是 Java 系统属性：arm 发生在 specialize 早期，读 Java
 /// 属性要走 JNI；这里只需要一个进程级开关。`setprop` 之后**重启应用**才生效（每个进程
 /// 在 specialize 时读一次）。
 #[cfg(target_os = "android")]
 fn replay_disabled_by_debug_prop() -> bool {
-    const NAME: &std::ffi::CStr = c"debug.device_faker.egress.disable_replay";
+    const NAME: &std::ffi::CStr = c"debug.devmask.egress.disable_replay";
     // PROP_VALUE_MAX（92 字节）：`__system_property_get` 要求缓冲区至少这么大。
     let mut buffer = [0 as libc::c_char; 92];
     // SAFETY: 缓冲区长度符合要求，成功时写入以 NUL 结尾。
@@ -1246,7 +1246,7 @@ fn android_log_write_symbol() -> *mut c_void {
 ///
 /// 重放发生在 `pre_app_specialize` **返回之后**，那时模块的日志缓冲已经 flush 给 companion
 /// 了——之后 `log::` 宏写出的行不会再有人取走。所以重放的时间序证据直接走 logcat
-/// （`adb logcat -s DeviceFaker`），可与探针应用的 logcat 读数对齐时间。
+/// （`adb logcat -s DevMask`），可与探针应用的 logcat 读数对齐时间。
 #[cfg(target_os = "android")]
 fn emit_logcat(priority: i32, message: &str) {
     use std::ffi::CString;
@@ -1257,7 +1257,7 @@ fn emit_logcat(priority: i32, message: &str) {
     }
     // SAFETY: 符号已按 android/log.h 的 __android_log_write(int, const char*, const char*) 解析。
     let writer: AndroidLogWrite = unsafe { std::mem::transmute(symbol) };
-    let Ok(tag) = CString::new("DeviceFaker") else {
+    let Ok(tag) = CString::new("DevMask") else {
         return;
     };
     let Ok(text) = CString::new(message.replace('\0', " ")) else {

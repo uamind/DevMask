@@ -1,11 +1,29 @@
 # 📝更新日志
 
+## 🚀[v0.0.1] - 2026-11-25 · 更名首发
+
+> 项目更名为 **DevMask**，版本号从零重开。以下历史章节属于 Device Faker 时期，保留备查。
+
+### 🆕 新功能
+- 🌐 带认证代理：设备内中继代填凭据，支持 HTTP Basic 与 SOCKS5（RFC 1929）
+- 🔀 应用级出口代理：按包名指定出口，支持 __DIRECT__ 强制直连
+- 🧭 Manager 代理池：绑定、批量下发、出口 IP 校验与审计
+- 🛡️ fail-closed 防火墙：三链 iptables + uid 白名单，规则被外部清掉会自动复核
+
+### ⚡ 改进
+- 📦 模块 id / 运行路径 / API 头 / 存储键统一改为 devmask 前缀
+- 📚 重写 README，按"设备侧 / 网络侧 / 管理侧"重新组织
+
+### ⚠️ 已知限制
+- 设备级不支持 SOCKS5；应用级注入只覆盖 Java 网络栈
+- 严格 uid 归属待补（当前靠内核 owner match + 限频复核）
+
 ## ⬆️[v1.10.0 → v1.11.0] - 2026-12-02
 
 ### 🆕 新功能
 - 🔐 **设备内认证中继（relay）**：带用户名/密码的代理由设备内一个只监听 `127.0.0.1` 的中继转发，替应用补 HTTP Basic / SOCKS5 RFC1929；设备级与应用级都覆盖，应用零改造
 - 🔌 中继端口表：`egress.toml` 新增 `[relay]` 段与只读 `local_port`；区间 17800–17899，设备级占 `base_port`、应用级哈希分配，跨重启稳定
-- 🛡️ uid 防火墙：三条 iptables 链（`DF_EGRESS_RLY` / `_ALLOW` / `_DENY`），只放行授权 uid；重建期间 **fail-closed**（DENY 兜底，不裸奔）
+- 🛡️ uid 防火墙：三条 iptables 链（`DM_EGRESS_RLY` / `_ALLOW` / `_DENY`），只放行授权 uid；重建期间 **fail-closed**（DENY 兜底，不裸奔）
 - 🔁 `POST /api/v1/egress/relay/restart`（`ops`，强制 apply）；`GET /egress` 增 `relay` 对象；`GET /egress/proxies` 增 `localPort` / `relayActive`
 - 🔍 探测新增 `via=relay`（缺省仍 `upstream`）：一次覆盖「本地端口在监听 + 中继转发 + 上游认证 + 目标往返」；新增 `relay_not_listening` / `relay_connect` 两个 reason
 
@@ -17,7 +35,7 @@
 - 📚 文档：API.md / openapi.yaml（30 个操作）/ CONFIG.md / SERVER.md / Manager 契约与架构同步；新增 5 个 `egress_relay_*` 警告码（含设备级 socks5 的 `egress_relay_device_socks5_unsupported`）
 
 ### ⚠️ 已知限制
-- 中继端口（`127.0.0.1:178xx`）与链名 `DF_EGRESS_RLY` 属**可检出项**；中继出网的是 **root** 进程，会绕过 AFWall+ / NetGuard 等按 uid 的防火墙
+- 中继端口（`127.0.0.1:178xx`）与链名 `DM_EGRESS_RLY` 属**可检出项**；中继出网的是 **root** 进程，会绕过 AFWall+ / NetGuard 等按 uid 的防火墙
 - **设备级依赖中继存活**：listener 挂掉期间整机代理链路不可用；`fail_open=true` 时下一次上游探测失败会**静默直连**（要「绝不直连」请把 `[probe].fail_open` 设为 `false`）
 - 只有**带凭据**的代理才走中继；关闭中继没有 API（编辑 0600 的 `egress.toml` 的 `[relay].enabled` + restart）
 - relay 只覆盖 **Java 层**：native 栈与 WebView 不受 fail-closed 保护
@@ -33,7 +51,7 @@
 - 📡 出口 IP 探测：`POST /api/v1/egress/probe` 经当前链路请求可配置探测 URL，返回出口 IP / 延迟 / 时间；失败给结构化错误码
 - 🗄️ Manager 代理池：`/relay/api/v1/egress-proxies` CRUD、绑定（整机 / 应用级）、批量下发（job `kind=egress`）、代理侧独立探测
 - 🖥️ 双侧 WebUI：设备端设置页「网络出口」卡片（代理配置 + 探测 + 直连回滚），Manager 新增「代理池」页并在设备卡片显示出口 IP / 代理名
-- 🔐 凭据保护：代理定义独立存 `egress.toml`（`0600`），API / 日志 / 审计 / WebUI 全程只给 `hasCredentials`；Manager 侧用 `manager.key` AES-256-GCM 加密落库
+- 🔐 凭据保护：代理定义独立存 `egress.toml`（`0600`），API / 日志 / 审计 / WebUI 全程只给 `hasCredentials`；Manager 侧用 `devmask-manager.key` AES-256-GCM 加密落库
 
 ### ⚡ 改进
 - 🧯 清除系统代理只用 `settings put global http_proxy :0`（`settings delete` 在 Android 17 上清不掉，实测记录在案）
@@ -77,7 +95,7 @@
 ### ⚡ 改进
 - 🏎️ companion 读取属性零 fork —— 存在性判定与备份直接查属性区
 - 👻 属性写入「本机不存在就不写」，不再留下可枚举的幽灵属性
-- 📦 模块不再打包 device_faker_cli，安装包体积减小
+- 📦 模块不再打包 devmask_cli，安装包体积减小
 - 🧱 cow_props 拆分为 11 个模块，职责分层便于维护
 - ⬆️ 依赖全量升级：rsbinder 0.11、WebUI 依赖 20+ 项、CI 升 NDK r30
 

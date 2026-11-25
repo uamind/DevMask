@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! ANY /devices/{id}/proxy/api/v1/{*path}：带设备 Token 的单设备透传。
 
@@ -154,12 +154,12 @@ fn proxy_response(proxy: ProxyResponse) -> Response {
         HeaderValue::from_str(content_type)
             .unwrap_or_else(|_| HeaderValue::from_static("application/json")),
     );
-    response_header(headers, "x-df-revision", proxy.revision);
+    response_header(headers, "x-dm-revision", proxy.revision);
     response_header(headers, "etag", proxy.etag);
     response_header(headers, "retry-after", proxy.retry_after);
     response_header(
         headers,
-        "x-df-upstream-request-id",
+        "x-dm-upstream-request-id",
         proxy.upstream_request_id,
     );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));

@@ -2,7 +2,7 @@
 
 - 结论：**FAIL（2 个阻塞缺陷 + 1 个中等问题）**——默认配置下**应用级中继完全不可用**；设备级中继可用。
 - 环境：Pixel 9（tokay）4A190DLAQ002QR，Android 17 / SDK 37，KernelSU root；模块装载本次构建（server 4.2 MiB / zygisk arm64-v8a.so）；契约 v1.2（§5.7 / §10.2–§10.4 / #19–#23）。
-- 被测代码：HEAD 3ddd031 + 未提交改动（t2/t3/t4/t5/t15 合并态），`cargo run -p xtask -- build -r` 产物 `output/device_faker-(release).zip`。
+- 被测代码：HEAD 3ddd031 + 未提交改动（t2/t3/t4/t5/t15 合并态），`cargo run -p xtask -- build -r` 产物 `output/devmask-(release).zip`。
 - 证据目录：`docs/design/relay/evidence-t9/`。
 
 ## 0. 结论总表
@@ -29,9 +29,9 @@
 - `GET /egress.relay.listeners`：dev_http(17800) listening=true；**app_http(17835) listening=false**，
   `lastError={code:"egress_relay_firewall_failed", reason:"command_failed"}`；
   `relay.firewall={applied:false, rules:10, allowRules:5, denyRules:2, lastError:{reason:"state_mismatch"}}`。
-- `iptables -S DF_EGRESS_RLY_ALLOW`（evidence-t9/firewall-apply-failure.log）里 **17835 的 uid 0 规则出现两次**：
+- `iptables -S DM_EGRESS_RLY_ALLOW`（evidence-t9/firewall-apply-failure.log）里 **17835 的 uid 0 规则出现两次**：
 
-      -N DF_EGRESS_RLY_ALLOW
+      -N DM_EGRESS_RLY_ALLOW
       -A … --dport 17800 -m owner --uid-owner 0 -j ACCEPT
       -A … --dport 17835 -m owner --uid-owner 0 -j ACCEPT
       -A … --dport 17800 -j ACCEPT
@@ -106,9 +106,9 @@ evidence-t9/credential-scan.log：
 evidence-t9/uninstall-cleanup.log：
 
     ss -ltn | grep 178xx                     -> (none)
-    iptables -S DF_EGRESS_RLY                -> No chain/target/match by that name
+    iptables -S DM_EGRESS_RLY                -> No chain/target/match by that name
     settings get global http_proxy           -> :0
-    ps -A | grep device_faker_server         -> (none)
+    ps -A | grep devmask_server         -> (none)
 
 ### 4.5 fail-closed 注入（#19）
 
@@ -138,9 +138,9 @@ evidence-t9/uninstall-cleanup.log：
 
 evidence-t9/restore-state.log：
 
-    module: /data/adb/modules/device_faker（本次构建，server 4203288 B / zygisk 1448528 B）
+    module: /data/adb/modules/devmask（本次构建，server 4203288 B / zygisk 1448528 B）
     settings get global http_proxy -> :0
-    iptables -S DF_EGRESS_RLY      -> No chain/target/match by that name
+    iptables -S DM_EGRESS_RLY      -> No chain/target/match by that name
     GET /api/v1/egress             -> 200，configured=false，mode=direct
     fixture: 已停止；adb forward 保留 tcp:18686
 
@@ -166,7 +166,7 @@ evidence-t9/restore-state.log：
 
 | 项 | 通过判据 | 命令要点 |
 | --- | --- | --- |
-| F1 | `relay.firewall.applied=true`；`app_http` listener `listening=true` 且能 accept；ALLOW 链里同一 (port, uid) 不重复；连续两次 restart 仍成立 | `GET /egress` + `iptables -S DF_EGRESS_RLY_ALLOW` + `ss -ltn` |
+| F1 | `relay.firewall.applied=true`；`app_http` listener `listening=true` 且能 accept；ALLOW 链里同一 (port, uid) 不重复；连续两次 restart 仍成立 | `GET /egress` + `iptables -S DM_EGRESS_RLY_ALLOW` + `ss -ltn` |
 | F2 | 应用内探针经应用级 HTTP 成功（`fetch.app=200 body=198.51.100.8`，fixture `listener=18082 auth=ok digest=7213dc66f53c`）；经应用级 SOCKS5 成功且远程 DNS（fixture `CONNECT app.fixture:80` 域名 + `method=userpass(ok) digest=c71343023d5c`），探针 `socksdomain=ok` | 探针 APK + fixture 日志 |
 | F3 | relay 生效时 PUT/GET warnings 不再出现 `egress_auth_unsupported` | `curl ... /egress` 过滤 code |
 | 回归五组 | cfg-app-http → cfg-app-socks → cfg-app-plain（直连 407，证明不经 relay）→ cfg-app-dead（502 + `egress_relay_upstream_unreachable`）→ cfg-app-direct（`__DIRECT__`，selector=DIRECT、fixture 命中 0） | `/tmp/t9-run/cfg-app-*.json` |

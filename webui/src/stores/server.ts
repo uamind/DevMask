@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
@@ -23,7 +23,7 @@ import { useI18n } from '../utils/i18n'
 import { describeApiError, pickServerMessages } from './serverMessages'
 
 /** 登录成功后广播：配置 store 据此重新加载（它不能反向依赖本 store，避免循环导入）。 */
-const TOKEN_CHANGED_EVENT = 'device-faker:token-changed'
+const TOKEN_CHANGED_EVENT = 'devmask:token-changed'
 
 /**
  * 原生模式的服务状态与登录态（契约 §3.5 / §10.5）。

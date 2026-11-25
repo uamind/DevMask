@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 #
 # t9 验收用：带认证上游 fixture 的启动/停止/取证包装（默认值与 t9-acceptance.md §2 一致）。
 #   t9-fixture.sh start [evidence-dir]

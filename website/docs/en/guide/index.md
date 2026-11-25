@@ -1,4 +1,4 @@
-# Device Faker 📱
+# DevMask 📱
 
 A device model spoofing module based on Zygisk that can configure different device models for different applications.
 
@@ -15,7 +15,7 @@ A device model spoofing module based on Zygisk that can configure different devi
 
 ## WebUI Features 🖥️
 
-Device Faker provides a modern web management interface.
+DevMask provides a modern web management interface.
 
 - 📋 **Template Management**: Create, edit and delete device templates, batch apply to multiple package names
 - 📱 **Application Management**: Intuitive view of installed applications and their configuration status, supports multi-user apps display
@@ -26,13 +26,13 @@ Device Faker provides a modern web management interface.
 
 For detailed configuration instructions, please refer to the [Configuration Documentation](./configuration/index.md).
 
-The configuration file is located at `/data/adb/device_faker/config/config.toml` and uses TOML format. After modifying the configuration, just restart the corresponding application to take effect, no need to restart the system.
+The configuration file is located at `/data/adb/devmask/config/config.toml` and uses TOML format. After modifying the configuration, just restart the corresponding application to take effect, no need to restart the system.
 
 ## Template Configuration Contribution 🎁
 
-Thanks to community contributions! You can also participate! Device Faker configuration repository:
+Thanks to community contributions! You can also participate! DevMask configuration repository:
 
-- 📦 [device_faker_config](https://github.com/Seyud/device_faker_config) - Contribute device template configurations
+- 📦 [devmask_config](https://github.com/uamind/DevMask_config) - Contribute device template configurations
 
 Contribute device configurations to help more users get better device spoofing results!
 

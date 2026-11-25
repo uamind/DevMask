@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 上游连接：**单一总预算** + NODELAY（HTTP 与 SOCKS5 两条数据面共用，F4）。
 //!

@@ -1,13 +1,13 @@
 # t15 复验：设备端出口代理（Pixel 9，第二轮）
 
 - 设备：Pixel 9（tokay），4A190DLAQ002QR，Android 17 / SDK 37，KernelSU root
-- 模块：v1.10.0（versionCode 20261201），/data/adb/modules/device_faker
-- 设备端服务：device_faker_server 1.10.0，127.0.0.1:8686，capabilities 含 egress
+- 模块：v1.10.0（versionCode 20261201），/data/adb/modules/devmask
+- 设备端服务：devmask_server 1.10.0，127.0.0.1:8686，capabilities 含 egress
 - 代码基线：HEAD 822bbc7 + 未提交改动（含 t14 对 src/ 的修复）
 - 本轮为 t9 缺陷（F1/F2/F3）修复后的复验；**未修改任何实现代码**（改动只在 docs/design/egress/）
-- 构建与静态检查：cargo fmt --check = 0，cargo clippy -p device_faker_server --all-targets -- -D warnings = 0，
-  cargo test -p device_faker_server = **226 passed / 0 failed**（原始输出见 evidence-t15/cargo-checks.log）
-- 装机：重新编译 libzygisk.so（含 t14 修复）与 device_faker_server，推送后 adb reboot 让 Zygisk 重新加载
+- 构建与静态检查：cargo fmt --check = 0，cargo clippy -p devmask_server --all-targets -- -D warnings = 0，
+  cargo test -p devmask_server = **226 passed / 0 failed**（原始输出见 evidence-t15/cargo-checks.log）
+- 装机：重新编译 libzygisk.so（含 t14 修复）与 devmask_server，推送后 adb reboot 让 Zygisk 重新加载
 
 ## 结论总表
 
@@ -199,7 +199,7 @@ configured app: before=100 after=104 delta=4
 ~~~
 
 **结论：通过。** t14 修正了「设备级 default 会让每个应用都挂 hook+线程」的行为，未配置应用不再有注入与重放线程。
-说明：/proc/&lt;pid&gt;/maps 不能用来判定（Zygisk 映射路径不含 device_faker，已配置应用同样查不到），
+说明：/proc/&lt;pid&gt;/maps 不能用来判定（Zygisk 映射路径不含 devmask，已配置应用同样查不到），
 因此证据以**模块侧自己写的日志**为准——它不是应用 self-report，且未配置/已配置两组差异稳定（0 vs 4）。
 
 ## 6. F3：ProxySelector 缺失的降级记录（PASS）
@@ -266,7 +266,7 @@ ProxyTracker:
 $ adb shell grep -c egressprobe config.toml   -> 0
 $ adb shell grep -c "[egress]" config.toml    -> 0
 $ adb shell ls .../egress.toml                -> No such file or directory
-$ adb shell ps -A | grep device_faker_server  -> 运行中（tokens=1，临时 Token 已移除）
+$ adb shell ps -A | grep devmask_server  -> 运行中（tokens=1，临时 Token 已移除）
 $ adb reverse --list                          -> （空）
 ~~~
 
@@ -297,9 +297,9 @@ $ adb reverse --list                          -> （空）
 # 0) 构建 + 装机（仓库根目录）
 export ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk
 RUSTFLAGS="-C default-linker-libraries" cargo +nightly ndk --platform 31 -t arm64-v8a build --release
-cargo ndk --platform 29 -t arm64-v8a build -p device_faker_server --release
-adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/device_faker/zygisk/arm64-v8a.so
-adb push target/aarch64-linux-android/release/device_faker_server /data/adb/modules/device_faker/bin/
+cargo ndk --platform 29 -t arm64-v8a build -p devmask_server --release
+adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/devmask/zygisk/arm64-v8a.so
+adb push target/aarch64-linux-android/release/devmask_server /data/adb/modules/devmask/bin/
 adb reboot   # zygisk .so 需开机重新加载
 
 # 1) fixture + 隧道
@@ -341,15 +341,15 @@ hook fired/unavailable、重放窗口边界），本节逐条对照，证据见 
 
 ~~~
 CASE C：设备级 :0 + 未配置应用 com.reqable.android
-  device_faker.log 行数 before=2603 after=2603 delta=0
+  devmask.log 行数 before=2603 after=2603 delta=0
   该包 [egress] 行数=0
-  logcat 中该进程的 DeviceFaker 行数=0（另有一条是 adbd 自己记录命令行，不是模块日志）
-  /proc/<pid>/maps 命中 device_faker|arm64-v8a|zygisk = 0
+  logcat 中该进程的 DevMask 行数=0（另有一条是 adbd 自己记录命令行，不是模块日志）
+  /proc/<pid>/maps 命中 devmask|arm64-v8a|zygisk = 0
 
 CASE D：设备级 default=mac_http(18080) 开启 + 同一未配置应用（继承，不注入）
-  device_faker.log 行数 before=2604 after=2604 delta=0
+  devmask.log 行数 before=2604 after=2604 delta=0
   该包 [egress] 行数=0
-  logcat 中该进程的 DeviceFaker 行数=0
+  logcat 中该进程的 DevMask 行数=0
   /proc/<pid>/maps 命中 = 0
   该应用仍由框架继承设备级代理（fixture 侧继续出现它经 18080 的 CONNECT）
 ~~~
@@ -365,9 +365,9 @@ CASE D：设备级 default=mac_http(18080) 开启 + 同一未配置应用（继�
   此后进程继续存活、继续创建线程（旋转/重建 Activity）也没有因调用 setpriority 崩溃——
   若 .so 已被 dlclose，这些晚到的 hook 调用会直接 SIGSEGV。
 - **但 /proc/<pid>/maps 里看不到任何模块名**：armed 进程 3170 行 maps 中，
-  device_faker|arm64-v8a|libzygisk 命中 0，[anon: 名字里也没有 egress/zygisk 相关项
+  devmask|arm64-v8a|libzygisk 命中 0，[anon: 名字里也没有 egress/zygisk 相关项
   （Zygisk Next 在本机把模块代码加载成无名映射；只有 companion 进程的 maps 里能看到
-  /data/adb/modules/device_faker/zygisk/arm64-v8a.so，7 行）。
+  /data/adb/modules/devmask/zygisk/arm64-v8a.so，7 行）。
 - **可检出性影响（写给下游）**：按名字扫 maps 检测不到本模块在应用进程中的存在（比
   docs/CHANGELOG 里「maps 可检出」的说法更弱），因此这条「已知代价」在当前构建上并未实际暴露；
   但 zygisk 自身（zygiskd64 进程、/data/adb/modules 挂载、Zygisk 相关线程）仍可被检测。
@@ -389,17 +389,17 @@ CASE D：设备级 default=mac_http(18080) 开启 + 同一未配置应用（继�
   1. 装机二进制 strings 校验：两条降级文案都在（libandroid_runtime_not_found / commit_failed）；
   2. 源码位置与触发条件固定、无分支歧义；
   3. 正常路径的 hook fired / replay done 真机原文已取得（见下）。
-- 建议：给 t14 加一个故障注入开关（例如系统属性 debug.device_faker.egress.disable_replay=1
+- 建议：给 t14 加一个故障注入开关（例如系统属性 debug.devmask.egress.disable_replay=1
   时跳过 arming、直接走 unavailable 分支），或由 captain 显式豁免该项；两者任一即可闭环。
 
 ### 重放窗口边界（复核项 7）
 
 ~~~
-11-24 22:15:02.252 DeviceFaker: [egress] replay hook armed package=io.df.egressprobe
-11-24 22:15:02.274 DeviceFaker: [egress] replay hook fired symbol=setpriority
-11-24 22:15:02.274 DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
-11-24 22:15:04.277 DeviceFaker: [egress] replay package=io.df.egressprobe t=26ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
-11-24 22:15:04.278 DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:15:02.252 DevMask: [egress] replay hook armed package=io.df.egressprobe
+11-24 22:15:02.274 DevMask: [egress] replay hook fired symbol=setpriority
+11-24 22:15:02.274 DevMask: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:15:04.277 DevMask: [egress] replay package=io.df.egressprobe t=26ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:15:04.278 DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
 ~~~
 
 - 启动期覆盖被纠正：注入后 t=26ms 检测到框架写入（18080→18082），当场重放 6/6 项。

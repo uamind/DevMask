@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 浏览器侧的 KernelSU 宿主接口垫片：由 tools/webui_remote/server.mjs 注入到
 // WebUI 的 index.html 里，在 Vue 应用加载前定义 window.ksu，把 exec / io / pm /

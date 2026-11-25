@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -430,7 +430,7 @@ async function loadCurrentDevice() {
       const { mockConfig } = await import('../../utils/mockData')
       ;({ templateData, defaultName } = parseFirstTemplateFromToml(mockConfig))
     } else {
-      // 直接读 getprop 输出在前端转换：不再需要临时文件与 device_faker_cli
+      // 直接读 getprop 输出在前端转换：不再需要临时文件与 devmask_cli
       const output = await backend.getProps()
       if (!output.trim()) {
         throw new Error(t('settings.messages.read_failed'))

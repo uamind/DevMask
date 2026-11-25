@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口 IP 探测：最小 HTTP/1.1 客户端（契约 §4）。
 //!
@@ -30,7 +30,7 @@ pub const MAX_BODY: usize = 4 * 1024;
 /// 响应头上限。
 const MAX_HEADER: usize = 16 * 1024;
 /// 探测请求的 User-Agent。
-pub const USER_AGENT: &str = concat!("device_faker/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("devmask/", env!("CARGO_PKG_VERSION"));
 
 /// 解析后的 probe URL（只支持 http://）。
 #[derive(Debug, Clone, PartialEq, Eq)]

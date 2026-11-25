@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 import locales from './locales/index.ts'
 
-const BASE = '/device_faker/'
-const SITE = 'https://seyud.github.io/device_faker/'
+const BASE = '/devmask/'
+const SITE = 'https://seyud.github.io/devmask/'
 
 // Hero logo 内联为 data URI：图片随 HTML 一起到达，不再单独走一个被 GitHub Pages
 // 限速的请求（线上实测 LCP P75 = 7.8s 就是耗在这张图上）。
@@ -17,7 +17,7 @@ const LOGO_SVG = readFileSync(fileURLToPath(new URL('../public/logo.svg', import
 const LOGO_DATA_URI = `data:image/svg+xml;base64,${LOGO_SVG.toString('base64')}`
 
 export default defineConfig({
-  title: 'Device Faker',
+  title: 'DevMask',
   base: BASE,
   locales: locales.locales,
   lastUpdated: true,
@@ -44,8 +44,8 @@ export default defineConfig({
     ['meta', { name: 'theme-color', content: '#4f7cff' }],
 
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:site_name', content: 'Device Faker' }],
-    ['meta', { property: 'og:title', content: 'Device Faker — 基于 Zygisk 的机型伪装模块' }],
+    ['meta', { property: 'og:site_name', content: 'DevMask' }],
+    ['meta', { property: 'og:title', content: 'DevMask — 基于 Zygisk 的机型伪装模块' }],
     ['meta', { property: 'og:description', content: '为每个应用配置不同的设备型号，基于 Zygisk 的机型伪装模块。' }],
     ['meta', { property: 'og:image', content: `${SITE}og-image.png` }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
@@ -68,10 +68,10 @@ export default defineConfig({
       'script',
       {},
       `            ;(() => {
-        const base = '/device_faker/'
-        const KEY = 'lang-pref:/device_faker/'
-        const LAST = 'lang-last:/device_faker/'
-        const FLAG = 'lang-redir:/device_faker/'
+        const base = '/devmask/'
+        const KEY = 'lang-pref:/devmask/'
+        const LAST = 'lang-last:/devmask/'
+        const FLAG = 'lang-redir:/devmask/'
         const path = location.pathname
         if (!path.startsWith(base)) return
         const sub = path.slice(base.length)
@@ -115,8 +115,8 @@ export default defineConfig({
         }
       })()
       ;(() => {
-        const base = '/device_faker/'
-        const KEY = 'lang-pref:/device_faker/'
+        const base = '/devmask/'
+        const KEY = 'lang-pref:/devmask/'
         const onPick = e => {
           const a = e.target && e.target.closest ? e.target.closest('a') : null
           if (!a) return

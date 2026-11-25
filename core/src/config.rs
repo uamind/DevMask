@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 配置模型与合并语义。
 //!
-//! 从 zygisk cdylib 抽出，供 device_faker_server、CLI 与测试复用：模型、模板优先
+//! 从 zygisk cdylib 抽出，供 devmask_server、CLI 与测试复用：模型、模板优先
 //! 规则、属性族展开与 `__DELETE__` / `__EMPTY__` 语义与抽取前完全一致。
 //!
 //! - 解析：[`Config::from_toml`]（`templates` 用 [`IndexMap`] 保留书写顺序）；

@@ -10,14 +10,14 @@ t18 token removed
 (tmp cleaned)
 Success
 (probe app removed)
-[2m2026-11-24T14:41:28.192328Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:41:28.192328Z[0m [32m INFO[0m devmask_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/devmask/webroot [3mconfig[0m[2m=[0m/data/adb/devmask/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/devmask/config/server.toml [3mtokens[0m[2m=[0m1
 [2m2026-11-24T14:41:28.712278Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
 --- 残留检查 ---
 0
 0
 0
 0
-ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+ls: /data/adb/devmask/config/egress.toml: No such file or directory
 --- 最终状态 ---
 List of devices attached
 4A190DLAQ002QR	device
@@ -42,14 +42,14 @@ DELETE HTTP 200
 0
 t18b token removed
 Success
-[2m2026-11-24T14:44:03.702133Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:44:03.702133Z[0m [32m INFO[0m devmask_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/devmask/webroot [3mconfig[0m[2m=[0m/data/adb/devmask/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/devmask/config/server.toml [3mtokens[0m[2m=[0m1
 [2m2026-11-24T14:44:04.217262Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
 --- 残留检查 ---
 0
 0
 0
 0
-ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+ls: /data/adb/devmask/config/egress.toml: No such file or directory
 prop=[]
 --- 最终状态 ---
 List of devices attached

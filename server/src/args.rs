@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 命令行参数。
 //!
@@ -36,11 +36,11 @@ pub struct CliArgs {
 
 /// --help 文本。
 pub const USAGE: &str = concat!(
-    "device_faker_server - Device Faker 原生 Web 服务\n\n",
-    "用法: device_faker_server [选项]\n\n",
+    "devmask_server - DevMask 原生 Web 服务\n\n",
+    "用法: devmask_server [选项]\n\n",
     "选项:\n",
-    "  --config-path <PATH>     配置 config.toml 路径（默认 /data/adb/device_faker/config/config.toml）\n",
-    "  --static-dir <PATH>      WebUI 静态目录（默认 /data/adb/modules/device_faker/webroot）\n",
+    "  --config-path <PATH>     配置 config.toml 路径（默认 /data/adb/devmask/config/config.toml）\n",
+    "  --static-dir <PATH>      WebUI 静态目录（默认 /data/adb/modules/devmask/webroot）\n",
     "  --bind <ADDR>            监听地址（默认 127.0.0.1:8686）\n",
     "  --server-config <PATH>   server.toml 路径（默认与 config.toml 同目录）\n",
     "  --module-prop <PATH>     module.prop 路径（默认静态目录的父目录）\n",

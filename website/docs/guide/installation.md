@@ -3,7 +3,7 @@
 ## 环境要求
 
 ::: danger 不支持 Magisk 自带的 Zygisk
-Device Faker **不支持 Magisk 自带的 Zygisk**，需要第三方 Zygisk 实现（推荐 **ZygiskNext**）。
+DevMask **不支持 Magisk 自带的 Zygisk**，需要第三方 Zygisk 实现（推荐 **ZygiskNext**）。
 
 请先安装并重启，再安装本模块。否则安装会直接中止
 :::
@@ -15,8 +15,8 @@ Device Faker **不支持 Magisk 自带的 Zygisk**，需要第三方 Zygisk 实�
 
 ## 下载
 
-从 [Releases](https://github.com/Seyud/device_faker/releases/latest) 页面下载最新的
-`device_faker-(release).zip`。
+从 [Releases](https://github.com/uamind/DevMask/releases/latest) 页面下载最新的
+`devmask-(release).zip`。
 
 ## 安装步骤
 
@@ -34,9 +34,9 @@ Device Faker **不支持 Magisk 自带的 Zygisk**，需要第三方 Zygisk 实�
 在 Magisk / KernelSU 的模块页面移除模块并重启即可。
 
 ::: warning 卸载会删除配置文件
-模块自带了卸载脚本，卸载时会执行 `rm -rf /data/adb/device_faker`，
+模块自带了卸载脚本，卸载时会执行 `rm -rf /data/adb/devmask`，
 **配置目录会被一并删除**。需要保留配置的话，请先手动备份
-`/data/adb/device_faker/config/config.toml`。
+`/data/adb/devmask/config/config.toml`。
 :::
 
 ## 下一步

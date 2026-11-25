@@ -39,7 +39,7 @@
 
 ### 方案 A（推荐）：设备内本地认证中继
 
-在 device_faker_server（已是 root、常驻、有 tokio）里跑一个**只监听 127.0.0.1 的转发代理**：
+在 devmask_server（已是 root、常驻、有 tokio）里跑一个**只监听 127.0.0.1 的转发代理**：
 
     app ──(普通代理，无认证)──> 127.0.0.1:P_local ──(注入凭据)──> 上游代理 ──> 互联网
 
@@ -64,7 +64,7 @@
 
 ## 4. 架构
 
-    ┌──────────────── device_faker_server (root) ────────────────┐
+    ┌──────────────── devmask_server (root) ────────────────┐
     │  egress 模块（已有：egress.toml / settings / probe）        │
     │  relay 模块（新增）                                        │
     │   ├─ 端口表：proxy name → 127.0.0.1:P_local（持久化）       │
@@ -126,7 +126,7 @@ loopback 端口默认对所有 uid 可达，任何 App 都能拿它当免费代�
 1. **uid 防火墙（默认开）**：iptables owner match 只放行授权 uid
    - 应用级端口：只放行该代理绑定到的包 uid（多用户按 userId 逐个解析）+ root
    - 设备级端口：放行全部 uid（语义上它就是"整机代理"），但仍拒绝非回环来源
-   - 规则：-A OUTPUT -o lo -p tcp --dport P -m owner --uid-owner U -j ACCEPT，之后 -j REJECT；链名 DF_EGRESS_RLY
+   - 规则：-A OUTPUT -o lo -p tcp --dport P -m owner --uid-owner U -j ACCEPT，之后 -j REJECT；链名 DM_EGRESS_RLY
    - 解析失败（包未安装、uid 取不到）→ 该端口**不监听**，并给 warning
 2. **拒绝非 loopback 源**：listener 只 bind 127.0.0.1；出站连接源地址也固定回环。
 3. **连接计数与速率**：单 uid 并发上限（默认 64），超限直接断开并计数。
@@ -255,4 +255,4 @@ PUT /egress 语义扩展：proxies[].local_port 只读，客户端传了 → 422
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

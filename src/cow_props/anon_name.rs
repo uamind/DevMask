@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 匿名 VMA 命名（中性名 `linker_alloc`，含内核能力探测）。
 //!
-//! 名字**必须中性**：maps 里出现的任何模块相关字样（device_faker / zygisk / libdf /
+//! 名字**必须中性**：maps 里出现的任何模块相关字样（devmask / zygisk / libdf /
 //! prop-area / memfd…）本身就会变成新的指纹。用 `linker_alloc`——bionic/linker 本就
 //! 大量产出 `r--p [anon:linker_alloc]`，同形易混。
 
 use log::{info, warn};
 
 /// 副本匿名映射的 VMA 名。**必须中性**：maps 里出现的任何模块相关字样
-/// （device_faker / zygisk / libdf / prop-area / memfd …）本身就会变成新的指纹。
+/// （devmask / zygisk / libdf / prop-area / memfd …）本身就会变成新的指纹。
 /// 用 linker_alloc——bionic/linker 本就大量产出 `r--p [anon:linker_alloc]`，同形易混。
 pub(super) const CLONE_ANON_NAME: &std::ffi::CStr = c"linker_alloc";
 

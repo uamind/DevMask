@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 """
 打包 Magisk 模块脚本
@@ -12,7 +12,7 @@
 
 zip 内容约定（安装器按 zip 里的 unix mode 落盘）：
 - module/ 下所有文件（.gitignore 之类的隐藏文件跳过）；
-- bin/device_faker_server：从 target/aarch64-linux-android/{release,debug}/ 找，
+- bin/devmask_server：从 target/aarch64-linux-android/{release,debug}/ 找，
   找到就以 0755 写进 zip，找不到只警告（配合 --no-server 可静默跳过）；
 - *.sh 与 bin/ 下的文件一律 0755，其余 0644。
 """
@@ -24,7 +24,7 @@ import stat
 import sys
 import zipfile
 
-SERVER_BIN_NAME = "device_faker_server"
+SERVER_BIN_NAME = "devmask_server"
 SERVER_TARGET_TRIPLE = "aarch64-linux-android"
 
 
@@ -80,7 +80,7 @@ def add_file(zipf, file_path, arcname, mode):
 
 
 def find_server_binary(project_root):
-    """找 `cargo xtask build` / `cargo ndk ... -p device_faker_server` 的产物，release 优先。"""
+    """找 `cargo xtask build` / `cargo ndk ... -p devmask_server` 的产物，release 优先。"""
     for profile in ("release", "debug"):
         candidate = os.path.join(
             project_root, "target", SERVER_TARGET_TRIPLE, profile, SERVER_BIN_NAME
@@ -104,14 +104,14 @@ def create_magisk_module_zip(include_server=True, output_dir=None):
     server_binary = find_server_binary(project_root) if include_server else None
     if include_server and server_binary is None:
         print(
-            "警告: 未找到 bin/device_faker_server（target/"
+            "警告: 未找到 bin/devmask_server（target/"
             f"{SERVER_TARGET_TRIPLE}/{{release,debug}}/{SERVER_BIN_NAME}）。",
             file=sys.stderr,
         )
         print(
             "      这次打出的 zip 不含原生 Web 服务；先运行 "
             "`cargo xtask build -r` 或 `cargo ndk -t arm64-v8a --platform 29 "
-            "build -p device_faker_server --release`。",
+            "build -p devmask_server --release`。",
             file=sys.stderr,
         )
 
@@ -127,7 +127,7 @@ def create_magisk_module_zip(include_server=True, output_dir=None):
 
     # 生成带时间戳的 ZIP 文件名
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_filename = f"device_faker_{timestamp}.zip"
+    zip_filename = f"devmask_{timestamp}.zip"
     zip_path = os.path.join(output_dir, zip_filename)
 
     print("\n开始打包 Magisk 模块...")
@@ -166,11 +166,11 @@ def create_magisk_module_zip(include_server=True, output_dir=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="打包 Device Faker Magisk 模块")
+    parser = argparse.ArgumentParser(description="打包 DevMask Magisk 模块")
     parser.add_argument(
         "--no-server",
         action="store_true",
-        help="不打包 bin/device_faker_server（只出 WebUI + 脚本）",
+        help="不打包 bin/devmask_server（只出 WebUI + 脚本）",
     )
     parser.add_argument(
         "--output-dir",

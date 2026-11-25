@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -774,8 +774,8 @@ function bindingRelayEndpoint(binding: DeviceEgressBinding): string | null {
 }
 
 /**
- * egress revision：只用 X-DF-Egress-Revision（client.ts 采集）或响应体的 revision。
- * 绝不读 X-DF-Revision / ETag —— 那是 config revision，混用会让 PUT /config 永远 412。
+ * egress revision：只用 X-DM-Egress-Revision（client.ts 采集）或响应体的 revision。
+ * 绝不读 X-DM-Revision / ETag —— 那是 config revision，混用会让 PUT /config 永远 412。
  */
 const egressRevision = computed<string | null>(() => {
   const id = selectedId.value

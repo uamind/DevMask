@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // Manager Relay API 类型草案（API v1 / manager 0.2.0；含 egress 增量）。
 // 契约来源：manager/docs/API.md；字段命名规则见该文档 §2.2。
@@ -83,7 +83,7 @@ export type ValidationErrorCode =
   | 'invalid_egress_name'
   | 'invalid_egress_proxy'
   | 'invalid_probe_url'
-  /** v1.11.0 起 socks5 探测真连，本码不再返回（保留兼容）。 */
+  /** v0.0.1 起 socks5 探测真连，本码不再返回（保留兼容）。 */
   | 'unsupported_proxy_type'
 
 /** 单个字段校验错误。 */
@@ -329,7 +329,7 @@ export interface DeviceEgressSummary {
   checkedAt: Iso8601 | null
   ok: boolean | null
   errorCode: string | null
-  /** v1.11.0：设备内认证中继状态；离线 / 旧设备 / 未绑定时为 null。 */
+  /** v0.0.1：设备内认证中继状态；离线 / 旧设备 / 未绑定时为 null。 */
   relay?: DeviceRelaySummary | null
 }
 

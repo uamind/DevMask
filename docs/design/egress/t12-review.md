@@ -49,24 +49,24 @@ t10 的 8 条验收结论本身**与实现一致**（409、结果码、probe、�
 
 ```sh
 # 1) Manager 全量测试（与 t10 一致：142 passed）
-cargo test -p device_faker_manager
+cargo test -p devmask_manager
 #    lib 64 + apply_flow 14 + devices_flow 14 + e2e 4 + egress_flow 6
 #    + manager_api 17 + ops_endpoints 8 + review_reverify 15 => 142 passed / 0 failed
 
 # 2) 复现 A/B（真实 manager 二进制 + docs/design/egress/fixtures/mock_device_egress.py）
-cargo build -p device_faker_manager
+cargo build -p devmask_manager
 python3 docs/design/egress/evidence-t12/repro-manager-egress.py
 #    A: dryRun 前 bindings=[] -> dryRun 后 bindings 多 1 行
 #    B: PATCH password -> apply 结果 egress_unchanged、设备侧 PUT /egress 次数不增加
 
 # 3) 复现 C（真实 device server 的 apps 合并语义旁证）
-cargo build -p device_faker_server
+cargo build -p devmask_server
 python3 docs/design/egress/evidence-t12/repro-device-apps-merge.py
 #    apps:[] 后 config.toml 仍保留 egress = "__DIRECT__"；apps:null 才清空
 
 # 4) 凭据边界（用复现跑出的真实数据目录）
-grep -c s3cret /tmp/t12-manager.log /tmp/dfm-t12/manager.db   # 全 0（收尾 checkpoint 后 -wal/-shm 已回收）
-ls -l /tmp/dfm-t12/manager.key                                                            # -rw------- 32 字节
+grep -c s3cret /tmp/t12-manager.log /tmp/dm-t12/devmask-manager.db   # 全 0（收尾 checkpoint 后 -wal/-shm 已回收）
+ls -l /tmp/dm-t12/devmask-manager.key                                                            # -rw------- 32 字节
 ```
 
 复现输出留在 `evidence-t12/repro-manager-egress.out.txt` 与 `repro-device-apps-merge.out.txt`。
@@ -93,7 +93,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
 
 | 契约点 | 实现 / 证据 |
 | --- | --- |
-| 复用 `manager.key` 32 字节，不引第二把密钥 | `DeviceKey::load_or_create`（`crypto.rs:97-146`）；文件 0600（复现目录 `-rw------- 32`） |
+| 复用 `devmask-manager.key` 32 字节，不引第二把密钥 | `DeviceKey::load_or_create`（`crypto.rs:97-146`）；文件 0600（复现目录 `-rw------- 32`） |
 | `v1:` + BASE64(nonce‖ct‖tag) | `encrypt_with_aad`（`crypto.rs:204-221`）；解密强制 `VERSION_PREFIX`（`:223-227`，未知前缀 `v2:` → 失败） |
 | nonce 随机 12 字节、绝不重用 | `Aes256Gcm::generate_nonce(&mut OsRng)`（`:206`） |
 | AAD = `egress_proxy:{id}:{field}` | `egress_aad`（`:49-51`）；`encrypt_egress`/`decrypt_egress`（`:184-202`）注入同一 AAD |
@@ -213,7 +213,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
 | --- | --- | --- |
 | 密码不回显 | ✅ | 列表/详情只渲染 `hasCredentials`；编辑弹窗注释「username / password 永远不预填」（`ProxiesPage.vue:686`），提交后 `resetForm` 清空（`:654-668`） |
 | 密码控件 | ✅ | `type="password"` + `show-password` + `autocomplete="new-password"`（`:202-205`） |
-| 不写 localStorage / URL | ✅ | 仅 Token 用 `localStorage.dfm_token`（`api/client.ts:63/123/133`）；`grep localStorage` 无其它命中 |
+| 不写 localStorage / URL | ✅ | 仅 Token 用 `localStorage.dm_token`（`api/client.ts:63/123/133`）；`grep localStorage` 无其它命中 |
 | 错误提示不误导 | ✅（除 B-1 的交互） | `describeError` 只渲染 message+code+requestId（`api/client.ts:149-157`）；409 删除弹窗展示 devices+total（`ProxiesPage.vue:798-807`）；probe 422 明确提示 socks5 不支持（`:771-779`） |
 | 批量绑定防重复提交 | ✅ | 两个按钮都绑 `:loading="egressSaving"`（`:387`/`:394`），Element Plus loading 态按钮不可点击；store 在 `applyEgress` 第一行置位并在 `finally` 复位（`stores/manager.ts:748-767`） |
 | 预演是否「只读」 | ❌ | 「预演（dryRun）」会真的落库（B-1），且界面没有任何「本次预览已写入绑定」的提示——用户以为只是看看 |
@@ -303,7 +303,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
   真实原因只出现在 Manager 日志（`tracing::error!`）里，job 结果与 UI 都看不到。
 - **必须的修复**：给 `build_desired_egress` 的错误分类（`Decrypt` vs `Db`），`Decrypt` 映射为独立的 job 结果码
   （例如 `internal_error` + `details.op="decrypt"`，或新增并在契约 §6.12 登记 `decrypt_failed`），message 写「代理凭据解密失败（密钥不匹配或密文损坏）」；
-  加测试：把 `manager.key` 换掉后 apply → 结果码是解密失败而不是 `device_error`。
+  加测试：把 `devmask-manager.key` 换掉后 apply → 结果码是解密失败而不是 `device_error`。
 
 ### 7.3 low
 
@@ -375,7 +375,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
 
 - **文件:行**：`manager/src/api/egress.rs:1176-1195`（`Err(error) => warnings.push(Warning::new("device_offline", error.to_string(), …))`）。
 - **问题**：`GET /devices/{id}/egress` 在**密钥问题**下告诉用户「设备离线」，与网络不可达无法区分；`deviceState` 为 null 时用户会去重启设备。
-- **必须的修复**：用独立码（如 `device_token_invalid` / `internal_error`）并在 message 里写「设备 Token 无法解密（manager.key 变更？）」。
+- **必须的修复**：用独立码（如 `device_token_invalid` / `internal_error`）并在 message 里写「设备 Token 无法解密（devmask-manager.key 变更？）」。
 
 #### L-11 `egress_unchanged` 未比较 `failOpen` / `probeUrl` / `probeTimeoutSeconds` / `exclusionList`
 
@@ -408,7 +408,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
 | 412 重试一次（attempts=2） | `egress_flow.rs:788-820` | PASS |
 | probe 成功/失败/结构化 + socks5 422 + `egress_checks` | `egress_flow.rs:620-755` | PASS |
 | 无密码明文（响应/审计/日志/DB） | 复现目录扫描（§1 第 4 条）+ t10 `t10-6-security.log`（含 WAL/key 扫描） | PASS（0 命中） |
-| manager.key 0600 32 字节 | 复现目录 `ls -l` | PASS |
+| devmask-manager.key 0600 32 字节 | 复现目录 `ls -l` | PASS |
 | 审计 detail 无凭据 | `api/egress.rs:412-419`、`:704-716`、`:1229-1241`、`:1473-1486`、`:774-782`、`:896-948` | PASS |
 | WebUI 密码不回显 / 不回填 / 不写本地存储 | `ProxiesPage.vue:202-205`、`:686`、`api/client.ts:63-142` | PASS |
 | 批量绑定防重复提交 | `:387`/`:394` `:loading` + `stores/manager.ts:748-767` | PASS |
@@ -439,7 +439,7 @@ ls -l /tmp/dfm-t12/manager.key                                                  
 - `decrypt_failure_is_not_reported_as_device_error`
 
 —— 本次评审未修改 `manager/src`、`manager/webui`、`server`、`core`；所有复现脚本只启动真实二进制并使用
-`docs/design/egress/fixtures/` 下既有装置（Manager 数据目录 `/tmp/dfm-t12`、device server 数据目录 `/tmp/dfs-t12`，收尾已退出进程）。
+`docs/design/egress/fixtures/` 下既有装置（Manager 数据目录 `/tmp/dm-t12`、device server 数据目录 `/tmp/dfs-t12`，收尾已退出进程）。
 
 ---
 

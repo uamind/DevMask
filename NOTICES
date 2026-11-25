@@ -1,15 +1,22 @@
-device_faker
+DevMask
 Copyright (c) 2025-2026 Seyud
 
-device_faker is free software: you can redistribute it and/or modify
+DevMask is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-device_faker is distributed in the hope that it will be useful,
+DevMask is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with device_faker. If not, see <https://www.gnu.org/licenses/>.
+along with DevMask. If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+This project is a derivative of Device Faker (https://github.com/Seyud/device_faker),
+originally authored by Seyud and licensed under GPL-3.0-or-later.
+The original copyright notice and license are preserved above and in every source file.
+Upstream-derived code remains under the same license; see docs/README.md for details.

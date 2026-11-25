@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 应用展示元数据。API 只返回 package（API.md §6：AppDef.id/name/short/color 无对应字段），
 // 因此中文名、首字与配色都在 UI 侧维护；未知包名回落到包名本身。

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 配置解析：CLI / 环境变量 / manager.toml / 默认值的优先级合并。
 
@@ -31,7 +31,7 @@ pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 10_000;
 /// 默认写请求超时。
 pub const DEFAULT_WRITE_TIMEOUT_MS: u64 = 15_000;
 
-const APP_DIR_NAME: &str = "device-faker-manager";
+const APP_DIR_NAME: &str = "devmask-manager";
 
 /// 配置加载错误。
 #[derive(Debug, thiserror::Error)]
@@ -78,7 +78,7 @@ pub struct Config {
 impl Config {
     /// SQLite 主库路径。
     pub fn db_file(&self) -> PathBuf {
-        self.data_dir.join("manager.db")
+        self.data_dir.join("devmask-manager.db")
     }
 
     /// 按优先级加载配置，并校验监听地址与 Token 的组合是否安全。
@@ -128,7 +128,7 @@ impl Config {
             .key_file
             .clone()
             .or_else(|| env_non_empty("DFM_KEY_FILE").map(PathBuf::from))
-            .unwrap_or_else(|| data_dir.join("manager.key"));
+            .unwrap_or_else(|| data_dir.join("devmask-manager.key"));
 
         let mut candidates: Vec<PathBuf> = Vec::new();
         if let Some(explicit) = args

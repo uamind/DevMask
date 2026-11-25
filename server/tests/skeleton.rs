@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 骨架端点的集成测试：认证、错误信封、healthz / status。
 
@@ -12,7 +12,7 @@ use common::{
     ADMIN_TOKEN, READ_TOKEN, WRITE_TOKEN, assert_error_envelope, body_json, body_text, fixture,
     fixture_with_config, get, get_with_token, header, send,
 };
-use device_faker_server::util;
+use devmask_server::util;
 
 fn empty_sha256() -> String {
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_owned()
@@ -102,7 +102,7 @@ async fn status_with_read_token_returns_snapshot() {
     let response = get_with_token(&fixture.router, "/api/v1/status", READ_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(expected_revision.as_str())
     );
     assert_eq!(
@@ -111,7 +111,7 @@ async fn status_with_read_token_returns_snapshot() {
     );
 
     let body = body_json(response).await;
-    assert_eq!(body["module"]["id"], "device_faker");
+    assert_eq!(body["module"]["id"], "devmask");
     assert_eq!(body["module"]["version"], "v1.7.0");
     assert_eq!(body["module"]["versionCode"], 20261109);
 
@@ -256,7 +256,7 @@ async fn missing_config_file_still_reports_status() {
     let response = get_with_token(&fixture.router, "/api/v1/status", READ_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(empty_sha256().as_str())
     );
     let body = body_json(response).await;

@@ -3,7 +3,7 @@
 ## Requirements
 
 ::: danger Magisk's built-in Zygisk is not supported
-Device Faker does **not** support Magisk's built-in Zygisk; a third-party Zygisk implementation is required (**ZygiskNext** recommended).
+DevMask does **not** support Magisk's built-in Zygisk; a third-party Zygisk implementation is required (**ZygiskNext** recommended).
 
 Install it and reboot before installing this module. Otherwise installation aborts with:
 
@@ -17,8 +17,8 @@ Install it and reboot before installing this module. Otherwise installation abor
 
 ## Download
 
-Grab the latest `device_faker-(release).zip` from the
-[Releases](https://github.com/Seyud/device_faker/releases/latest) page.
+Grab the latest `devmask-(release).zip` from the
+[Releases](https://github.com/uamind/DevMask/releases/latest) page.
 
 ## Install Steps
 
@@ -36,10 +36,10 @@ Just install the new zip over the existing one. Your existing config file is pre
 Remove the module from the Magisk / KernelSU module page and reboot.
 
 ::: warning Uninstalling deletes your config
-The module ships an uninstall script that runs `rm -rf /data/adb/device_faker`,
+The module ships an uninstall script that runs `rm -rf /data/adb/devmask`,
 which **deletes the config directory along with it**.
 If you want to keep your config, back up
-`/data/adb/device_faker/config/config.toml` first.
+`/data/adb/devmask/config/config.toml` first.
 :::
 
 ## Next Steps

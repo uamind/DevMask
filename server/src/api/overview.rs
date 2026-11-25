@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! GET /api/v1/overview：一次返回设备状态、模板与每个应用最终生效的配置。
 //!
@@ -16,7 +16,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use device_faker_core::Config;
+use devmask_core::Config;
 use serde::Serialize;
 use serde_json::{Value, json};
 

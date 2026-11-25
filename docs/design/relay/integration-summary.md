@@ -24,10 +24,10 @@
 | # | 命令 | 结果 |
 | --- | --- | --- |
 | 1 | `cargo fmt --check` | EXIT=0（1s） |
-| 2 | `cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings` | EXIT=0（23s） |
-| 3 | `cargo test --workspace --exclude device_faker` | EXIT=0（115s）；**706 passed / 0 failed**（含 server 184 + relay_api 21 + manager 166 等） |
-| 4 | `cargo check -p device_faker --target aarch64-linux-android` | EXIT=0 |
-| 5 | `cargo test -p device_faker_module_tests` | EXIT=0（60 passed） |
+| 2 | `cargo clippy --workspace --exclude devmask --all-targets -- -D warnings` | EXIT=0（23s） |
+| 3 | `cargo test --workspace --exclude devmask` | EXIT=0（115s）；**706 passed / 0 failed**（含 server 184 + relay_api 21 + manager 166 等） |
+| 4 | `cargo check -p devmask --target aarch64-linux-android` | EXIT=0 |
+| 5 | `cargo test -p devmask_module_tests` | EXIT=0（60 passed） |
 | 6 | `python webui/build_webui.py` | EXIT=0（14s，含 vue-tsc + eslint --max-warnings 0 + vite build） |
 | 7 | `npm --prefix manager/webui run build` | EXIT=0 |
 | 8 | `cd manager/webui && npx vue-tsc --noEmit` | EXIT=0 |
@@ -45,7 +45,7 @@
 
 ## 4. 已知限制（四条 + 补充）
 
-1. **可检出性（P1–P11）**：中继端口在 `127.0.0.1:17800–17899`、链名 `DF_EGRESS_RLY`、注入目标从真实上游变为回环地址；同 uid 检测代码可枚举。
+1. **可检出性（P1–P11）**：中继端口在 `127.0.0.1:17800–17899`、链名 `DM_EGRESS_RLY`、注入目标从真实上游变为回环地址；同 uid 检测代码可枚举。
 2. **设备级依赖 relay 存活**：listener 挂掉期间整机代理链路不可用（设备级 settings 指向回环）；服务有守护循环但存在窗口。
 3. **root 出网绕过 uid 防火墙**：relay 以 root 连接上游，会绕过 AFWall+/NetGuard 等按 uid 的防火墙（P8）。
 4. **fail-open 静默直连**：`[probe].fail_open=true`（默认）时，上游探测失败会清系统代理 → 静默直连（P9）；要「绝不直连」需设 `false`。`via=relay` 的失败**不**触发 fail-open。

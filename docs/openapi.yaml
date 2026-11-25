@@ -1,11 +1,11 @@
 openapi: 3.1.0
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
-  title: Device Faker HTTP API
+  title: DevMask HTTP API
   summary: 模块自带 Web 服务的 /api/v1 契约（第一增量）
-  version: 1.11.0
+  version: 0.0.1
   description: |
-    Device Faker 原生服务（device_faker_server 1.11.0）的 HTTP 契约；版本号随模块发布递增，端点与字段只增不改（egress 自 1.10.0、relay 自 1.11.0）。
+    DevMask 原生服务（devmask_server 0.0.1）的 HTTP 契约；版本号随模块发布递增，端点与字段只增不改（egress 自 1.10.0、relay 自 0.0.1）。
 
     约定：
     - 基地址默认 http://127.0.0.1:8686，API 前缀 /api/v1。
@@ -14,12 +14,12 @@ info:
     - 所有写操作必须带 If-Match（当前配置 revision）；不匹配返回 412，不自动合并。
     - 错误统一信封 error.code / error.message / error.details / error.retryable / error.requestId。
     - 本增量不含 MCP、plan/apply、备份管理、审计查询、Token 管理、应用名与图标。
-    - egress（出口代理）自 v1.10.0 起提供：设备级 HTTP 代理 + 应用级 SOCKS5 注入 + 出口 IP 探测；egress 端点用独立的 egress revision（响应头 X-DF-Egress-Revision），不返回 X-DF-Revision / ETag。
-    - v1.11.0 起增设备内认证中继（relay）：带凭据的代理注入 127.0.0.1:<local_port>，由 root 进程补 HTTP Basic / SOCKS5 RFC1929；新增第 30 个操作 POST /api/v1/egress/relay/restart，GET /egress 增 relay 对象，probe 增 via / relayPort。
-  termsOfService: https://github.com/Seyud/device_faker
+    - egress（出口代理）自 v1.10.0 起提供：设备级 HTTP 代理 + 应用级 SOCKS5 注入 + 出口 IP 探测；egress 端点用独立的 egress revision（响应头 X-DM-Egress-Revision），不返回 X-DM-Revision / ETag。
+    - v0.0.1 起增设备内认证中继（relay）：带凭据的代理注入 127.0.0.1:<local_port>，由 root 进程补 HTTP Basic / SOCKS5 RFC1929；新增第 30 个操作 POST /api/v1/egress/relay/restart，GET /egress 增 relay 对象，probe 增 via / relayPort。
+  termsOfService: https://github.com/uamind/DevMask
   contact:
-    name: Device Faker
-    url: https://github.com/Seyud/device_faker
+    name: DevMask
+    url: https://github.com/uamind/DevMask
   license:
     name: GPL-3.0-or-later
     identifier: GPL-3.0-or-later
@@ -66,7 +66,7 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
-                version: 1.11.0
+                version: 0.0.1
                 uptimeSec: 3600
         '500':
           $ref: '#/components/responses/InternalError'
@@ -85,16 +85,16 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatusResponse'
               example:
-                module: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+                module: {id: devmask, version: v0.0.1, versionCode: 20261125}
                 device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-                server: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+                server: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
                 config:
                   revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
                   mtime: '2026-11-24T03:00:00Z'
@@ -126,7 +126,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -134,10 +134,10 @@ paths:
                 $ref: '#/components/schemas/OverviewResponse'
               example:
                 revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
-                module: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+                module: {id: devmask, version: v0.0.1, versionCode: 20261125}
                 device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
                 root: {manager: kernelsu, version: 1.0.7}
-                server: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+                server: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
                 config: {revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5', mtime: '2026-11-24T03:00:00Z', size: 9361, exists: true, templates: 2, apps: 1, conflicts: 1}
                 templates:
                   - name: pixel_9
@@ -181,7 +181,7 @@ paths:
                 $ref: '#/components/schemas/ConfigSchema'
               example:
                 $schema: 'http://json-schema.org/draft-07/schema#'
-                title: DeviceFakerConfig
+                title: DevMaskConfig
                 type: object
                 properties:
                   apps: {default: [], items: {'$ref': '#/definitions/AppConfig'}, type: array}
@@ -229,7 +229,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
             ETag:
               $ref: '#/components/headers/ETag'
@@ -342,7 +342,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
             ETag:
               $ref: '#/components/headers/ETag'
@@ -387,7 +387,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
             ETag:
               $ref: '#/components/headers/ETag'
@@ -490,7 +490,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -526,7 +526,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
             ETag:
               $ref: '#/components/headers/ETag'
@@ -591,7 +591,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -609,7 +609,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -670,7 +670,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -719,7 +719,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -778,7 +778,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -830,7 +830,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -879,7 +879,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -916,7 +916,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
             ETag:
               $ref: '#/components/headers/ETag'
@@ -995,7 +995,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -1014,7 +1014,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -1064,7 +1064,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-            X-DF-Revision:
+            X-DM-Revision:
               $ref: '#/components/headers/XDFRevision'
           content:
             application/json:
@@ -1209,7 +1209,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceResponse'
               example:
-                module: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+                module: {id: devmask, version: v0.0.1, versionCode: 20261125}
                 device:
                   manufacturer: Google
                   brand: google
@@ -1219,7 +1219,7 @@ paths:
                   sdk: 37
                   abi: arm64-v8a
                   fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'
-                server: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+                server: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
                 root: {manager: kernelsu, version: 1.0.7}
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1304,14 +1304,14 @@ paths:
       summary: 出口代理状态
       description: |
         一次拿到「期望模式 + 实际模式 + 设备上真实读回的生效值 + 脱敏上游 + 各应用覆盖 + 最近探测」。
-        响应头是 X-DF-Egress-Revision（egress revision）：本端点**不**返回 X-DF-Revision / ETag，
+        响应头是 X-DM-Egress-Revision（egress revision）：本端点**不**返回 X-DM-Revision / ETag，
         否则会污染 WebUI 缓存的 config revision。写端点的 If-Match 也用它。
       responses:
         '200':
           description: 当前出口状态
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressResponse'}
@@ -1404,7 +1404,7 @@ paths:
           description: 写入结果（含写入后的真实状态）
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressWriteResult'}
@@ -1447,7 +1447,7 @@ paths:
           description: 已恢复直连
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressWriteResult'}
@@ -1494,7 +1494,7 @@ paths:
           description: 探测成功
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressProbeResponse'}
@@ -1531,7 +1531,7 @@ paths:
           description: 代理定义列表
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressProxiesResponse'}
@@ -1569,7 +1569,7 @@ paths:
           description: 重建结果
           headers:
             X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+            X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
           content:
             application/json:
               schema: {$ref: '#/components/schemas/EgressRelayRestartResponse'}
@@ -1621,7 +1621,7 @@ components:
         type: string
         example: '"9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"'
     XDFEgressRevision:
-      description: 当前 egress revision（不带引号；不是 config revision）。egress 端点只回这个头，不回 X-DF-Revision / ETag
+      description: 当前 egress revision（不带引号；不是 config revision）。egress 端点只回这个头，不回 X-DM-Revision / ETag
       schema:
         type: string
         pattern: '^[0-9a-f]{64}$'
@@ -1833,7 +1833,7 @@ components:
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
-        X-DF-Revision:
+        X-DM-Revision:
           $ref: '#/components/headers/XDFRevision'
       content:
         application/json:
@@ -1952,7 +1952,7 @@ components:
       description: egress 的 If-Match 与当前 egress revision 不一致（client 应重新 GET /api/v1/egress）
       headers:
         X-Request-Id: {$ref: '#/components/headers/XRequestId'}
-        X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+        X-DM-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
       content:
         application/json:
           schema: {$ref: '#/components/schemas/ErrorResponse'}
@@ -2136,7 +2136,7 @@ components:
           minimum: 0
           description: 服务已运行秒数
           example: 3600
-      example: {status: ok, version: 1.11.0, uptimeSec: 3600}
+      example: {status: ok, version: 0.0.1, uptimeSec: 3600}
     ModuleInfo:
       type: object
       description: 模块信息，来自 module.prop
@@ -2146,7 +2146,7 @@ components:
         id:
           type: string
           description: 模块 id
-          example: device_faker
+          example: devmask
         version:
           type: string
           description: 模块版本（带 v 前缀）
@@ -2155,7 +2155,7 @@ components:
           type: integer
           description: 模块版本号
           example: 20261109
-      example: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+      example: {id: devmask, version: v0.0.1, versionCode: 20261125}
     DeviceSummary:
       type: object
       description: 设备 Build 摘要
@@ -2184,12 +2184,12 @@ components:
       required: [version, bind, uptimeSec]
       additionalProperties: false
       properties:
-        version: {type: string, description: device_faker_server 版本, example: 1.8.0}
+        version: {type: string, description: devmask_server 版本, example: 1.8.0}
         bind: {type: string, description: 实际监听地址, example: '127.0.0.1:8686'}
         uptimeSec: {type: integer, minimum: 0, description: 已运行秒数, example: 3600}
         startedAt: {type: string, format: date-time, description: 启动时间（UTC）, example: '2026-11-24T03:00:00Z'}
         pid: {type: integer, description: 进程 pid, example: 4321}
-      example: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+      example: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
     ConfigStatus:
       type: object
       description: 配置文件的 revision 与统计；配置文件不存在（exists=false）时 mtime 为 null、size 为 0、revision 为空内容字节的 SHA-256
@@ -2236,9 +2236,9 @@ components:
             enum: [config, templates, apps, packages, device, validate, overview]
           example: [config, templates, apps, packages, device, validate, overview]
       example:
-        module: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+        module: {id: devmask, version: v0.0.1, versionCode: 20261125}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-        server: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+        server: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
         config:
           revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
           mtime: '2026-11-24T03:00:00Z'
@@ -2895,9 +2895,9 @@ components:
         root:
           $ref: '#/components/schemas/RootInfo'
       example:
-        module: {id: device_faker, version: v1.11.0, versionCode: 20261202}
+        module: {id: devmask, version: v0.0.1, versionCode: 20261125}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
-        server: {version: 1.11.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+        server: {version: 0.0.1, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
         root: {manager: kernelsu, version: 1.0.7}
     DevicePropsResponse:
       type: object
@@ -2948,7 +2948,7 @@ components:
     ConfigSchema:
       type: object
       description: |
-        schemars 0.8 依据 device_faker_core::config::Config 生成的单份 JSON Schema，方言为 draft-07
+        schemars 0.8 依据 devmask_core::config::Config 生成的单份 JSON Schema，方言为 draft-07
         （$schema = http://json-schema.org/draft-07/schema#）。Config 字段直接位于顶层 properties；
         被引用的类型（DeviceTemplate、AppConfig、NumberSetting）放在 definitions，$ref 形如
         #/definitions/DeviceTemplate。没有 $id 与 additionalProperties: false；
@@ -2957,13 +2957,13 @@ components:
       required: ['$schema', title, type, properties, definitions]
       properties:
         '$schema': {type: string, const: 'http://json-schema.org/draft-07/schema#', description: draft-07 方言 URI, example: 'http://json-schema.org/draft-07/schema#'}
-        title: {type: string, description: Schema 标题, example: DeviceFakerConfig}
+        title: {type: string, description: Schema 标题, example: DevMaskConfig}
         type: {type: string, const: object, description: 顶层类型, example: object}
         properties: {type: object, additionalProperties: true, description: 'Config 顶层字段：apps、debug、default_force_denylist_unmount、default_hide_maps、templates'}
         definitions: {type: object, additionalProperties: true, description: 被引用类型的定义（draft-07 关键字），包含 DeviceTemplate、AppConfig、NumberSetting}
       example:
         '$schema': 'http://json-schema.org/draft-07/schema#'
-        title: DeviceFakerConfig
+        title: DevMaskConfig
         type: object
         properties:
           apps: {default: [], items: {'$ref': '#/definitions/AppConfig'}, type: array}
@@ -3127,7 +3127,7 @@ components:
       properties:
         package: {type: [string, 'null'], description: 'null = 设备级链路；给定包名 = 用该应用的生效代理定义', example: null}
         url: {type: [string, 'null'], format: uri, pattern: '^http://', maxLength: 512}
-        via: {type: string, enum: [upstream, relay], default: upstream, description: 'v1.11.0：探测路径；缺省 upstream 与 v1.10.0 逐字节兼容，relay 表示经设备内中继', example: upstream}
+        via: {type: string, enum: [upstream, relay], default: upstream, description: 'v0.0.1：探测路径；缺省 upstream 与 v1.10.0 逐字节兼容，relay 表示经设备内中继', example: upstream}
     EgressProbeResponse:
       type: object
       required: [ok, exitIp, latencyMs, checkedAt, scope, via, url, approximate, warnings]
@@ -3137,7 +3137,7 @@ components:
         latencyMs: {type: integer, minimum: 0, example: 412}
         checkedAt: {type: string, format: date-time, example: '2026-12-01T03:00:00Z'}
         scope: {type: string, enum: [device, app], example: device}
-        via: {type: string, enum: [proxy, direct, relay], description: 'relay 表示经设备内中继（v1.11.0）', example: proxy}
+        via: {type: string, enum: [proxy, direct, relay], description: 'relay 表示经设备内中继（v0.0.1）', example: proxy}
         proxy: {type: [string, 'null'], example: office_http}
         relayPort: {type: [integer, 'null'], minimum: 1, maximum: 65535, description: 'via=relay 时实际使用的中继端口，其余为 null', example: null}
         url: {type: string, format: uri, example: 'http://checkip.example.com/'}

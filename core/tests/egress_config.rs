@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! egress 配置面回归（docs/plans/egress-contract.md §2.3 / §2.4 / §2.5 / §2.7）：
 //! `[egress].default` 与 `[[apps]].egress` 的解析、序列化、校验与增量编辑。
 
-use device_faker_core::config::{
+use devmask_core::config::{
     AppConfig, Config, DIRECT_MARKER, EGRESS_PROXY_NAME_MAX, EGRESS_PROXY_NAME_PATTERN,
     EgressSection,
 };
-use device_faker_core::edit::{
+use devmask_core::edit::{
     EditError, bind_package, delete_app, parse_document, set_app, set_egress, upsert_template,
 };
-use device_faker_core::schema::bundle;
-use device_faker_core::validate::{
+use devmask_core::schema::bundle;
+use devmask_core::validate::{
     Severity, ValidationOptions, unknown_fields, validate_app, validate_config, validate_document,
     validate_egress_proxy_name,
 };
@@ -49,7 +49,7 @@ fn sample_config() -> Config {
     Config::from_toml(SAMPLE).expect("fixture must parse")
 }
 
-fn codes(report: &device_faker_core::validate::ValidationReport) -> Vec<&'static str> {
+fn codes(report: &devmask_core::validate::ValidationReport) -> Vec<&'static str> {
     report.issues.iter().map(|issue| issue.code).collect()
 }
 

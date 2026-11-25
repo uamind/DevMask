@@ -2,7 +2,7 @@
 
 - 结论：**pass**。t34 的唯一 high（H1 用例假绿）已改为两步 PUT 判别性用例，t32 的实现与 t33 的文档口径保持一致；
   前两轮 findings 无回退。
-- 验证：cargo test -p device_faker_server 全 target ok（lib 184、relay_api 33）、module-tests 60 passed、fmt --check 通过。
+- 验证：cargo test -p devmask_server 全 target ok（lib 184、relay_api 33）、module-tests 60 passed、fmt --check 通过。
 
 ## 1. H1（PUT 直连窗口）
 
@@ -58,8 +58,8 @@ device_default_name（api/egress.rs:963-969）。changing_existing_default_to_so
 
 ## 7. 已执行核对
 
-    cargo test -p device_faker_server            # 全 target ok（lib 184、relay_api 33）
-    cargo test -p device_faker_server --test relay_api   # 33 passed
-    cargo test -p device_faker_module_tests      # 60 passed
-    cargo fmt --check -p device_faker_server     # 通过
+    cargo test -p devmask_server            # 全 target ok（lib 184、relay_api 33）
+    cargo test -p devmask_server --test relay_api   # 33 passed
+    cargo test -p devmask_module_tests      # 60 passed
+    cargo fmt --check -p devmask_server     # 通过
     grep -rn '4 个警告码\\|4 个扁平\\|4 个 relay' docs/ manager/docs/   # 0 命中

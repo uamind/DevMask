@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
-//! device_faker_server 二进制入口。
+//! devmask_server 二进制入口。
 //!
 //! 启动顺序（任何一步失败都不进入监听）：
 //!
@@ -16,16 +16,14 @@
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
-use device_faker_server::{
-    AppState, args, args::CliArgs, device::DeviceSource, serve, settings, token,
-};
+use devmask_server::{AppState, args, args::CliArgs, device::DeviceSource, serve, settings, token};
 
 #[tokio::main]
 async fn main() -> ExitCode {
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("[device-faker-server] 启动失败: {error:#}");
+            eprintln!("[devmask-server] 启动失败: {error:#}");
             ExitCode::FAILURE
         }
     }
@@ -38,7 +36,7 @@ async fn run() -> Result<()> {
         return Ok(());
     }
     if cli.version {
-        println!("device_faker_server {}", env!("CARGO_PKG_VERSION"));
+        println!("devmask_server {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
@@ -80,7 +78,7 @@ async fn run() -> Result<()> {
         config = %state.store().path().display(),
         server_config = %state.settings().server_config_path.display(),
         tokens = state.settings().tokens.len(),
-        "device_faker_server 已启动"
+        "devmask_server 已启动"
     );
     if !state.site().exists() {
         tracing::warn!(
@@ -96,13 +94,13 @@ async fn run() -> Result<()> {
     }
 
     serve(state, listener).await.context("服务异常退出")?;
-    tracing::info!("device_faker_server 已退出");
+    tracing::info!("devmask_server 已退出");
     Ok(())
 }
 
 fn init_tracing() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-        tracing_subscriber::EnvFilter::new("device_faker_server=info,tower_http=info")
+        tracing_subscriber::EnvFilter::new("devmask_server=info,tower_http=info")
     });
     let _ = tracing_subscriber::fmt()
         .with_env_filter(filter)

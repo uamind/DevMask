@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 应用端点（docs/API.md 5.15-5.19）。
 //!
@@ -15,9 +15,9 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use device_faker_core::Config;
-use device_faker_core::config::{AppConfig, is_known_app_key};
-use device_faker_core::edit::{bind_package, delete_app, set_app, unbind_package};
+use devmask_core::Config;
+use devmask_core::config::{AppConfig, is_known_app_key};
+use devmask_core::edit::{bind_package, delete_app, set_app, unbind_package};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 

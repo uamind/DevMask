@@ -11,10 +11,10 @@ PUT HTTP 200
 2026-11-24T22:39:09+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
 2026-11-24T22:39:12+0800 proto=http listener=18080 CONNECT phonedeviceverification-pa.googleapis.com:443 auth=0
 2026-11-24T22:39:17+0800 proto=http listener=18080 CONNECT digitalassetlinks.googleapis.com:443 auth=0
---- DeviceFaker logcat ---
-11-24 22:39:07.958 10435 10435 I DeviceFaker: [egress] replay hook armed package=io.df.egressprobe
-11-24 22:39:07.979 10435 10435 I DeviceFaker: [egress] replay hook fired symbol=setpriority
-11-24 22:39:07.979 10435 10435 I DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
-11-24 22:39:09.980 10435 10439 W DeviceFaker: [egress] replay package=io.df.egressprobe t=32ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
-11-24 22:39:09.981 10435 10439 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2000ms
-11-24 22:39:16.165  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -6'
+--- DevMask logcat ---
+11-24 22:39:07.958 10435 10435 I DevMask: [egress] replay hook armed package=io.df.egressprobe
+11-24 22:39:07.979 10435 10435 I DevMask: [egress] replay hook fired symbol=setpriority
+11-24 22:39:07.979 10435 10435 I DevMask: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:39:09.980 10435 10439 W DevMask: [egress] replay package=io.df.egressprobe t=32ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:39:09.981 10435 10439 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2000ms
+11-24 22:39:16.165  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -6'

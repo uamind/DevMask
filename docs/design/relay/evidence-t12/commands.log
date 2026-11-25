@@ -2,21 +2,21 @@
 $ cargo fmt --check
 EXIT=0 DURATION=1s
 ===== clippy =====
-$ cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings
-    Checking device_faker_server v1.10.0 (/Users/crymang/Works/device_faker/server)
+$ cargo clippy --workspace --exclude devmask --all-targets -- -D warnings
+    Checking devmask_server v1.10.0 (/Users/crymang/Works/devmask/server)
     Checking reqwest v0.12.28
-    Checking device_faker_module_tests v1.10.0 (/Users/crymang/Works/device_faker/module-tests)
-    Checking device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+    Checking devmask_module_tests v1.10.0 (/Users/crymang/Works/devmask/module-tests)
+    Checking devmask_manager v0.2.0 (/Users/crymang/Works/devmask/manager)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.56s
 EXIT=0 DURATION=23s
 ===== test =====
-$ cargo test --workspace --exclude device_faker
-   Compiling device_faker_server v1.10.0 (/Users/crymang/Works/device_faker/server)
+$ cargo test --workspace --exclude devmask
+   Compiling devmask_server v1.10.0 (/Users/crymang/Works/devmask/server)
    Compiling reqwest v0.12.28
-   Compiling device_faker_module_tests v1.10.0 (/Users/crymang/Works/device_faker/module-tests)
-   Compiling device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+   Compiling devmask_module_tests v1.10.0 (/Users/crymang/Works/devmask/module-tests)
+   Compiling devmask_manager v0.2.0 (/Users/crymang/Works/devmask/manager)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 32.50s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_core-fa5de236a5bdc27b)
+     Running unittests src/lib.rs (target/debug/deps/devmask_core-fa5de236a5bdc27b)
 
 running 0 tests
 
@@ -123,7 +123,7 @@ test config_schema_describes_toml_shape ... ok
 
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-7aef5f612c990079)
+     Running unittests src/lib.rs (target/debug/deps/devmask_manager-7aef5f612c990079)
 
 running 73 tests
 test api::apply::tests::validates_template_names ... ok
@@ -202,7 +202,7 @@ test db::tests::prune_keeps_latest_500_checks_per_device_and_app ... ok
 
 test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_manager-34ac0ee045597f5d)
+     Running unittests src/main.rs (target/debug/deps/devmask_manager-34ac0ee045597f5d)
 
 running 0 tests
 
@@ -349,7 +349,7 @@ test r6_oversized_device_reads_are_rejected ... ok
 
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
 
-     Running unittests src/lib.rs (target/debug/deps/device_faker_module_tests-eb34897354253c27)
+     Running unittests src/lib.rs (target/debug/deps/devmask_module_tests-eb34897354253c27)
 
 running 60 tests
 test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
@@ -415,7 +415,7 @@ test spec::tests::direct_and_unconfigured_specs_are_byte_identical_to_v1_10_0 ..
 
 test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
-     Running unittests src/lib.rs (target/debug/deps/device_faker_server-df63743e7891bbf7)
+     Running unittests src/lib.rs (target/debug/deps/devmask_server-df63743e7891bbf7)
 
 running 184 tests
 test api::apps::tests::restart_request_defaults_when_body_missing ... ok
@@ -605,7 +605,7 @@ test relay::http::tests::idle_covers_write_direction_and_releases_connection ...
 
 test result: ok. 184 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_server-6b433a465c4817e0)
+     Running unittests src/main.rs (target/debug/deps/devmask_server-6b433a465c4817e0)
 
 running 0 tests
 
@@ -854,25 +854,25 @@ test tests::zip_entry_mode_marks_scripts_and_bin_executable ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_core
+   Doc-tests devmask_core
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_manager
+   Doc-tests devmask_manager
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_module_tests
+   Doc-tests devmask_module_tests
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_server
+   Doc-tests devmask_server
 
 running 0 tests
 
@@ -880,13 +880,13 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 EXIT=0 DURATION=115s
 ===== check_android =====
-$ cargo check -p device_faker --target aarch64-linux-android
+$ cargo check -p devmask --target aarch64-linux-android
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.50s
 EXIT=0 DURATION=0s
 ===== module_tests =====
-$ cargo test -p device_faker_module_tests
+$ cargo test -p devmask_module_tests
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_module_tests-d3d311fe51b8444b)
+     Running unittests src/lib.rs (target/debug/deps/devmask_module_tests-d3d311fe51b8444b)
 
 running 60 tests
 test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
@@ -952,7 +952,7 @@ test source_guards::credential_carrier_keys_are_absent_from_injection_sources ..
 
 test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_module_tests
+   Doc-tests devmask_module_tests
 
 running 0 tests
 
@@ -982,7 +982,7 @@ npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install
 2026-11-25 14:53:16,455 - INFO - === TypeScript 类型检查 ===
 2026-11-25 14:53:16,455 - INFO - 正在执行: TypeScript 类型检查
 
-> device-faker-webui@1.7.0 type-check
+> devmask-webui@1.7.0 type-check
 > vue-tsc --noEmit
 
 ▎ TNB ACTIVE — `typescript` is the tsgo-backed fork
@@ -991,7 +991,7 @@ npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install
 2026-11-25 14:53:18,357 - INFO - === 代码检查 ===
 2026-11-25 14:53:18,357 - INFO - 正在执行: 代码检查
 
-> device-faker-webui@1.7.0 lint
+> devmask-webui@1.7.0 lint
 > eslint . --max-warnings 0
 
 2026-11-25 14:53:22,130 - INFO - 代码检查 完成
@@ -999,7 +999,7 @@ npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install
 2026-11-25 14:53:22,130 - INFO - === 构建生产版本 ===
 2026-11-25 14:53:22,130 - INFO - 正在执行: 构建生产版本
 
-> device-faker-webui@1.7.0 build
+> devmask-webui@1.7.0 build
 > vite build
 
 vite v8.3.4 building client environment for production...
@@ -1025,7 +1025,7 @@ computing gzip size...
 ../module/webroot/assets/TemplatePage-B5Eq8Ppa.css             20.03 kB │ gzip:  4.13 kB
 ../module/webroot/assets/index-BViPY4qA.css                    23.80 kB │ gzip:  4.93 kB
 ../module/webroot/assets/css-CODSuW_b.css                      31.08 kB │ gzip:  3.71 kB
-../module/webroot/assets/DeviceFakerFormFields-BGo_cyFN.css    31.21 kB │ gzip:  4.74 kB
+../module/webroot/assets/DevMaskFormFields-BGo_cyFN.css    31.21 kB │ gzip:  4.74 kB
 ../module/webroot/assets/css-0elob1iY.js                        0.02 kB │ gzip:  0.03 kB
 ../module/webroot/assets/css-CM8IHeeM.js                        0.02 kB │ gzip:  0.03 kB
 ../module/webroot/assets/css-Dy6dT7WZ.js                        0.02 kB │ gzip:  0.03 kB
@@ -1061,17 +1061,17 @@ computing gzip size...
 ../module/webroot/assets/SettingsPage-Bmwm1AVZ.js              59.60 kB │ gzip: 16.33 kB
 ../module/webroot/assets/runtime-dom.esm-bundler-Cxi8Nvu1.js   81.49 kB │ gzip: 31.97 kB
 ../module/webroot/assets/TemplatePage-CqAifrvo.js              84.26 kB │ gzip: 29.03 kB
-../module/webroot/assets/DeviceFakerFormFields-CTYRDzh4.js    111.32 kB │ gzip: 34.94 kB
+../module/webroot/assets/DevMaskFormFields-CTYRDzh4.js    111.32 kB │ gzip: 34.94 kB
 ../module/webroot/assets/i18n-C6fteztG.js                     134.72 kB │ gzip: 44.86 kB
 
 ✓ built in 849ms
 2026-11-25 14:53:23,997 - INFO - 构建生产版本 完成
-2026-11-25 14:53:24,000 - INFO - 构建完成！输出目录: /Users/crymang/Works/device_faker/webui/../module/webroot
+2026-11-25 14:53:24,000 - INFO - 构建完成！输出目录: /Users/crymang/Works/devmask/webui/../module/webroot
 2026-11-25 14:53:24,000 - INFO - 构建产物大小: 913.4 KB
 
 ==================================================
 ✅ 构建完成！
-构建产物位于 /Users/crymang/Works/device_faker/webui/../module/webroot 目录
+构建产物位于 /Users/crymang/Works/devmask/webui/../module/webroot 目录
 
 构建产物已集成到模块中
 ==================================================
@@ -1079,7 +1079,7 @@ EXIT=0 DURATION=14s
 ===== manager_web_build =====
 $ npm --prefix manager/webui run build
 
-> device-faker-manager-webui@0.1.0 build
+> devmask-manager-webui@0.1.0 build
 > vite build
 
 vite v8.3.8 building client environment for production...

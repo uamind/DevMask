@@ -31,9 +31,9 @@ drwxr-xr-x 3 root root 3452 2026-11-24 21:23 ..
 ===== 清理 2：恢复 server.toml（移除临时 QA Token）=====
 0
 t9-qa token removed
-root         14955 14950   10981300   7152 futex_wait_queue    0 S device_faker_server
-2026-11-24 21:24:26 [service.sh] device_faker_server 已启动（pid=14955，bind 见 /data/adb/device_faker/config/server.toml）
-[2m2026-11-24T13:24:26.128981Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+root         14955 14950   10981300   7152 futex_wait_queue    0 S devmask_server
+2026-11-24 21:24:26 [service.sh] devmask_server 已启动（pid=14955，bind 见 /data/adb/devmask/config/server.toml）
+[2m2026-11-24T13:24:26.128981Z[0m [32m INFO[0m devmask_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/devmask/webroot [3mconfig[0m[2m=[0m/data/adb/devmask/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/devmask/config/server.toml [3mtokens[0m[2m=[0m1
 [2m2026-11-24T13:24:26.639322Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
 ===== 清理 3：卸载探针应用、删除临时文件 =====
 Success
@@ -55,8 +55,8 @@ cert
 cl2
 clogs
 dalvik-cache
-device_faker-v1.8.0.zip
-device_faker-v1.9.0.zip
+devmask-v1.8.0.zip
+devmask-v1.9.0.zip
 frida-server-17.18.0-android-arm64
 ===== 清理 4：停止 fixture 代理、撤销 adb 隧道 =====
 fixture killed: yes

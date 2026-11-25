@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { parse as parseToml } from 'smol-toml'
 import type {
@@ -26,17 +26,17 @@ const FETCH_ACCEPT_GITHUB_JSON = 'application/vnd.github+json'
 const SOURCE_CONFIGS = {
   gitee: {
     owner: 'Seyud',
-    repo: 'device_faker_config_mirror',
+    repo: 'devmask_config_mirror',
     apiBase: 'https://gitee.com/api/v5',
-    rawBase: 'https://gitee.com/Seyud/device_faker_config_mirror/raw/main',
-    cdnBase: 'https://cdn.jsdelivr.net/gh/Seyud/device_faker_config@main',
+    rawBase: 'https://github.com/uamind/DevMask/raw_config_mirror/raw/main',
+    cdnBase: 'https://cdn.jsdelivr.net/gh/Seyud/devmask_config@main',
   },
   github: {
     owner: 'Seyud',
-    repo: 'device_faker_config',
+    repo: 'devmask_config',
     apiBase: 'https://api.github.com',
-    rawBase: 'https://raw.githubusercontent.com/Seyud/device_faker_config/main',
-    cdnBase: 'https://cdn.jsdelivr.net/gh/Seyud/device_faker_config@main',
+    rawBase: 'https://raw.githubusercontent.com/Seyud/devmask_config/main',
+    cdnBase: 'https://cdn.jsdelivr.net/gh/Seyud/devmask_config@main',
   },
 } as const satisfies Record<
   OnlineTemplateSource,

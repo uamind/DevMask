@@ -4,8 +4,8 @@ Configure a fake device identity and system properties per app. The config file 
 
 ## Config File Path
 
-- `/data/adb/device_faker/config/config.toml`
-- `/data/adb/device_faker/config/egress.toml` (**0600**, proxy definitions and probe policy; never exported, never returned by the API — see [Network Egress](#network-egress-egress))
+- `/data/adb/devmask/config/config.toml`
+- `/data/adb/devmask/config/egress.toml` (**0600**, proxy definitions and probe policy; never exported, never returned by the API — see [Network Egress](#network-egress-egress))
 
 The config is **hot-reloaded**: the module re-reads the file on every app launch. After editing, just restart the target app — **no system reboot required**.
 
@@ -19,7 +19,7 @@ debug = false                        # debug logging (off by default)
 default_force_denylist_unmount = false
 ```
 
-- `debug`: when enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/device_faker/logs/device_faker.log`; keep it disabled during normal use for better stealth
+- `debug`: when enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/devmask/logs/devmask.log`; keep it disabled during normal use for better stealth
 - `default_force_denylist_unmount`: enables Zygisk's `FORCE_DENYLIST_UNMOUNT` for the target apps; can be overridden per template / per app with `force_denylist_unmount`
 
 ## Editing the Configuration
@@ -202,14 +202,14 @@ manufacturer = "Custom"
 
 ## Network Egress (egress)
 
-> Requires `device_faker_server` v1.11.0+ (relay fields need 1.11.0; the egress endpoints exist since v1.10.0). With only the module installed the config still applies — you just lose probing, the relay and read-back verification.
+> Requires `devmask_server` v0.0.1+ (relay fields need 0.0.1; the egress endpoints exist since v1.10.0). With only the module installed the config still applies — you just lose probing, the relay and read-back verification.
 
 Egress decides **which IP app traffic leaves from**; it is independent of device-identity spoofing. Two granularities:
 
 | Level | Mechanism | Scope | Protocol |
 | --- | --- | --- | --- |
-| Device-wide (plan A) | writes the Android global proxy (`settings global http_proxy`) | apps that honour the system proxy (OkHttp / HttpURLConnection / WebView / most SDKs) | HTTP/HTTPS CONNECT only; the device-wide relay supports **http upstreams only**; **auth is carried by the in-device relay** (v1.11.0) |
-| Per-app (plan B) | Zygisk injects `http/https/socksProxy` and `ProxySelector` inside the target process | that one app only, system settings untouched | HTTP + SOCKS5; **credentials are added by the in-device relay** (v1.11.0) |
+| Device-wide (plan A) | writes the Android global proxy (`settings global http_proxy`) | apps that honour the system proxy (OkHttp / HttpURLConnection / WebView / most SDKs) | HTTP/HTTPS CONNECT only; the device-wide relay supports **http upstreams only**; **auth is carried by the in-device relay** (v0.0.1) |
+| Per-app (plan B) | Zygisk injects `http/https/socksProxy` and `ProxySelector` inside the target process | that one app only, system settings untouched | HTTP + SOCKS5; **credentials are added by the in-device relay** (v0.0.1) |
 
 ### config.toml: references only
 
@@ -239,7 +239,7 @@ Proxy names: `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$` (1–64 chars, case-sensitive)
 
 ### egress.toml: proxy definitions and probe policy
 
-Path `/data/adb/device_faker/config/egress.toml`, **mode 0600** (root only). `config.toml` stays 0644 (shareable / exportable), so **passwords live only here**. The service maintains this file; after editing by hand, restart the service.
+Path `/data/adb/devmask/config/egress.toml`, **mode 0600** (root only). `config.toml` stays 0644 (shareable / exportable), so **passwords live only here**. The service maintains this file; after editing by hand, restart the service.
 
 ```toml
 version = 1
@@ -267,7 +267,7 @@ fail_open       = true                             # allow direct when the proxy
 - At most 64 definitions; `host` ≤253 chars, `username` ≤128, `password` ≤256.
 - If permissions get widened, the service heals them back to 0600 and reports `egress_perm_fixed`; backups (`backups/egress-*.toml`) are 0600 as well.
 - `egress.toml` is **not** part of `GET /config?format=toml` and is not exported by the WebUI; `GET /api/v1/egress` only returns redacted summaries (`hasCredentials` is the only credential signal).
-- `username` / `password` are **stored securely** (0600; the API only reports `hasCredentials`) and are used **only by the in-device relay since v1.11.0**: credentialed proxies are relayed through `127.0.0.1:<local_port>` and the root process adds HTTP Basic / SOCKS5 RFC1929. v1.2 no longer writes credentials into app processes. See [known limitations](#known-limitations).
+- `username` / `password` are **stored securely** (0600; the API only reports `hasCredentials`) and are used **only by the in-device relay since v0.0.1**: credentialed proxies are relayed through `127.0.0.1:<local_port>` and the root process adds HTTP Basic / SOCKS5 RFC1929. v1.2 no longer writes credentials into app processes. See [known limitations](#known-limitations).
 
 ### fail-open and degradation
 
@@ -314,7 +314,7 @@ Observability (requires `debug = true`; goes to both logcat and the module log):
 
 ```
 [egress] replay hook armed image=libandroid_runtime device=... inode=... symbols=setpriority,__system_property_get   # module log (debug = true)
-[egress] replay hook armed package=com.example.a                                                                  # logcat (DeviceFaker tag)
+[egress] replay hook armed package=com.example.a                                                                  # logcat (DevMask tag)
 [egress] replay start package=com.example.a trigger=post_zygote_setpriority
 [egress] replay package=com.example.a t=28ms reason=framework_overwrite applied=6/6 changed=[http.proxyHost=-->127.0.0.1, http.proxyPort=-->18082]
 [egress] replay done package=com.example.a probes=118 replays=1 divergences=1 state=match elapsed=2003ms
@@ -338,15 +338,15 @@ Seeing this line means the process only got the pre-`specialize` one-shot inject
 
 ### Known limitations
 
-- **Authenticated proxies go through the in-device relay (v1.11.0)**: with `[relay].enabled=true` and a definition that has a `local_port`, both device-wide and per-app egress point at `127.0.0.1:<port>` and the root relay adds HTTP Basic / SOCKS5 RFC1929. Boundaries: (1) since v1.2 credentials are **never written into app processes** (≤v1.1 wrote `java.net.socks.username/password`, which libcore never sent); (2) when the relay is explicitly off (`[relay].enabled=false` or an unmigrated file) egress falls back to the upstream `host:port` and only an **IP allow-list** can authenticate; (3) enabled but no port / invalid view → **fail-closed** at `127.0.0.1:9` (app goes offline, never silently direct); (4) only credentialed proxies use the relay. Use `POST /api/v1/egress/relay/restart` after fixing the relay config, then restart the app.
+- **Authenticated proxies go through the in-device relay (v0.0.1)**: with `[relay].enabled=true` and a definition that has a `local_port`, both device-wide and per-app egress point at `127.0.0.1:<port>` and the root relay adds HTTP Basic / SOCKS5 RFC1929. Boundaries: (1) since v1.2 credentials are **never written into app processes** (≤v1.1 wrote `java.net.socks.username/password`, which libcore never sent); (2) when the relay is explicitly off (`[relay].enabled=false` or an unmigrated file) egress falls back to the upstream `host:port` and only an **IP allow-list** can authenticate; (3) enabled but no port / invalid view → **fail-closed** at `127.0.0.1:9` (app goes offline, never silently direct); (4) only credentialed proxies use the relay. Use `POST /api/v1/egress/relay/restart` after fixing the relay config, then restart the app.
 - **Layered uid policy (availability vs. security)**: per-app listeners decide by uid after accept — known and allow-listed → allowed; known but not listed → closed; **an unknown uid is allowed only when `relay.firewall.applied=true`** (a fresh `iptables -S` sample) and logs a rate-limited `uid_unresolved_firewall_enforced` line, otherwise it is closed (`uid_unresolved`). The allow path re-checks `-S` at most once per second, so a manual `iptables -F` flips it back to fail-closed within ~1s. Trade-off: root-trust — the check only constrains **who may connect**, not which uid the connection leaves as.
 - **The device-wide default must be http**: a `type="socks5"` definition never becomes a device-wide listener — `settings global http_proxy` cannot express SOCKS semantics, so no `scope="device"` entry appears in `relay.listeners[]`, `base_port` is not listening and `proxies[].relayActive=false`. `PUT /egress` validates the **merged effective default**: a non-http default is rejected with `422 validation_failed` (`details.errors[].code="invalid_egress_default"`, `path="default"`), regardless of `[relay].enabled` or credentials. An **existing** config splits by `[relay].enabled`: `true` → `settings` is set to the blackhole `127.0.0.1:9` (no HTTP traffic is sent to a SOCKS port and nothing leaks direct) and `readback.settingsValue` shows it; `false` → treated as unconfigured (`settings :0`, direct) and **no** blackhole is written. Neither creates a SOCKS5 listener, and **both** carry `egress_relay_device_socks5_unsupported` (a configuration hint, independent of `enabled`). Use socks5 definitions through `[[apps]].egress` only; to recover, switch `default` to an http definition (or remove it) and restart the app.
 - **Local port hijack window**: after a listener is released (rebuild / restart / DELETE) and before we rebind, another local process may grab `127.0.0.1:178xx`. Detection is the next bind failing with `addr_in_use`: per-app reallocates and reports `relay.portChanges{reason:"addr_in_use"}` plus `restartRequiredApps`; the device-wide port then simply does not listen (`egress_relay_bind_failed`). `iptables -S` cannot tell who owns a port; use `ss -ltnp | grep 178`. Residual risk: the millisecond window plus apps that have not been restarted yet.
-- **A process with explicit `egress` keeps module code pages resident**: the replay thread and the PLT hook live in the module `.so`, so zygisk cannot `dlclose` it while they run. They are **not visible by name in `/proc/<pid>/maps`**: Zygisk maps the module anonymously (an armed process showed 0 hits for `device_faker`/`arm64-v8a`/`libzygisk` across 3170 lines; only the **companion** process shows `/data/adb/modules/device_faker/zygisk/arm64-v8a.so`). Real detection must compare **anonymous executable segments** (`r-xp`) against a process without egress. Processes **without** per-app egress still unload the module immediately.
+- **A process with explicit `egress` keeps module code pages resident**: the replay thread and the PLT hook live in the module `.so`, so zygisk cannot `dlclose` it while they run. They are **not visible by name in `/proc/<pid>/maps`**: Zygisk maps the module anonymously (an armed process showed 0 hits for `devmask`/`arm64-v8a`/`libzygisk` across 3170 lines; only the **companion** process shows `/data/adb/modules/devmask/zygisk/arm64-v8a.so`). Real detection must compare **anonymous executable segments** (`r-xp`) against a process without egress. Processes **without** per-app egress still unload the module immediately.
 - **Changing the device-wide proxy while an app is running is not replayed**: the window only covers 0–2000ms after a cold start. Changing `[egress] default` later (the AMS `updateHttpProxy` broadcast) lands outside it — restart the app to pick it up.
 - **When the `setpriority` hook cannot be installed the injection degrades to one-shot**: if `libandroid_runtime.so` is missing or the PLT hook commit fails, a single `[egress] replay hook unavailable reason=...` line is logged and no replay happens — the values are still written but may be overwritten by the framework's `updateHttpProxy` (symptom: per-app HTTP egress ineffective, `__DIRECT__` unable to restore direct).
 - `ProxySelector.of(...)` does not exist on Android 17 (SDK 37): the property path is authoritative and the selector is a bonus; a single `[egress] proxy_selector degraded reason=of_method_missing` line is logged per process and injection/replay are unaffected.
-- Device-wide covers HTTP/HTTPS CONNECT only: **SOCKS5 works only via plan B**, while **proxy auth is carried by the in-device relay** (v1.11.0; `egress_credentials_ignored` appears only when the relay is off / the file is unmigrated). **If the device-wide default is a socks5 definition, no device-wide listener is created at all**: PUT rejects it; an existing config is blackholed as `127.0.0.1:9` only while the relay is enabled (`enabled=false` is treated as unconfigured) — see the bullet above.
+- Device-wide covers HTTP/HTTPS CONNECT only: **SOCKS5 works only via plan B**, while **proxy auth is carried by the in-device relay** (v0.0.1; `egress_credentials_ignored` appears only when the relay is off / the file is unmigrated). **If the device-wide default is a socks5 definition, no device-wide listener is created at all**: PUT rejects it; an existing config is blackholed as `127.0.0.1:9` only while the relay is enabled (`enabled=false` is treated as unconfigured) — see the bullet above.
 - UDP / QUIC are not constrained by an HTTP proxy; established connections do not switch paths; VPN apps override the system proxy.
 - WebView follows the system proxy (plan A works, plan B does not); native stacks (cronet, custom C++, QUIC) are the opposite.
 - **Run `DELETE /api/v1/egress` before uninstalling or disabling the module**: the system proxy lives in Android settings and nothing can clear it once the module is disabled. `uninstall.sh` clears it after stopping the service, but toggling the module off by hand does not run it.

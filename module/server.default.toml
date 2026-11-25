@@ -1,7 +1,7 @@
-# device_faker_server 默认服务设置。
-# 安装时由 customize.sh 复制到 /data/adb/device_faker/config/server.toml；
+# devmask_server 默认服务设置。
+# 安装时由 customize.sh 复制到 /data/adb/devmask/config/server.toml；
 # 已存在同名文件时不会覆盖。改完重启服务生效：
-#   sh /data/adb/modules/device_faker/service.sh restart
+#   sh /data/adb/modules/devmask/service.sh restart
 #
 # 权限 0600：这里只存 Token 的 sha256，永远不要把明文写进本文件。
 
@@ -10,16 +10,16 @@
 bind = "127.0.0.1:8686"
 
 # WebUI 静态资源目录（模块安装位置）。
-static_dir = "/data/adb/modules/device_faker/webroot"
+static_dir = "/data/adb/modules/devmask/webroot"
 
 # 唯一事实来源：Zygisk 与本服务共用的 config.toml。
-config_path = "/data/adb/device_faker/config/config.toml"
+config_path = "/data/adb/devmask/config/config.toml"
 
 # 配置写入前的备份目录（保留最近 10 份）。
-backup_dir = "/data/adb/device_faker/config/backups"
+backup_dir = "/data/adb/devmask/config/backups"
 
 # 审计日志（JSON Lines，本增量只透传路径）。
-audit_log = "/data/adb/device_faker/logs/api-audit.jsonl"
+audit_log = "/data/adb/devmask/logs/api-audit.jsonl"
 
 # 局域网访问：默认关闭。改成 bind = "0.0.0.0:8686" 时必须同时把 allow_lan 改成 true
 # 并配置至少一个 Token，否则服务会拒绝启动（避免管理面无认证暴露到网络）。
@@ -34,8 +34,8 @@ write_rate_per_min = 30
 #
 # 首次启动（bind 是 loopback 且没有任何 Token）时，服务会写入默认 Token
 # admin123（id=default、name=owner、scopes=[read, write, ops, admin]），
-# 明文同时打印到 /data/adb/device_faker/logs/server.log 的横幅里：
-#   grep 'initial token' /data/adb/device_faker/logs/server.log
+# 明文同时打印到 /data/adb/devmask/logs/server.log 的横幅里：
+#   grep 'initial token' /data/adb/devmask/logs/server.log
 #
 # 修改 Token 的两种方式：
 #   1. 管理器 WebUI → 设置 → 外部访问 → 「访问 Token」填值后保存（推荐，自动算哈希）；

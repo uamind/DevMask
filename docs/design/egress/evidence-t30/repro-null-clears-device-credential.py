@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # t30 复验（captain 指定）：Manager 发 "password": null 是否真的清掉设备端已存凭据。
-# 用真实 device_faker_server 验证 merge_credential(Some(None)) → render 删掉 password 行。
+# 用真实 devmask_server 验证 merge_credential(Some(None)) → render 删掉 password 行。
 #
 # 用法：python3 docs/design/egress/evidence-t30/repro-null-clears-device-credential.py
 
@@ -39,7 +39,7 @@ def main():
     os.makedirs(os.path.join(DATA, "config"), exist_ok=True)
     log = open("/tmp/t30-device.log", "w+", encoding="utf-8")
     proc = subprocess.Popen(
-        [os.path.join(ROOT, "target/debug/device_faker_server"), "--config-path", CONFIG,
+        [os.path.join(ROOT, "target/debug/devmask_server"), "--config-path", CONFIG,
          "--bind", f"127.0.0.1:{PORT}", "--server-config", os.path.join(DATA, "config", "server.toml")],
         cwd=ROOT, stdout=subprocess.DEVNULL, stderr=log)
     fails = []

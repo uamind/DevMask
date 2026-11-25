@@ -66,4 +66,4 @@ std::process::Command::new("pm")
 
 - 所有包名使用 `com.example.*`（保留域名），不要写入真实应用配置；
 - 修改 fixture 结构时同步检查 `tests/check.sh` 的解析断言；
-- fixture 是测试输入，不是运行时配置；不要把设备上的真实 `/data/adb/device_faker/config/config.toml` 复制进来。
+- fixture 是测试输入，不是运行时配置；不要把设备上的真实 `/data/adb/devmask/config/config.toml` 复制进来。

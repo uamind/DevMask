@@ -19,16 +19,16 @@ service.sh
 uninstall.sh
 webroot
 zygisk
-id=device_faker
-name=Device Faker
+id=devmask
+name=DevMask
 version=v1.10.0
 versionCode=20261201
 author=酷安@瓦力喀/GitHub@Seyud
 description=使用Zygisk实现自定义配置对应用伪装机型
-updateJson=https://gitee.com/Seyud/device_faker/raw/master/Update.json
+updateJson=https://github.com/uamind/DevMask/raw/main/Update.json
 == server proc
-root          2034     1   10857276   6600 do_sys_poll         0 S zn-zygisk-companion64 device_faker
-root         11144  9904   11007864   6336 futex_wait_queue    0 S device_faker_server
+root          2034     1   10857276   6600 do_sys_poll         0 S zn-zygisk-companion64 devmask
+root         11144  9904   11007864   6336 futex_wait_queue    0 S devmask_server
 == settings proxy
 :0
 == server config files
@@ -40,7 +40,7 @@ drwx------ 2 root root 3452 2026-11-24 23:18 backups
 -rw------- 1 root root 2131 2026-11-24 23:25 server.toml
 -rw------- 1 root root 2379 2026-11-24 16:00 server.toml.bak-v1.8.0
 == egress.toml
-cat: /data/adb/device_faker/config/egress.toml: No such file or directory
+cat: /data/adb/devmask/config/egress.toml: No such file or directory
 == server.toml tokens count
 0
 == iptables DF chains

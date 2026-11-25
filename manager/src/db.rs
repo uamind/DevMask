@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! SQLite：单写连接 + WAL；schema v2（v1 见 manager/docs/ARCH.md 第 5 节，v2 追加出口代理三表）。
 
@@ -637,7 +637,7 @@ impl Db {
         self.path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "manager.db".to_string())
+            .unwrap_or_else(|| "devmask-manager.db".to_string())
     }
 
     /// 在阻塞线程池中执行数据库操作，避免占用 async 执行器。
@@ -2223,7 +2223,7 @@ mod tests {
         use rusqlite::Connection;
 
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("manager.db");
+        let path = dir.path().join("devmask-manager.db");
         {
             let connection = Connection::open(&path).unwrap();
             connection.execute_batch(DDL).unwrap();

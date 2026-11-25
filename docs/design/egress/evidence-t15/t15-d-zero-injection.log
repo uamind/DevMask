@@ -44,25 +44,25 @@ log lines: before=2573 after=2573 delta=0
 
 ===== CASE C：设备级直连(:0) + 未配置应用 =====
 :0
-device_faker.log 行数 before=2603 after=2603 delta=0
+devmask.log 行数 before=2603 after=2603 delta=0
 该包 [egress] 行数=0
-logcat DeviceFaker 与该进程相关行数=1
+logcat DevMask 与该进程相关行数=1
 pid=13532
-maps 命中 device_faker/arm64-v8a/zygisk = 0
+maps 命中 devmask/arm64-v8a/zygisk = 0
 ===== CASE D：设备级 default=mac_http 开启 + 未配置应用（继承，不注入）=====
 PUT default=mac_http HTTP 200
 127.0.0.1:18080
-device_faker.log 行数 before=2604 after=2604 delta=0
+devmask.log 行数 before=2604 after=2604 delta=0
 该包 [egress] 行数=0
-logcat DeviceFaker 与该进程相关行数=1
+logcat DevMask 与该进程相关行数=1
 pid=13743
-maps 命中 device_faker/arm64-v8a/zygisk = 0
+maps 命中 devmask/arm64-v8a/zygisk = 0
 --- 该应用仍通过框架继承设备级代理（fixture 侧应有它的流量，见下）---
 2026-11-24T22:15:02+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
 2026-11-24T22:15:02+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
 2026-11-24T22:15:02+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
 2026-11-24T22:15:02+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
 2026-11-24T22:15:03+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
-===== CASE C/D 中那条含 reqable 的 DeviceFaker 行到底是什么 =====
-11-24 22:16:15.139  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -c reqable || true'
-11-24 22:16:24.931  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -a reqable'
+===== CASE C/D 中那条含 reqable 的 DevMask 行到底是什么 =====
+11-24 22:16:15.139  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | grep -c reqable || true'
+11-24 22:16:24.931  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | grep -a reqable'

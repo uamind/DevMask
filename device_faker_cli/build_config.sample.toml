@@ -1,4 +1,4 @@
-# Device Faker CLI 本地构建路径配置（sample）
+# DevMask CLI 本地构建路径配置（sample）
 #
 # 用法：
 #   1. 复制本文件为 build_config.local.toml

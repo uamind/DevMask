@@ -35,17 +35,17 @@
  ]
 }
 
-## iptables -S DF_EGRESS_RLY_ALLOW（实际输出：-d 在前、带 -m tcp）
--N DF_EGRESS_RLY_ALLOW
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+## iptables -S DM_EGRESS_RLY_ALLOW（实际输出：-d 在前、带 -m tcp）
+-N DM_EGRESS_RLY_ALLOW
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
 
-## iptables -S DF_EGRESS_RLY_DENY（同样多出 -m tcp）
--N DF_EGRESS_RLY_DENY
--A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
--A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+## iptables -S DM_EGRESS_RLY_DENY（同样多出 -m tcp）
+-N DM_EGRESS_RLY_DENY
+-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
 
 ## 期望串（server/src/relay/firewall.rs: accept_rule / deny_rule）
 118:    let mut rule = format!("{} 127.0.0.0/8 -p tcp --dport {port}", LOOPBACK.join(" "));

@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -529,7 +529,7 @@
     <div class="hint" style="margin-top: 18px">
       <el-icon style="vertical-align: -2px"><Connection /></el-icon>
       契约：<code>docs/plans/egress-contract.md</code> §6。egress revision 只从
-      <code>X-DF-Egress-Revision</code> 或响应体的 <code>revision</code> 读取，绝不用 <code>X-DF-Revision</code> / <code>ETag</code>
+      <code>X-DM-Egress-Revision</code> 或响应体的 <code>revision</code> 读取，绝不用 <code>X-DM-Revision</code> / <code>ETag</code>
       覆盖 config revision 缓存。
     </div>
   </div>

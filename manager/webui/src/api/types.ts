@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // Manager Relay API 类型（API v1 / manager 0.1.0）。
 // 契约来源：manager/docs/API.md 与 manager/docs/api-types.ts（已冻结，勿改字段名）。
@@ -916,7 +916,7 @@ export interface DeviceRelayListener {
   } | null
 }
 
-/** 设备端 uid 防火墙状态（iptables 链 DF_EGRESS_RLY）。 */
+/** 设备端 uid 防火墙状态（iptables 链 DM_EGRESS_RLY）。 */
 export interface DeviceRelayFirewall {
   /** 期望规则是否已落地。 */
   applied?: boolean
@@ -946,7 +946,7 @@ export interface DeviceEgressProxyState {
 /** 设备端 GET /egress 的透传子集（Relay 原样转发，允许出现新字段）。 */
 export interface DeviceEgressDeviceState {
   fetchedAt?: Iso8601
-  /** 设备端 egress revision（只来自响应体或 X-DF-Egress-Revision，见 client.ts）。 */
+  /** 设备端 egress revision（只来自响应体或 X-DM-Egress-Revision，见 client.ts）。 */
   revision?: Revision
   /** 设备端 config revision（与 egress revision 是两套，永不互相覆盖）。 */
   configRevision?: Revision

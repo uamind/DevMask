@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 [package]
-name = "device_faker_core"
-version = "1.7.0"
+name = "devmask_core"
+version = "0.0.1"
 edition = "2024"
 authors = ["Seyud"]
 license = "GPL-3.0-or-later"
-description = "Device Faker 共享配置内核：配置模型、toml_edit 增量编辑、revision/备份与校验"
+description = "DevMask 共享配置内核：配置模型、toml_edit 增量编辑、revision/备份与校验"
 
 [dependencies]
 anyhow = { version = "1.0.102", default-features = false }

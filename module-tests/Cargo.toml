@@ -1,6 +1,6 @@
 [package]
-name = "device_faker_module_tests"
-version = "1.11.0"
+name = "devmask_module_tests"
+version = "0.0.1"
 edition = "2024"
 publish = false
 
@@ -9,11 +9,11 @@ publish = false
 # 依赖面刻意压到最小，且**只能是宿主机可编译的纯 Rust crate**：
 #   - log：被测代码（src/egress.rs / src/spec.rs）用它写 warn；
 #   - toml：spec 本身就是 TOML 编解码，换掉它就变成「测副本」；
-#   - device_faker_core：Config 继承链的类型来源（core 本身也是宿主可编译的）。
+#   - devmask_core：Config 继承链的类型来源（core 本身也是宿主可编译的）。
 # src/spec.rs 的 `crate::load_config()` 桩用 `Result<_, String>`，不为签名再引 anyhow。
 # 严禁引入 prop-rs-android / rsbinder / jni / zygisk-api 等 Android-only crate——
 # 一旦引入，这个 crate 在宿主机就编不过，那正是它存在的意义。
 [dependencies]
 log = { version = "^0.4", default-features = false }
 toml = { version = "1.0", features = ["parse", "preserve_order"] }
-device_faker_core = { path = "../core", default-features = false }
+devmask_core = { path = "../core", default-features = false }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 纯视觉预览数据（仅在 VITE_MOCK=1 时由 store 动态 import）。
 // 结构与真实 Relay 响应一致：DeviceSummary[] / TemplateSummary[] / AppsMatrixResponse /
@@ -412,7 +412,7 @@ export const mockHealth: HealthResponse = {
   apiVersion: 'v1',
   uptimeSec: 3612,
   startedAt: '2026-11-24T07:12:31Z',
-  db: { status: 'ok', schemaVersion: 2, path: 'manager.db' },
+  db: { status: 'ok', schemaVersion: 2, path: 'devmask-manager.db' },
   devices: { total: 4, online: 3, offline: 1 },
   jobs: { queued: 0, running: 0 },
 }

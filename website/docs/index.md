@@ -1,14 +1,14 @@
 ---
 layout: home
-title: Device Faker
+title: DevMask
 
 hero:
-  name: Device Faker
+  name: DevMask
   text: 为每个应用伪装不同的机型
   tagline: 按应用定制机型 · 属性伪装 · 改完即生效
   image:
     src: /logo.svg
-    alt: Device Faker
+    alt: DevMask
   actions:
     - theme: brand
       text: 快速开始
@@ -18,10 +18,10 @@ hero:
       link: /guide/
     - theme: brand
       text: 下载 Releases
-      link: https://github.com/Seyud/device_faker/releases/latest
+      link: https://github.com/uamind/DevMask/releases/latest
     - theme: alt
       text: 💬 Telegram 群组
-      link: https://t.me/device_faker
+      link: https://t.me/devmask
     - theme: alt
       text: 🐧 QQ 群：854188252
       link: https://qun.qq.com/universal-share/share?ac=1&authKey=ls4nlfcsF%2Bxp5SPnVsXRgpbeV1axPZb%2FmJCMXms6ZCHjgAwvOyl1LV%2BDNVL1btgL&busi_data=eyJncm91cENvZGUiOiI4NTQxODgyNTIiLCJ0b2tlbiI6IlE1WVVyZTZxUXVjZUtGUUxWSGFmbzkvMEd3UWNRSiszdklTZDhHejU0RDRyT0lWRTFqS3d4UGJSM1ltaXpkS3MiLCJ1aW4iOiIxMTA1NzgzMDMzIn0%3D&data=IbvhTKt9HwCSsCsl_610-rQ8p6H2NgLmxhEKkMcn-BMWPb86jygWBZJfWLQGm7J8LwpVV2yhPafxTMXYGkjRVA&svctype=4&tempid=h5_group_info

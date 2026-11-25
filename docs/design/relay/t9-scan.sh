@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 #
 # t9 凭据零泄漏扫描：设备日志 / 审计 / API 响应 / fixture 日志。只读，不改变任何状态。
 # 用法：t9-scan.sh [evidence-dir]；命中数 != 0 时退出码 1。
@@ -27,8 +27,8 @@ hit() { # name command...
   fi
 }
 
-hit device-server.log bash -c "adb shell su -c 'grep -Eci \"$MARK\" /data/adb/device_faker/logs/server.log 2>/dev/null' || true"
-hit device-audit.jsonl bash -c "adb shell su -c 'grep -Eci \"$MARK\" /data/adb/device_faker/logs/api-audit.jsonl 2>/dev/null' || true"
+hit device-server.log bash -c "adb shell su -c 'grep -Eci \"$MARK\" /data/adb/devmask/logs/server.log 2>/dev/null' || true"
+hit device-audit.jsonl bash -c "adb shell su -c 'grep -Eci \"$MARK\" /data/adb/devmask/logs/api-audit.jsonl 2>/dev/null' || true"
 hit api-egress bash -c "curl -s -H 'Authorization: Bearer $TOKEN' '$API/egress' | grep -Eci \"$MARK|password\" || true"
 hit api-proxies bash -c "curl -s -H 'Authorization: Bearer $TOKEN' '$API/egress/proxies' | grep -Eci \"$MARK|password\" || true"
 hit fixture-log bash -c "grep -Eci \"$MARK\" '${T9_FIXTURE_LOG:-/tmp/t9-run/fixture.log}' || true"

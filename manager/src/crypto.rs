@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 设备 Token 加密：AES-256-GCM，密文格式 v1: + base64(nonce || ciphertext || tag)。
 //! 密钥文件为 32 字节原始二进制，权限 0600；AAD 绑定设备 id，防止密文行搬迁。
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn encrypts_and_decrypts_roundtrip() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         let stored = key.encrypt("pixel-9", "admin123").unwrap();
         assert!(stored.starts_with(VERSION_PREFIX), "{stored}");
         assert!(!stored.contains("admin123"));
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn key_file_is_32_bytes_and_reloaded() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("manager.key");
+        let path = dir.path().join("devmask-manager.key");
         let key = DeviceKey::load_or_create(&path).unwrap();
         assert_eq!(fs::read(&path).unwrap().len(), KEY_LEN);
 
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn wrong_device_id_fails() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         let stored = key.encrypt("pixel-9", "admin123").unwrap();
         assert!(key.decrypt("redmi-k80", &stored).is_err());
     }
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn tampered_ciphertext_fails() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         let stored = key.encrypt("pixel-9", "admin123").unwrap();
         let mut blob = BASE64.decode(&stored[VERSION_PREFIX.len()..]).unwrap();
         let last = blob.len() - 1;
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn rejects_unknown_prefix() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         assert!(key.decrypt("pixel-9", "v2:abcd").is_err());
         assert!(key.decrypt("pixel-9", "not-base64").is_err());
     }
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn rejects_bad_key_length() {
         let dir = tempdir().unwrap();
-        let path = dir.path().join("manager.key");
+        let path = dir.path().join("devmask-manager.key");
         fs::write(&path, b"short").unwrap();
         let error = DeviceKey::load_or_create(&path).unwrap_err();
         assert!(matches!(
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn egress_credentials_roundtrip_and_bind_identity() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         let stored = key
             .encrypt_egress("egp_abc", EgressField::Password, "hunter2")
             .unwrap();
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn debug_does_not_leak_key_material() {
         let dir = tempdir().unwrap();
-        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("devmask-manager.key")).unwrap();
         let rendered = format!("{key:?}");
         assert_eq!(rendered, "DeviceKey(<redacted>)");
     }

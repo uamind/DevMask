@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -21,7 +21,7 @@
         <el-input v-model="templateNameInput" :placeholder="t('templates.placeholders.name')" />
       </el-form-item>
 
-      <DeviceFakerFormFields>
+      <DevMaskFormFields>
         <template #packages>
           <el-form-item :label="t('templates.fields.packages')">
             <div class="package-manager">
@@ -63,7 +63,7 @@
             </div>
           </el-form-item>
         </template>
-      </DeviceFakerFormFields>
+      </DevMaskFormFields>
     </el-form>
 
     <template #footer>
@@ -81,8 +81,8 @@ import { useI18n } from '../../utils/i18n'
 import { useLazyMessageBox } from '../../utils/elementPlus'
 import { toast } from 'kernelsu-alt'
 import type { Template } from '../../types'
-import { provideDeviceFakerForm } from '../../composables/useDeviceFakerForm'
-import DeviceFakerFormFields from '../shared/DeviceFakerFormFields.vue'
+import { provideDevMaskForm } from '../../composables/useDevMaskForm'
+import DevMaskFormFields from '../shared/DevMaskFormFields.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -108,7 +108,7 @@ const visible = computed({
 const packageInput = ref('')
 const templateNameInput = ref('')
 
-const { formData, resetForm, fillFromTemplate, toTemplate } = provideDeviceFakerForm()
+const { formData, resetForm, fillFromTemplate, toTemplate } = provideDevMaskForm()
 
 function searchPackages(
   queryString: string,

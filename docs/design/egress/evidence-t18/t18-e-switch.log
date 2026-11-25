@@ -1,4 +1,4 @@
-===== E 排障开关（debug.device_faker.egress.disable_replay）四条路径 =====
+===== E 排障开关（debug.devmask.egress.disable_replay）四条路径 =====
 --- 前置：设备级 mac_http(18080) + 应用级 mac_http2(18082)，debug=true ---
 PUT HTTP 200
 1
@@ -8,9 +8,9 @@ PUT HTTP 200
 11-24 22:40:21.490 11559 11559 I EGRESSPROBE: http.proxyHost=127.0.0.1
 11-24 22:40:21.490 11559 11559 I EGRESSPROBE: http.proxyPort=18080
 11-24 22:40:21.490 11559 11559 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18080
---- logcat DeviceFaker（应有 unavailable/debug_disable_replay，无 armed/fired）---
-11-24 22:40:15.490 11559 11559 W DeviceFaker: [egress] replay hook unavailable package=io.df.egressprobe reason=debug_disable_replay
-11-24 22:40:23.702  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -5'
+--- logcat DevMask（应有 unavailable/debug_disable_replay，无 armed/fired）---
+11-24 22:40:15.490 11559 11559 W DevMask: [egress] replay hook unavailable package=io.df.egressprobe reason=debug_disable_replay
+11-24 22:40:23.702  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -5'
 --- 模块日志（unavailable 行 + 不应有 kept mapped）---
 --- fixture（应落 listener=18080：应用请求仍走设备级代理）---
 2026-11-24T22:40:17+0800 proto=http listener=18080 GET http://app.fixture/ host=app.fixture auth=0
@@ -20,7 +20,7 @@ PUT HTTP 200
 1:debug = false
 11-24 22:40:31.638 11629 11629 I EGRESSPROBE: http.proxyPort=18082
 11-24 22:40:31.638 11629 11629 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18082
---- fixture（debug=false 时模块日志/DeviceFaker 关闭，靠 listener 归因）---
+--- fixture（debug=false 时模块日志/DevMask 关闭，靠 listener 归因）---
 2026-11-24T22:40:27+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
 2026-11-24T22:40:27+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
 
@@ -29,10 +29,10 @@ PUT HTTP 200
 0
 11-24 22:40:41.605 11689 11689 I EGRESSPROBE: http.proxyPort=18082
 11-24 22:40:41.605 11689 11689 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18082
-11-24 22:40:35.622 11689 11689 I DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
-11-24 22:40:37.623 11689 11694 W DeviceFaker: [egress] replay package=io.df.egressprobe t=30ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
-11-24 22:40:37.624 11689 11694 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
-11-24 22:40:43.809  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -4'
+11-24 22:40:35.622 11689 11689 I DevMask: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:40:37.623 11689 11694 W DevMask: [egress] replay package=io.df.egressprobe t=30ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:40:37.624 11689 11694 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:40:43.809  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -4'
 --- fixture ---
 2026-11-24T22:40:37+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
 2026-11-24T22:40:37+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
@@ -64,11 +64,11 @@ prop=1
 本轮新增模块日志：
 [2026-11-24 22:43:31.511] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
 [2026-11-24 22:43:31.511] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
-[2026-11-24 22:43:31.511] [WARN] zygisk::hooks - [egress] replay hook unavailable reason=debug_disable_replay (debug.device_faker.egress.disable_replay is set; one-shot injection only)
+[2026-11-24 22:43:31.511] [WARN] zygisk::hooks - [egress] replay hook unavailable reason=debug_disable_replay (debug.devmask.egress.disable_replay is set; one-shot injection only)
 armed 出现次数=0
 kept mapped 次数=0
-11-24 22:43:31.511 12814 12814 W DeviceFaker: [egress] replay hook unavailable package=io.df.egressprobe reason=debug_disable_replay
-11-24 22:43:40.066  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -a unavailable | tail -2'
+11-24 22:43:31.511 12814 12814 W DevMask: [egress] replay hook unavailable package=io.df.egressprobe reason=debug_disable_replay
+11-24 22:43:40.066  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | grep -a unavailable | tail -2'
 11-24 22:43:37.519 12814 12814 I EGRESSPROBE: http.proxyPort=18080
 11-24 22:43:37.519 12814 12814 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18080
 fixture:
@@ -82,10 +82,10 @@ prop=[]
 [2026-11-24 22:43:42.047] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
 [2026-11-24 22:43:42.048] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
 [2026-11-24 22:43:42.048] [INFO] zygisk - [egress] module kept mapped for the replay window
-11-24 22:43:42.069 12891 12891 I DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
-11-24 22:43:44.071 12891 12895 W DeviceFaker: [egress] replay package=io.df.egressprobe t=28ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
-11-24 22:43:44.071 12891 12895 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
-11-24 22:43:50.417  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -4'
+11-24 22:43:42.069 12891 12891 I DevMask: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:43:44.071 12891 12895 W DevMask: [egress] replay package=io.df.egressprobe t=28ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:43:44.071 12891 12895 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:43:50.417  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -4'
 11-24 22:43:48.049 12891 12891 I EGRESSPROBE: http.proxyPort=18082
 11-24 22:43:48.049 12891 12891 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18082
 fixture:

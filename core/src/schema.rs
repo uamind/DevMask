@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! schemars 生成的 JSON Schema（docs/dev/server-api-plan.md 9.2 / 5.8）。
 //!
@@ -17,17 +17,17 @@ use crate::config::{AppConfig, Config, DeviceTemplate};
 
 /// @@Config@@ 的 JSON Schema。
 pub fn config_schema() -> Value {
-    schema_for::<Config>("DeviceFakerConfig")
+    schema_for::<Config>("DevMaskConfig")
 }
 
 /// @@DeviceTemplate@@ 的 JSON Schema。
 pub fn template_schema() -> Value {
-    schema_for::<DeviceTemplate>("DeviceFakerTemplate")
+    schema_for::<DeviceTemplate>("DevMaskTemplate")
 }
 
 /// @@AppConfig@@ 的 JSON Schema。
 pub fn app_schema() -> Value {
-    schema_for::<AppConfig>("DeviceFakerApp")
+    schema_for::<AppConfig>("DevMaskApp")
 }
 
 /// 三份 schema 打包，便于一次性下发给 WebUI / AI。
@@ -44,7 +44,7 @@ pub fn bundle() -> Value {
     );
     root.insert(
         "title".to_owned(),
-        Value::String("DeviceFakerSchemas".to_owned()),
+        Value::String("DevMaskSchemas".to_owned()),
     );
     root.insert("definitions".to_owned(), Value::Object(definitions));
     Value::Object(root)

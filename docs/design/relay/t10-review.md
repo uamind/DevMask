@@ -3,7 +3,7 @@
 - 评审人：reviewer；被审对象：t2 relay、t3 uid 防火墙、t5 SOCKS5、t4 注入改造、t17/t21 加固、t22 真机复验
 - 结论：**needs_revision**（1 个 high、6 个 medium、4 个 low）。开放代理主路径（三链 fail-closed、bind 断言、重建零空窗）成立，
   但「accept 期第二道防线」依赖一个不会随 live 状态更新的布尔量，在 uid 归属失败的设备上会把应用级端口变成开放代理。
-- 证据：cargo test -p device_faker_server（全 target ok，relay_api 20）、cargo test -p device_faker_module_tests（60 passed）、
+- 证据：cargo test -p devmask_server（全 target ok，relay_api 20）、cargo test -p devmask_module_tests（60 passed）、
   docs/design/relay/t22-acceptance.md 与其 evidence-t22/。
 
 ## 1. 七个维度逐条结论
@@ -25,7 +25,7 @@
 - 位置：server/src/relay/service.rs:146（字段）、:660-674（只在 apply/clear 时 store）、:1046-1065（accept 期策略读取）；
   server/src/relay/firewall.rs:184-210（sample 只更新 FirewallState，不更新该 atomic）。
 - 问题：accept 期的分层策略是「uid 未知 + firewall_enforced=true → 放行」。这个 true 只来自**最近一次 apply**，
-  GET 的 -S 采样（service.rs:251-258）不会同步它。于是：iptables -F DF_EGRESS_RLY_ALLOW / _DENY（手工、或其它 root
+  GET 的 -S 采样（service.rs:251-258）不会同步它。于是：iptables -F DM_EGRESS_RLY_ALLOW / _DENY（手工、或其它 root
   防火墙应用重载规则集）之后，GET 会报 applied=false，但 accept 期仍认为「内核已按 uid 过滤」→ 在 uid 归属失败的设备
   （t22 O1 实测本机就是）上，任何应用连应用级端口都会被放行 → 拿到带凭据的隧道。契约 §4.6 第 5 条明确说双检要管
   「规则被外部清掉」的场景，这条没有兑现。
@@ -132,9 +132,9 @@
 
 ## 4. 已执行的核对（可复跑）
 
-    cargo test -p device_faker_server            # 全 target ok（relay_api 20 例）
-    cargo test -p device_faker_module_tests      # 60 passed
-    cargo test -p device_faker_server --lib relay --quiet
+    cargo test -p devmask_server            # 全 target ok（relay_api 20 例）
+    cargo test -p devmask_module_tests      # 60 passed
+    cargo test -p devmask_server --lib relay --quiet
     grep -rn 'firewall_applied' server/src/relay/service.rs     # 只有 apply/clear 两处 store，无 live 同步
     grep -rn 'proxy.kind != ProxyType::Http' server/src/egress/mod.rs   # 设备级 socks5 不走 settings，但 listener 仍建
     grep -rn 'uid_unresolved_firewall_enforced' docs/plans docs/design  # 契约与 zh 文档均未收录该策略

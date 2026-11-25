@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口代理端点：GET/PUT/DELETE /egress、POST /egress/probe、GET /egress/proxies。
 //!
@@ -8,7 +8,7 @@
 //!
 //! 三条容易踩的规则：
 //!
-//! 1. 这些端点**不设置** X-DF-Revision / ETag，只设置 X-DF-Egress-Revision
+//! 1. 这些端点**不设置** X-DM-Revision / ETag，只设置 X-DM-Egress-Revision
 //!    （否则既有 WebUI 的拦截器会把 config revision 覆盖成 egress revision，
 //!    下一次 PUT /config 必然 412）；
 //! 2. 写路径的 If-Match 比较对象是 egress revision（config revision 与 egress.toml 字节的合成值）；
@@ -22,9 +22,9 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use device_faker_core::config::{Config, DIRECT_MARKER, EgressSection};
-use device_faker_core::revision::{FileLock, atomic_write, create_backup};
-use device_faker_core::validate::{self, ValidationOptions};
+use devmask_core::config::{Config, DIRECT_MARKER, EgressSection};
+use devmask_core::revision::{FileLock, atomic_write, create_backup};
+use devmask_core::validate::{self, ValidationOptions};
 use serde_json::{Value, json};
 use toml_edit::DocumentMut;
 
@@ -919,7 +919,7 @@ pub async fn put_egress(
         .parse()
         .map_err(|error| ApiError::internal_error(&request_id, format!("配置解析失败: {error}")))?;
     if let Some(default) = egress_request::default_update(&request) {
-        device_faker_core::edit::set_egress(&mut document, &EgressSection { default }).map_err(
+        devmask_core::edit::set_egress(&mut document, &EgressSection { default }).map_err(
             |error| ApiError::internal_error(&request_id, format!("写入 [egress] 失败: {error}")),
         )?;
     }
@@ -1172,7 +1172,7 @@ pub async fn delete_egress(
         .parse()
         .map_err(|error| ApiError::internal_error(&request_id, format!("配置解析失败: {error}")))?;
     // 第 2、3 条：删 [egress].default、清所有 [[apps]].egress（不动其它机型字段）。
-    device_faker_core::edit::set_egress(&mut document, &EgressSection { default: None }).map_err(
+    devmask_core::edit::set_egress(&mut document, &EgressSection { default: None }).map_err(
         |error| ApiError::internal_error(&request_id, format!("清除 [egress] 失败: {error}")),
     )?;
     crate::egress::clear_all_app_egress(&mut document);

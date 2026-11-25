@@ -1,8 +1,8 @@
-# Device Faker 原生 Web 服务与 AI API 计划书
+# DevMask 原生 Web 服务与 AI API 计划书
 
 - 文档版本：v0.1（草案）
 - 日期：2026-11-24
-- 适用代码：device_faker v1.7.0（当前工作区）
+- 适用代码：devmask v1.7.0（当前工作区）
 - 关联文档：docs/README.md、docs/CONFIG.md、docs/API.md（待新增）
 - 状态：待评审
 
@@ -14,7 +14,7 @@
 
 三条主线：
 
-1. **原生 Web**：模块内置常驻进程 device_faker_server，直接托管 module/webroot，手机浏览器或局域网浏览器打开即可完整管理，不依赖管理器 WebView。
+1. **原生 Web**：模块内置常驻进程 devmask_server，直接托管 module/webroot，手机浏览器或局域网浏览器打开即可完整管理，不依赖管理器 WebView。
 2. **AI API**：同一进程暴露版本化 REST API（/api/v1）、OpenAPI 3.1 描述、JSON Schema、llms.txt，并提供 MCP（Model Context Protocol）端点，AI 客户端可以直接把它当工具集使用。
 3. **双形态兼容**：现有管理器模式（ksu 桥接）继续可用；WebUI 增加 HTTP 传输层，按运行环境自动切换，不维护两份前端。
 
@@ -34,12 +34,12 @@
 ### 2.1 当前链路
 
 - **Zygisk 模块**：Rust cdylib（src/lib.rs），在 zygote 中注入，按包名伪装 Build 字段、COW 属性，并通过 companion 进程做 resetprop 与密度管理。
-- **配置**：唯一事实来源是 /data/adb/device_faker/config/config.toml，TOML 格式，模板（templates）+ 应用内联配置（apps）+ 全局开关。
+- **配置**：唯一事实来源是 /data/adb/devmask/config/config.toml，TOML 格式，模板（templates）+ 应用内联配置（apps）+ 全局开关。
 - **配置生效**：companion 把配置预渲染成 per-package TOML 放在内存，config.toml 的 mtime 变化时重渲染（src/spec.rs）；目标应用下一次启动即拿到新 spec。
 - **WebUI**：webui/ 是 Vue 3 + Vite 单页应用，构建产物输出到 module/webroot，由管理器以本地页面加载。
 - **能力来源**：WebUI 不直接读文件、不直接跑命令，全部通过管理器注入的 window.ksu（kernelsu-alt 封装）：exec、io、pm、getPackagesInfo、moduleInfo、toast。
 - **服务端**：没有。仓库中不存在任何 HTTP 服务、端口监听或 API。
-- **日志**：/data/adb/device_faker/logs/device_faker.log。
+- **日志**：/data/adb/devmask/logs/devmask.log。
 
 ### 2.2 痛点
 
@@ -59,7 +59,7 @@
 ### 2.4 已完成的可行性验证（本机 Pixel 9 / Android 17 / KernelSU 域）
 
 - 在 ksu 域内绑定 TCP 端口成功（toybox nc 监听 9999，adb forward 可访问）。
-- 从 /data/adb/modules/device_faker 执行二进制成功（上下文 u:object_r:system_file:s0）。
+- 从 /data/adb/modules/devmask 执行二进制成功（上下文 u:object_r:system_file:s0）。
 - 配置目录可写，写入后文件上下文为 u:object_r:system_file:s0，权限可控。
 - 结论：service.sh 启动原生服务、监听端口、读写 /data/adb 在目标环境可行；Magisk 环境需在测试矩阵中复验。
 
@@ -90,15 +90,15 @@
     ┌───────────────────────────── Android 设备 ─────────────────────────────┐
     │                                                                        │
     │  service.sh (root)                                                     │
-    │      └─ device_faker_server  (Rust / axum)                             │
-    │            ├─ 静态资源：/data/adb/modules/device_faker/webroot         │
+    │      └─ devmask_server  (Rust / axum)                             │
+    │            ├─ 静态资源：/data/adb/modules/devmask/webroot         │
     │            ├─ REST /api/v1/*                                           │
     │            ├─ MCP   /mcp                                               │
     │            ├─ 认证 / 审计 / 限流 / 备份                                 │
     │            └─ 配置仓库（toml_edit + flock + revision）                  │
     │                     │                                                  │
     │                     ▼                                                  │
-    │            /data/adb/device_faker/config/config.toml                   │
+    │            /data/adb/devmask/config/config.toml                   │
     │                     │ mtime 变化                                        │
     │                     ▼                                                  │
     │  zygote / companion：重渲染 per-package spec → 目标应用启动时生效        │
@@ -116,8 +116,8 @@
 
 | 组件 | 位置 | 职责 |
 | --- | --- | --- |
-| device_faker_server | 新增 crate server/ | HTTP、静态托管、REST、MCP、认证、审计 |
-| device_faker_core | 新增 crate core/ | 配置模型、校验、合并、TOML 读写、revision |
+| devmask_server | 新增 crate server/ | HTTP、静态托管、REST、MCP、认证、审计 |
+| devmask_core | 新增 crate core/ | 配置模型、校验、合并、TOML 读写、revision |
 | zygisk 模块 | src/ | 复用 core，行为不变 |
 | WebUI | webui/ | 新增传输抽象，支持 ksu 与 HTTP |
 | service.sh | module/ | 开机启动、崩溃拉起、日志轮转 |
@@ -166,12 +166,12 @@ WebUI 启动时探测：存在 window.__DF_SERVER__ 或 /api/v1/healthz 可达 �
 - 所有列表接口支持 limit / cursor；默认 limit=50，最大 500。
 - 变更类接口支持 dry_run=true 或独立 plan 接口，返回 diff 与 warnings。
 - 幂等：POST 支持 Idempotency-Key，24 小时内重复键返回首次结果。
-- 响应带 X-Request-Id、X-DF-Revision，便于追踪与条件写。
+- 响应带 X-Request-Id、X-DM-Revision，便于追踪与条件写。
 
 ### 5.2 认证与权限
 
 - 认证：Authorization: Bearer <token>；MCP 同样。
-- Token 存于 /data/adb/device_faker/config/server.toml 的 tokens 表，落盘只存 sha256，明文仅在创建时返回一次。
+- Token 存于 /data/adb/devmask/config/server.toml 的 tokens 表，落盘只存 sha256，明文仅在创建时返回一次。
 - 作用域：
   - read：读取状态、配置、模板、应用、日志。
   - write：增删改模板、应用、配置。
@@ -262,7 +262,7 @@ AI 与运维：
 
     200 OK
     {
-      "module": {"id": "device_faker", "version": "v1.7.0", "versionCode": 20261109},
+      "module": {"id": "devmask", "version": "v1.7.0", "versionCode": 20261109},
       "device": {"model": "Pixel 9", "android": "17", "sdk": 37, "abi": "arm64-v8a"},
       "server": {"version": "1.0.0", "uptimeSec": 3600, "bind": "127.0.0.1:8686"},
       "config": {
@@ -384,7 +384,7 @@ AI 与运维：
 
 ### 5.7 审计
 
-- 路径：/data/adb/device_faker/logs/api-audit.jsonl。
+- 路径：/data/adb/devmask/logs/api-audit.jsonl。
 - 字段：ts、requestId、tokenId、tokenName、remote、method、path、status、revisionBefore、revisionAfter、durationMs、userAgent。
 - 敏感值（Token、完整配置内容）不落审计。
 - 日志轮转：单文件 5MB，保留 3 份。
@@ -434,10 +434,10 @@ AI 与运维：
 
 MCP 资源：
 
-- device_faker://config（当前配置）
-- device_faker://templates/{name}
-- device_faker://schema/config
-- device_faker://guide
+- devmask://config（当前配置）
+- devmask://templates/{name}
+- devmask://schema/config
+- devmask://guide
 
 MCP 提示模板：
 
@@ -538,12 +538,12 @@ module/service.sh（新增）：
 
     #!/system/bin/sh
     MODDIR=$(dirname "$0")
-    RUNTIME=/data/adb/device_faker
+    RUNTIME=/data/adb/devmask
     mkdir -p "$RUNTIME/logs"
     until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 2; done
     [ -f "$RUNTIME/config/server.toml" ] || cp "$MODDIR/server.default.toml" "$RUNTIME/config/server.toml"
     while true; do
-      "$MODDIR/bin/device_faker_server" --config "$RUNTIME/config/server.toml" >> "$RUNTIME/logs/server.log" 2>&1
+      "$MODDIR/bin/devmask_server" --config "$RUNTIME/config/server.toml" >> "$RUNTIME/logs/server.log" 2>&1
       echo "server exited ($?), restarting in 5s" >> "$RUNTIME/logs/server.log"
       sleep 5
     done &
@@ -551,7 +551,7 @@ module/service.sh（新增）：
 要点：
 
 - 后台常驻，崩溃 5 秒后拉起。
-- 单实例：启动时写 /data/adb/device_faker/server.pid，检测旧 pid 存活则退出。
+- 单实例：启动时写 /data/adb/devmask/server.pid，检测旧 pid 存活则退出。
 - 退出：uninstall.sh 读取 pid 并 kill；也可由服务自身处理 SIGTERM。
 - 日志轮转：服务内按大小切分，或由 service.sh 简单 mv。
 
@@ -559,13 +559,13 @@ module/service.sh（新增）：
 
 | 路径 | 用途 | 权限 |
 | --- | --- | --- |
-| /data/adb/modules/device_faker/bin/device_faker_server | 二进制 | 755 |
-| /data/adb/modules/device_faker/webroot/ | 静态资源 | 644/755 |
-| /data/adb/device_faker/config/config.toml | 配置 | 644 |
-| /data/adb/device_faker/config/server.toml | 服务设置与 token 哈希 | 600 |
-| /data/adb/device_faker/config/backups/ | 备份 | 700 |
-| /data/adb/device_faker/logs/server.log | 服务日志 | 600 |
-| /data/adb/device_faker/logs/api-audit.jsonl | 审计 | 600 |
+| /data/adb/modules/devmask/bin/devmask_server | 二进制 | 755 |
+| /data/adb/modules/devmask/webroot/ | 静态资源 | 644/755 |
+| /data/adb/devmask/config/config.toml | 配置 | 644 |
+| /data/adb/devmask/config/server.toml | 服务设置与 token 哈希 | 600 |
+| /data/adb/devmask/config/backups/ | 备份 | 700 |
+| /data/adb/devmask/logs/server.log | 服务日志 | 600 |
+| /data/adb/devmask/logs/api-audit.jsonl | 审计 | 600 |
 
 - 已验证：模块目录二进制上下文 system_file 可执行；配置目录写入后上下文正确。
 - Magisk 环境需验证 service.sh 的域是否能绑定端口；若受限，回退方案为 Unix socket + adb forward，或在 post-fs-data 阶段启动。
@@ -594,8 +594,8 @@ module/service.sh（新增）：
 
 - 新增 workspace 成员：core、server。
 - xtask build 增加：
-  - cargo ndk -t arm64-v8a -p 29 build -p device_faker_server --release
-  - 复制产物到临时目录 bin/device_faker_server
+  - cargo ndk -t arm64-v8a -p 29 build -p devmask_server --release
+  - 复制产物到临时目录 bin/devmask_server
   - 复制 module/service.sh、server.default.toml
   - 保持现有 zygisk 构建与 webroot 复制流程
 - 兼容现有 pack_module.py（遍历 module 目录，自动包含 bin 与 service.sh）。
@@ -658,14 +658,14 @@ module/service.sh（新增）：
 ### 10.2 明确不做的事
 
 - 不提供任意 shell 执行接口。
-- 不提供任意文件读写接口；文件访问限定在 /data/adb/device_faker 与模块目录。
+- 不提供任意文件读写接口；文件访问限定在 /data/adb/devmask 与模块目录。
 - 不允许通过 API 修改服务自身二进制或开机脚本。
 
 ### 10.3 网络与 TLS
 
 - 默认 127.0.0.1:8686。
 - 局域网访问建议配合 Tailscale / WireGuard；如需直接暴露，P4 提供可选 TLS（rustls + 自签证书 + 指纹输出）。
-- 支持 Unix socket（可选）：/data/adb/device_faker/server.sock，便于 adb forward 之外的本地集成。
+- 支持 Unix socket（可选）：/data/adb/devmask/server.sock，便于 adb forward 之外的本地集成。
 
 ### 10.4 审计与告警
 
@@ -700,7 +700,7 @@ module/service.sh（新增）：
 
 ### P1 core crate 与只读 API（4 人日）
 
-- 抽出 device_faker_core，zygisk 改为依赖 core，行为不变。
+- 抽出 devmask_core，zygisk 改为依赖 core，行为不变。
 - 新建 server crate：静态托管、认证、status、config 读取、templates/apps/packages 只读、schema、openapi。
 - service.sh 与构建打包打通，设备上可访问。
 - 交付：可在手机浏览器打开完整只读 WebUI；curl 可读全部资源。
@@ -812,7 +812,7 @@ module/service.sh（新增）：
 - server/（HTTP、REST、MCP、认证、审计、静态托管）
 - src/ 改造为依赖 core
 - webui/src/utils/backend.ts 与 backend/ksu.ts、backend/http.ts
-- module/service.sh、module/server.default.toml、module/bin/device_faker_server（构建产物）
+- module/service.sh、module/server.default.toml、module/bin/devmask_server（构建产物）
 - tools/mcp_stdio_bridge.mjs
 - tests/api/、tests/device/
 
@@ -870,10 +870,10 @@ module/service.sh（新增）：
 ### A. server.default.toml
 
     bind = "127.0.0.1:8686"
-    static_dir = "/data/adb/modules/device_faker/webroot"
-    config_path = "/data/adb/device_faker/config/config.toml"
-    backup_dir = "/data/adb/device_faker/config/backups"
-    audit_log = "/data/adb/device_faker/logs/api-audit.jsonl"
+    static_dir = "/data/adb/modules/devmask/webroot"
+    config_path = "/data/adb/devmask/config/config.toml"
+    backup_dir = "/data/adb/devmask/config/backups"
+    audit_log = "/data/adb/devmask/logs/api-audit.jsonl"
     allow_lan = false
     body_limit_bytes = 2097152
     read_rate_per_min = 120
@@ -900,9 +900,9 @@ module/service.sh（新增）：
 
     {
       "mcpServers": {
-        "device-faker": {
+        "devmask": {
           "command": "node",
-          "args": ["/path/to/device_faker/tools/mcp_stdio_bridge.mjs"],
+          "args": ["/path/to/devmask/tools/mcp_stdio_bridge.mjs"],
           "env": {
             "DF_URL": "http://127.0.0.1:8686/mcp",
             "DF_TOKEN": "df_xxx"

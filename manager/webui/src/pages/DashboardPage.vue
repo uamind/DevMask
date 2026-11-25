@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -11,7 +11,7 @@
         <div class="eyebrow">CONTROL PLANE</div>
         <h1>设备中转站</h1>
         <p>
-          把多台 Device Faker 设备收进一个控制面。AI 只认一个 Relay 地址，
+          把多台 DevMask 设备收进一个控制面。AI 只认一个 Relay 地址，
           就能按设备、按应用或全量下发统一的伪装机型。
         </p>
       </div>

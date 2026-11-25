@@ -3,7 +3,7 @@
 - 对象：t24 修复 + t26 文档 + t28 收尾；结论：**needs_revision**（2 high / 2 medium）。
 - 第一轮 high（F1）实现已落地且逻辑正确，但**没有任何可失败用例**；t28 把「设备级 socks5 不建 listener」修进代码后，
   t26 写的文档/契约/CHANGELOG 反而在 8 处继续声明「base_port 上有一个全 uid 的 SOCKS5 服务端」，文档与实现相反。
-- 验证：cargo test -p device_faker_server（全 target ok，relay_api 22 例）、cargo test -p device_faker_module_tests（60 passed）。
+- 验证：cargo test -p devmask_server（全 target ok，relay_api 22 例）、cargo test -p devmask_module_tests（60 passed）。
 
 ## 1. 第一轮 findings 复核
 
@@ -82,8 +82,8 @@
 
 ## 4. 已执行核对
 
-    cargo test -p device_faker_server            # 全 target ok（relay_api 22）
-    cargo test -p device_faker_module_tests      # 60 passed
+    cargo test -p devmask_server            # 全 target ok（relay_api 22）
+    cargo test -p devmask_module_tests      # 60 passed
     grep -rn 'is_device' -A 3 server/src/relay/service.rs          # 设备级要求 http（H1 代码侧）
     grep -rn 'SOCKS5 服务端' docs/plans docs/*.md docs/en/*.md     # 文档仍声明暴露（H1 文档侧）
     grep -rn 'Revalidator\\|revalidate' server/tests               # 无测试（H2）

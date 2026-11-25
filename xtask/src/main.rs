@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 mod zip_ext;
 
@@ -26,7 +26,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Check the build of device_faker
+    /// Check the build of devmask
     Check {
         /// Build in release mode (default: false)
         #[clap(short, long, default_value = "false")]
@@ -37,7 +37,7 @@ enum Commands {
         verbose: bool,
     },
 
-    /// Build device_faker and device_faker_cli
+    /// Build devmask and devmask_cli
     Build {
         /// Build in release mode (default: false)
         #[clap(short, long, default_value = "false")]
@@ -136,12 +136,12 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     }
 
     run_command(&mut cargo, "cargo ndk build")?;
-    // TODO(remove-cli): device_faker_cli 已不随模块打包（WebUI 的「ZIP/属性 → 模板」转换
+    // TODO(remove-cli): devmask_cli 已不随模块打包（WebUI 的「ZIP/属性 → 模板」转换
     // 已在 utils/propsToTemplate.ts 纯前端实现，模块运行期也不需要它）。仍保留 crate 作为
-    // 开发/排障用的命令行工具（`cargo run -p device_faker_cli -- ...`）。若确认无人再用，
+    // 开发/排障用的命令行工具（`cargo run -p devmask_cli -- ...`）。若确认无人再用，
     // 可整 crate 删除并一并清掉本文件的 cli_bin_path()、AGENTS.md 的 CLI 说明。
 
-    // 原生 Web 服务：与 zygisk 打进同一个模块包（bin/device_faker_server），
+    // 原生 Web 服务：与 zygisk 打进同一个模块包（bin/devmask_server），
     // 由 module/service.sh 在开机后拉起。
     build_server(release, verbose)?;
 
@@ -174,7 +174,7 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     .context("failed to stage zygisk/arm64-v8a.so")?;
     stage_server_binary(release, &temp_dir)?;
     let build_type = if release { "release" } else { "debug" };
-    let package_path = Path::new("output").join(format!("device_faker-({build_type}).zip"));
+    let package_path = Path::new("output").join(format!("devmask-({build_type}).zip"));
 
     let local_offset = UtcOffset::from_hms(8, 0, 0).expect("UTC+8 offset should always be valid");
 
@@ -192,7 +192,7 @@ fn build(release: bool, verbose: bool) -> Result<()> {
     })
     .unwrap();
 
-    println!("device_faker built successfully: {:?}", package_path);
+    println!("devmask built successfully: {:?}", package_path);
 
     Ok(())
 }
@@ -200,7 +200,7 @@ fn build(release: bool, verbose: bool) -> Result<()> {
 /// zip 条目的 unix 权限位。
 ///
 /// Magisk / KernelSU 安装时按 zip 里的 mode 落盘：`*.sh` 与 `bin/` 下的
-/// `device_faker_server` 必须是 0755，否则装机后 service.sh 与二进制都没有
+/// `devmask_server` 必须是 0755，否则装机后 service.sh 与二进制都没有
 /// 执行权限（只有 customize.sh 里的 set_perm 兜底，一旦脚本本身跑不起来就彻底失效）。
 fn zip_entry_mode(entry_path: &Path) -> u32 {
     if entry_path.is_dir() {
@@ -234,14 +234,14 @@ fn zip_entry_modified_time(entry_path: &Path, local_offset: UtcOffset) -> Option
     DateTime::try_from(primitive).ok()
 }
 
-/// device_faker_server 的 ABI：与 zygisk 一致，只出 arm64-v8a。
+/// devmask_server 的 ABI：与 zygisk 一致，只出 arm64-v8a。
 const SERVER_ABI: &str = "arm64-v8a";
-/// device_faker_server 的最低 API level（计划书 8.6：-p 29）。
+/// devmask_server 的最低 API level（计划书 8.6：-p 29）。
 const SERVER_NDK_PLATFORM: &str = "29";
 /// 模块 bin/ 里的文件名。
-const SERVER_BIN_NAME: &str = "device_faker_server";
+const SERVER_BIN_NAME: &str = "devmask_server";
 
-/// 构建 device_faker_server（arm64）。
+/// 构建 devmask_server（arm64）。
 ///
 /// 服务是纯 Rust + tokio，不需要任何 `-Z` 特性，所以走默认 toolchain
 /// （不跟随 zygisk 的 `+nightly`，少一个 nightly 依赖）。
@@ -250,14 +250,14 @@ fn build_server(release: bool, verbose: bool) -> Result<()> {
     // cargo-ndk 4.x 把短参数从 `-p` 改成了 `-P`；长参数 `--platform` 两代语义一致，
     // 因此这里只用长写法，装哪个版本都能跑。
     cargo.args(["ndk", "--platform", SERVER_NDK_PLATFORM, "-t", SERVER_ABI]);
-    cargo.args(["build", "-p", "device_faker_server"]);
+    cargo.args(["build", "-p", "devmask_server"]);
     if release {
         cargo.arg("--release");
     }
     if verbose {
         cargo.arg("--verbose");
     }
-    run_command(&mut cargo, "cargo ndk build -p device_faker_server")?;
+    run_command(&mut cargo, "cargo ndk build -p devmask_server")?;
 
     Ok(())
 }
@@ -282,7 +282,7 @@ fn stage_server_binary(release: bool, temp_dir: &Path) -> Result<()> {
 
     let size = fs::metadata(&staged).map(|meta| meta.len()).unwrap_or(0);
     println!(
-        "device_faker_server staged: {} ({:.2} MiB)",
+        "devmask_server staged: {} ({:.2} MiB)",
         staged.display(),
         size as f64 / (1024.0 * 1024.0)
     );
@@ -472,7 +472,7 @@ mod tests {
     fn zip_entry_mode_marks_scripts_and_bin_executable() {
         assert_eq!(zip_entry_mode(Path::new("service.sh")), 0o755);
         assert_eq!(zip_entry_mode(Path::new("uninstall.sh")), 0o755);
-        assert_eq!(zip_entry_mode(Path::new("bin/device_faker_server")), 0o755);
+        assert_eq!(zip_entry_mode(Path::new("bin/devmask_server")), 0o755);
         assert_eq!(zip_entry_mode(Path::new("config.toml")), 0o644);
         assert_eq!(zip_entry_mode(Path::new("server.default.toml")), 0o644);
         assert_eq!(zip_entry_mode(Path::new("webroot/assets/index.js")), 0o644);
@@ -488,13 +488,13 @@ mod tests {
     fn server_bin_path_points_at_ndk_output() {
         let release = server_bin_path(true);
         assert!(
-            release.ends_with("aarch64-linux-android/release/device_faker_server"),
+            release.ends_with("aarch64-linux-android/release/devmask_server"),
             "{}",
             release.display()
         );
         let debug = server_bin_path(false);
         assert!(
-            debug.ends_with("aarch64-linux-android/debug/device_faker_server"),
+            debug.ends_with("aarch64-linux-android/debug/devmask_server"),
             "{}",
             debug.display()
         );

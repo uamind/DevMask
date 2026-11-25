@@ -1,11 +1,11 @@
 # uninstall 清理 —— 2026-11-25T04:08:59Z
 ## ss 178xx
 (none)
-## iptables DF_EGRESS_RLY
+## iptables DM_EGRESS_RLY
 iptables: No chain/target/match by that name.
 ## settings
 :0
 ## server proc
-root          2033     1   10877764   6628 do_sys_poll         0 S zn-zygisk-companion64 device_faker
+root          2033     1   10877764   6628 do_sys_poll         0 S zn-zygisk-companion64 devmask
 root          2038     1   10941768   6608 do_sys_poll         0 S zn-zygisk-companion64 zygisk_lsposed
 root          7289     1   10815672   5260 do_sys_poll         0 S zn-zygisk-companion64 playintegrityfix

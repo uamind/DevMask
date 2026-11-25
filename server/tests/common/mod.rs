@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 集成测试共用的 fixture：临时 webroot / config.toml / module.prop / Token 表 / 命令执行器。
 #![allow(dead_code)]
@@ -15,7 +15,7 @@ use axum::{
 };
 use std::sync::Arc;
 
-use device_faker_server::{
+use devmask_server::{
     app::{AppState, router},
     auth::{Scope, TokenEntry},
     commands::{CommandRunner, FixtureRunner},
@@ -69,10 +69,10 @@ model = \"2509FPN0BC\"
 
 /// module.prop 内容。
 pub const MODULE_PROP: &str =
-    "id=device_faker\nname=Device Faker\nversion=v1.7.0\nversionCode=20261109\nauthor=test\n";
+    "id=devmask\nname=DevMask\nversion=v1.7.0\nversionCode=20261109\nauthor=test\n";
 
 /// index.html（带 <head>，用于验证注入位置）。
-pub const INDEX_HTML: &str = "<!DOCTYPE html>\n<html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>Device Faker</title></head><body><div id=\"app\"></div></body></html>\n";
+pub const INDEX_HTML: &str = "<!DOCTYPE html>\n<html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><title>DevMask</title></head><body><div id=\"app\"></div></body></html>\n";
 
 fn token_entry(token: &str, scopes: Vec<Scope>) -> TokenEntry {
     TokenEntry::new(
@@ -150,7 +150,7 @@ fn build_fixture_with_relay(
     std::fs::write(webroot.join("index.html"), INDEX_HTML).expect("index.html");
     std::fs::write(
         webroot.join("assets/app-abc.js"),
-        "console.log('device-faker')\n",
+        "console.log('devmask')\n",
     )
     .expect("app.js");
     std::fs::write(webroot.join("assets/site.css"), "body{color:#000}\n").expect("site.css");

@@ -1,9 +1,9 @@
-# Device Faker Manager Relay API 契约（/relay/api/v1）
+# DevMask Manager Relay API 契约（/relay/api/v1）
 
 > 状态：**已冻结（contract 里程碑）**
 > 版本：Manager `0.2.0` / API `v1`（egress + relay 增量）
 > 日期：2026-11-24
-> 上游契约：[设备端 /api/v1](../../docs/API.md)（device_faker_server 1.11.0；egress 端点自 1.10.0 起、设备内认证中继 relay 自 1.11.0 起提供）
+> 上游契约：[设备端 /api/v1](../../docs/API.md)（devmask_server 0.0.1；egress 端点自 1.10.0 起、设备内认证中继 relay 自 0.0.1 起提供）
 > 关联文档：[ARCH.md](ARCH.md)（实现架构与数据模型）、[api-types.ts](api-types.ts)（TypeScript 类型定义）、[../docs/plans/manager-relay-plan.md](../../docs/plans/manager-relay-plan.md)（计划书）
 
 本文是 Manager / Relay 的唯一接口事实来源。`frontend-dev` 按本文 + `api-types.ts` 编码 WebUI，
@@ -30,7 +30,7 @@
 | 审计 | `/audit` 查询添加 / 修改 / 移除 / 同步 / 下发 / 轮换 / 鉴权失败 |
 | 出口代理池（egress） | `/egress-proxies` CRUD（名称唯一、被绑定删除 409）、凭据加密落库、Manager 侧直连探测、最近探测结果 |
 | 出口绑定与下发 | `/devices/{id}/egress` 绑定（整机 / 应用级）、`/devices/egress/apply` 批量下发（job `kind=egress`，含 `probe` 与 `dryRun`） |
-| 设备内认证中继（relay，v1.11.0） | `DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`；`/devices/{id}/egress` 的 `deviceState.relay` 原样透传；Manager 侧探测支持 `socks5` 真连 |
+| 设备内认证中继（relay，v0.0.1） | `DeviceSummary.egress.relay = {enabled, active, listeners, firewallApplied}`；`/devices/{id}/egress` 的 `deviceState.relay` 原样透传；Manager 侧探测支持 `socks5` 真连 |
 
 ### 1.2 明确不做（本增量）
 
@@ -48,7 +48,7 @@
 | API 前缀 | `/relay/api/v1`（下称 `BASE`） |
 | `apiVersion` | `v1`（出现在 `/healthz`） |
 | Manager 版本 | `0.2.0` |
-| 设备端最低版本 | `1.9.0`（需要 `/status`、`/overview`、`/config/revision`、`/templates`、`/apps`、`/apps/{pkg}/restart`）；egress 端点需要 `1.10.0`，缺失时下发结果记 `egress_unsupported`（`skipped`）；`relay` 字段需要 `1.11.0`，旧设备的 `DeviceSummary.egress.relay` 为 `null`（不报错、字段只增不改） |
+| 设备端最低版本 | `1.9.0`（需要 `/status`、`/overview`、`/config/revision`、`/templates`、`/apps`、`/apps/{pkg}/restart`）；egress 端点需要 `1.10.0`，缺失时下发结果记 `egress_unsupported`（`skipped`）；`relay` 字段需要 `0.0.1`，旧设备的 `DeviceSummary.egress.relay` 为 `null`（不报错、字段只增不改） |
 | 低版本设备 | 允许注册；缺少的字段为 `null`，聚合视图给 `unsupported_device_api` 警告；下发仍按 1.9.0 端点执行，失败按 §7.5 映射 |
 
 兼容规则：
@@ -109,7 +109,7 @@
 | `X-Request-Id` | 所有响应 | 未提供时生成 `req_<32 位小写十六进制>` |
 | `Cache-Control: no-store` | 所有 `/relay/api/v1/*` | 含错误响应 |
 | `Idempotent-Replay: true` | 幂等键命中的 `POST /apply` | 响应体是首次的 job |
-| `X-DF-Upstream-Request-Id` | 代理端点 | 设备端返回的 `X-Request-Id`，便于两段日志对齐 |
+| `X-DM-Upstream-Request-Id` | 代理端点 | 设备端返回的 `X-Request-Id`，便于两段日志对齐 |
 | `Retry-After` | 429（保留） | 本增量不返回 429 |
 | `WWW-Authenticate: Bearer` | 401 | 标准质询 |
 
@@ -133,7 +133,7 @@
 
 - `POST /token/rotate` 在来源为 1 或 2 时返回 `409 invalid_state`（`details.reason = "token_overridden"`），
   因为进程参数 / 环境变量无法由服务端安全改写。
-- WebUI：Token 存 `localStorage` 的 `dfm_token`；首个请求 401 时弹出 Token 对话框，重新输入后重试。
+- WebUI：Token 存 `localStorage` 的 `dm_token`；首个请求 401 时弹出 Token 对话框，重新输入后重试。
   默认值 `admin123` 只用于初始化输入框，不写入页面 HTML。
 - 401 响应不得包含 Token 片段、设备 Token、数据库路径。
 
@@ -225,8 +225,8 @@ Job 逐设备结果的 `code`（即 `JobResult.code`，也是 `error.code`）取
 | `egress_unsupported` | Manager | 设备端没有 `/egress`（旧版本，404）：`skipped` |
 | `egress_not_configured` | 设备 | 设备端没有任何可用出口（409 `egress.not_configured`）：`failed` |
 | `egress_unchanged` | Manager | 幂等短路：**设备返回 `changed:false`**（每次都 PUT，Manager 不做本地比较）。**结果仍是 `ok`**，只是 `code` 非空（全部 `skipped` 会把 job 算成 `partial`） |
-| `decrypt_failed` | Manager | 组装期望态时**代理凭据解密失败**（`manager.key` 变更 / 密文损坏）：`failed`，`details={deviceId, op:"decrypt", reason:"credential_decrypt_failed", message, detail}` |
-| `device_token_invalid` | Manager | **设备 Token 解密失败**（`manager.key` 变更，需要重新登记设备 Token）：`failed`，`details={deviceId, op:"decrypt"}`；**不是** `device_offline` |
+| `decrypt_failed` | Manager | 组装期望态时**代理凭据解密失败**（`devmask-manager.key` 变更 / 密文损坏）：`failed`，`details={deviceId, op:"decrypt", reason:"credential_decrypt_failed", message, detail}` |
+| `device_token_invalid` | Manager | **设备 Token 解密失败**（`devmask-manager.key` 变更，需要重新登记设备 Token）：`failed`，`details={deviceId, op:"decrypt"}`；**不是** `device_offline` |
 
 警告对象（`Warning`）：
 
@@ -379,7 +379,7 @@ Manager 产生的警告码：
       "apiVersion": "v1",
       "uptimeSec": 3612,
       "startedAt": "2026-11-24T08:00:00Z",
-      "db": { "status": "ok", "schemaVersion": 2, "path": "manager.db" },
+      "db": { "status": "ok", "schemaVersion": 2, "path": "devmask-manager.db" },
       "devices": { "total": 2, "online": 1, "offline": 1 },
       "jobs": { "queued": 0, "running": 0 }
     }
@@ -425,8 +425,8 @@ Manager 产生的警告码：
           "sdk": 37,
           "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys",
           "root": "kernelsu",
-          "moduleVersion": "v1.11.0",
-          "serverVersion": "1.11.0",
+          "moduleVersion": "v0.0.1",
+          "serverVersion": "0.0.1",
           "lastSeen": "2026-11-24T08:12:31Z",
           "lastSyncedAt": "2026-11-24T08:12:31Z",
           "latencyMs": 38,
@@ -526,8 +526,8 @@ Manager 产生的警告码：
       "sdk": 37,
       "fingerprint": "google/tokay/tokay:17/…",
       "root": "kernelsu",
-      "moduleVersion": "v1.11.0",
-      "serverVersion": "1.11.0",
+      "moduleVersion": "v0.0.1",
+      "serverVersion": "0.0.1",
       "lastSeen": "2026-11-24T08:12:31Z",
       "lastSyncedAt": "2026-11-24T08:12:31Z",
       "latencyMs": 38,
@@ -1106,9 +1106,9 @@ Manager 产生的警告码：
 - 转发内容：method、query string、请求体。请求头白名单：
   `Content-Type`、`Accept`、`If-Match`、`Idempotency-Key`、`X-Request-Id`、`Range`。
   其它头丢弃（含客户端的 `Authorization`、`Cookie`、`Host`、`Origin`）。
-- Relay 注入 `Authorization: Bearer <解密后的设备 Token>` 与 `User-Agent: device-faker-manager/0.1.0`（UA 是 `device_client.rs` 里的独立常量，不随 crate 版本变化；`/healthz` 的 `version` 才是 0.2.0）。
-- 响应：2xx 与 4xx（除 401/403）**原样透传**状态码与响应体；复制 `Content-Type`、`X-DF-Revision`、
-  `ETag`、`Retry-After`；设备端 `X-Request-Id` 放入 `X-DF-Upstream-Request-Id`，Relay 自己回填 `X-Request-Id`。
+- Relay 注入 `Authorization: Bearer <解密后的设备 Token>` 与 `User-Agent: devmask-manager/0.1.0`（UA 是 `device_client.rs` 里的独立常量，不随 crate 版本变化；`/healthz` 的 `version` 才是 0.2.0）。
+- 响应：2xx 与 4xx（除 401/403）**原样透传**状态码与响应体；复制 `Content-Type`、`X-DM-Revision`、
+  `ETag`、`Retry-After`；设备端 `X-Request-Id` 放入 `X-DM-Upstream-Request-Id`，Relay 自己回填 `X-Request-Id`。
 - 设备 401/403 → Relay 返回 `502 device_error`（`details = {deviceId, upstreamStatus: 401|403, upstreamCode}`），
   避免浏览器把设备 Token 问题误判成 Manager 登录失效。
 - 设备不可达 → `502 device_offline`；超时 → `504 upstream_timeout`；响应 > 8 MiB → `502 device_error`
@@ -1170,7 +1170,7 @@ Manager 产生的警告码：
 
 错误：401、409 `egress_proxy_exists`、413、415、422（`invalid_egress_name` / `invalid_egress_proxy` / `too_many_items`）、500。
 
-> **认证（v1.11.0）**：`username` / `password` 加密落库并随下发进入设备 0600 的 `egress.toml`；设备内中继（relay）生效时由 root 进程补 HTTP Basic / SOCKS5 RFC1929，应用侧永远看不到凭据。relay 未生效（设备 `[relay].enabled=false` / 文件未迁移）时回退上游 `host:port`，该状态才需要代理侧 **IP 白名单**。Manager 侧 `POST /egress-proxies/{id}/probe` 自 v1.11.0 起 `http` 与 `socks5` 都真连（`socks5h://` + RFC 1929）。设备内中继状态见 `DeviceSummary.egress.relay`。
+> **认证（v0.0.1）**：`username` / `password` 加密落库并随下发进入设备 0600 的 `egress.toml`；设备内中继（relay）生效时由 root 进程补 HTTP Basic / SOCKS5 RFC1929，应用侧永远看不到凭据。relay 未生效（设备 `[relay].enabled=false` / 文件未迁移）时回退上游 `host:port`，该状态才需要代理侧 **IP 白名单**。Manager 侧 `POST /egress-proxies/{id}/probe` 自 v0.0.1 起 `http` 与 `socks5` 都真连（`socks5h://` + RFC 1929）。设备内中继状态见 `DeviceSummary.egress.relay`。
 
 ### 4.21 `GET /egress-proxies/{id}`
 
@@ -1207,7 +1207,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
 - 用途：**Manager 侧直连探测**，验证代理本身可用（与设备链路无关）。
 - 请求体可省略：`{"url": "http://…"}`；默认 `http://checkip.amazonaws.com/`，只接受 `http://`、≤512 字符。
 - 执行：用该代理的 `type/host/port/凭据`（解密后仅在内存）发一次 GET，5 s 超时；**成功与失败都写** `egress_checks(source="manager")`。
-- 支持 `http` 与 `socks5`：`http` 用 `Proxy-Authorization: Basic`；`socks5` 自 v1.11.0 起真连（reqwest `socks` feature，`socks5h://` 表示 DNS 交给代理解析；有凭据时按 RFC 1929）。失败同样写 `ok=0` + `error_code`。
+- 支持 `http` 与 `socks5`：`http` 用 `Proxy-Authorization: Basic`；`socks5` 自 v0.0.1 起真连（reqwest `socks` feature，`socks5h://` 表示 DNS 交给代理解析；有凭据时按 RFC 1929）。失败同样写 `ok=0` + `error_code`。
 
 响应 `200`（成功）：`{proxyId, ok:true, exitIp, latencyMs, checkedAt, url, upstreamStatus, warnings}`——
 `warnings` **恒在**（没东西时是 `[]`）；探测结果没写进 `egress_checks` 时带一条 `egress_check_not_recorded`（`{proxyId, source:"manager"}`），**探测本身仍按真实结果返回 200**。
@@ -1239,8 +1239,8 @@ Merge-Patch 风格，但凭据字段是**双态**：
 ### 4.25 `GET /devices/{id}/egress`
 
 - 返回该设备的**绑定**与**设备侧实时状态**。设备在线时实时 `GET /api/v1/egress`（读超时 10 s）；仅当 HTTP 请求失败/超时才给 `device_offline`，旧版本（404）给 `egress_unsupported`。
-- **设备 Token 无法解密**（`manager.key` 变更 / 密文损坏）时**不再归入 `device_offline`**：
-  - `warnings` 里给 `{code:"device_token_invalid", message:"设备 Token 解密失败（manager.key 可能已变更，需要重新登记设备的 Token）：…", details:{deviceId, code:"device_token_invalid", op:"decrypt"}}`（与 job 结果码 `device_token_invalid` 同名同根因）；
+- **设备 Token 无法解密**（`devmask-manager.key` 变更 / 密文损坏）时**不再归入 `device_offline`**：
+  - `warnings` 里给 `{code:"device_token_invalid", message:"设备 Token 解密失败（devmask-manager.key 可能已变更，需要重新登记设备的 Token）：…", details:{deviceId, code:"device_token_invalid", op:"decrypt"}}`（与 job 结果码 `device_token_invalid` 同名同根因）；
   - `deviceState` 仍是 `null`（拿不到设备侧状态）；
   - **`bindings` 照常返回**——绑定是先在库里读出来的，不因 Token 解不开而丢；
   - 响应的 HTTP 状态仍是 `200`（这是可诊断的预期结果，不是 5xx）。
@@ -1262,7 +1262,7 @@ Merge-Patch 风格，但凭据字段是**双态**：
       "warnings": []
     }
 
-- `deviceState` 是设备端 `GET /egress` 的**透传子集**（原样转发，不裁剪 Relay 不认识的字段；遵循 §2.12），含 v1.11.0 的 `relay` 对象（`enabled/basePort/failOpen/listeners/firewall/portChanges/restartRequiredApps`）与 `proxies[].localPort` / `relayActive`。
+- `deviceState` 是设备端 `GET /egress` 的**透传子集**（原样转发，不裁剪 Relay 不认识的字段；遵循 §2.12），含 v0.0.1 的 `relay` 对象（`enabled/basePort/failOpen/listeners/firewall/portChanges/restartRequiredApps`）与 `proxies[].localPort` / `relayActive`。
 - `bindings[].app=""` 表示整机（方案 A）；`mode="direct"` 时 `proxyId`/`proxyName` 为 `null`。
 
 错误：401、404 `device_not_found`、500（离线不报错）。
@@ -1347,14 +1347,14 @@ Merge-Patch 风格，但凭据字段是**双态**：
 | `sdk` | integer | 是 | `device.sdk` |
 | `fingerprint` | string | 是 | `device.fingerprint` |
 | `root` | string | 是 | `root.manager`（`kernelsu` / `magisk` / `apatch`）；无 root 块为 `null` |
-| `moduleVersion` | string | 是 | `module.version`（如 `v1.11.0`） |
-| `serverVersion` | string | 是 | `server.version`（如 `1.11.0`） |
+| `moduleVersion` | string | 是 | `module.version`（如 `v0.0.1`） |
+| `serverVersion` | string | 是 | `server.version`（如 `0.0.1`） |
 | `lastSeen` | string | 是 | 最近一次成功接触（RFC 3339 UTC，秒精度） |
 | `lastSyncedAt` | string | 是 | 最近一次成功拉取 overview 的时间 |
 | `latencyMs` | integer | 是 | 最近一次探测 / 同步耗时（四舍五入，毫秒） |
 | `createdAt` | string | 否 | 注册时间 |
 | `lastError` | `{code, message}` | 是 | 最近一次失败；成功后清空 |
-| `egress` | `DeviceEgressSummary` \| null | 是 | 设备级出口摘要（只增不改）：`{mode, proxyId, proxyName, exitIp, checkedAt, ok, errorCode, relay}`；没有任何绑定时为 `null`。`relay`（v1.11.0）= `{enabled, active, listeners, firewallApplied}`，设备离线 / 旧设备（无 `relay` 字段）/ 未绑定时为 `null` |
+| `egress` | `DeviceEgressSummary` \| null | 是 | 设备级出口摘要（只增不改）：`{mode, proxyId, proxyName, exitIp, checkedAt, ok, errorCode, relay}`；没有任何绑定时为 `null`。`relay`（v0.0.1）= `{enabled, active, listeners, firewallApplied}`，设备离线 / 旧设备（无 `relay` 字段）/ 未绑定时为 `null` |
 
 `baseUrl` 在校验阶段拒绝：非 `http`/`https`、含 `@`（userinfo）、含 `?` / `#`、空 host、
 以及 `file:` / `ftp:` 等 scheme。查询参数与片段一律不允许（设备端 API 不需要）。
@@ -1745,7 +1745,7 @@ DDL 与迁移步骤见 [ARCH.md §5.2.1](ARCH.md) / [§5.3](ARCH.md)；这里只
 前端接入约定：
 
 1. `manager/webui/src/api/client.ts`：`baseUrl = import.meta.env.VITE_API_BASE ?? '/relay/api/v1'`；
-   Token 取 `localStorage.dfm_token ?? 'admin123'`；统一加 `Authorization` 与 `Accept: application/json`。
+   Token 取 `localStorage.dm_token ?? 'admin123'`；统一加 `Authorization` 与 `Accept: application/json`。
 2. 非 2xx 时解析错误信封，抛出带 `status` / `code` / `requestId` 的 `ApiError`；401 抛 `AuthError`，
    由 `App.vue` 弹 Token 对话框。
 3. 开发环境 Vite 需要代理（`manager/webui/vite.config.ts`）：
@@ -1772,7 +1772,7 @@ DDL 与迁移步骤见 [ARCH.md §5.2.1](ARCH.md) / [§5.3](ARCH.md)；这里只
 | `removeAppConfig(app, device)` | `DELETE /devices/{id}/proxy/api/v1/apps/{pkg}?confirm=true&detach_templates=true` |
 | `templates` | `GET /templates` |
 | `logs` / `recentLogs` | `GET /audit` |
-| `managerToken` / `regenerateToken()` | `localStorage.dfm_token` / `POST /token/rotate` |
+| `managerToken` / `regenerateToken()` | `localStorage.dm_token` / `POST /token/rotate` |
 | Relay 在线状态 | `GET /healthz` |
 
 #### 原型字段 → v1 字段迁移对照
@@ -1901,8 +1901,8 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
 - **总是 PUT**：每次 apply 都会写一次设备（需要设备 Token 的 `write` 作用域），换来凭据轮换、设备侧漂移都能被下一次 apply 收敛；Manager 不存「已下发指纹」。
 - **幂等判定权在设备**：`changed:false` 由设备端算（期望态 == 现状），Manager 只把它转写成 `egress_unchanged`（结果 `ok`）。
 - **Manager 只下发三样**：`default` / `apps` / `proxies`；`failOpen`、`probeUrl`、`probeTimeoutSeconds`、`exclusionList` 保持设备现值，Manager 不比较也不重置。
-- **Manager 侧探测支持 `http` 与 `socks5`**（v1.11.0 起 `socks` feature 真连，`socks5h://` + RFC 1929），只用于验证代理本身可用，与设备链路无关。
-- **固有代价：凭据随请求下发**。「总是 PUT」意味着每次 apply 都会把**解密后的** `username`/`password` 放进 `PUT /api/v1/egress` 请求体，走与设备 Token 相同的通道（默认 loopback 明文 HTTP + Bearer；局域网无 TLS）。这是「总是 PUT」的代价而非缺陷：不先解密就推不动轮换后的凭据。明文只在请求内存里（`Zeroizing`），不落 Manager 日志、不进审计、不回响应；更强隔离用代理侧 IP 白名单；设备内中继（v1.11.0）已承担应用侧认证。
+- **Manager 侧探测支持 `http` 与 `socks5`**（v0.0.1 起 `socks` feature 真连，`socks5h://` + RFC 1929），只用于验证代理本身可用，与设备链路无关。
+- **固有代价：凭据随请求下发**。「总是 PUT」意味着每次 apply 都会把**解密后的** `username`/`password` 放进 `PUT /api/v1/egress` 请求体，走与设备 Token 相同的通道（默认 loopback 明文 HTTP + Bearer；局域网无 TLS）。这是「总是 PUT」的代价而非缺陷：不先解密就推不动轮换后的凭据。明文只在请求内存里（`Zeroizing`），不落 Manager 日志、不进审计、不回响应；更强隔离用代理侧 IP 白名单；设备内中继（v0.0.1）已承担应用侧认证。
 
 结果码映射（`JobResult.code`）：
 
@@ -1952,7 +1952,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
 （例如 `adb forward tcp:18686` 已监听）时换一个端口，并同步修改下文 `$DEV`。
 
     #!/usr/bin/env python3
-    """Device Faker 设备端最小 Mock：供 Manager 冒烟验收。"""
+    """DevMask 设备端最小 Mock：供 Manager 冒烟验收。"""
     import hashlib
     import json
     import sys
@@ -1983,7 +1983,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
         rev = revision()
         return {
             "revision": rev,
-            "module": {"id": "device_faker", "version": "v1.9.0", "versionCode": 20261125},
+            "module": {"id": "devmask", "version": "v1.9.0", "versionCode": 20261125},
             "device": {
                 "manufacturer": "Google", "brand": "google", "model": "Pixel 9",
                 "device": "tokay", "android": "17", "sdk": 37, "abi": "arm64-v8a",
@@ -2019,7 +2019,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("X-Request-Id", "req_mock")
-            self.send_header("X-DF-Revision", revision())
+            self.send_header("X-DM-Revision", revision())
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -2209,7 +2209,7 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
       "$BASE/egress-proxies" | jq -r .id)
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress-proxies/$PID" | jq '{name, hasCredentials, boundDevices, lastCheck}'
 
-    # 2) Manager 侧直连探测（验证代理本身；v1.11.0 起 http / socks5 都真连）
+    # 2) Manager 侧直连探测（验证代理本身；v0.0.1 起 http / socks5 都真连）
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
       -d '{"url":"http://checkip.example.com/"}' "$BASE/egress-proxies/$PID/probe" | jq .
 
@@ -2254,4 +2254,4 @@ Job 字段：`kind="egress"`、`app=null`、`template=null`、`restart=false`；
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

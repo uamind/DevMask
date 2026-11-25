@@ -11,13 +11,13 @@ d9aa881
 total 764
 drwx------   7 crymang wheel    224 Nov 24 18:42 .
 drwxrwxrwt 774 root    wheel  24768 Nov 24 18:43 ..
--rw-------   1 crymang wheel   4096 Nov 24 18:42 manager.db
--rw-------   1 crymang wheel  32768 Nov 24 18:42 manager.db-shm
--rw-------   1 crymang wheel 679832 Nov 24 18:43 manager.db-wal
--rw-------   1 crymang wheel     32 Nov 24 18:42 manager.key
+-rw-------   1 crymang wheel   4096 Nov 24 18:42 devmask-manager.db
+-rw-------   1 crymang wheel  32768 Nov 24 18:42 devmask-manager.db-shm
+-rw-------   1 crymang wheel 679832 Nov 24 18:43 devmask-manager.db-wal
+-rw-------   1 crymang wheel     32 Nov 24 18:42 devmask-manager.key
 -rw-------   1 crymang wheel     36 Nov 24 18:42 manager.token
 === token file mode ===
-  File: /tmp/dfm-t14/manager.token
+  File: /tmp/dm-t14/manager.token
     ID: 10000120000001a Namelen: ?       Type: apfs
 Block size: 4096       Fundamental block size: 4096
 Blocks: Total: 120699413  Free: 16271417   Available: 16271417
@@ -35,8 +35,8 @@ job.finished|ok|4
 token.rotate|ok|1
 === manager log ===
 2026-11-24T10:42:16.991159Z  WARN 正在使用默认 Manager Token admin123；建议用 --token / DFM_TOKEN / manager.token 轮换
-2026-11-24T10:42:16.991353Z  INFO Device Faker Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dfm-t14 token_source="default"
-2026-11-24T10:42:16.998069Z  INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dfm-t14/manager.key
+2026-11-24T10:42:16.991353Z  INFO DevMask Manager 启动中 version="0.1.0" bind=127.0.0.1:8765 data_dir=/tmp/dm-t14 token_source="default"
+2026-11-24T10:42:16.998069Z  INFO 已生成 Manager 设备 Token 密钥 file=/tmp/dm-t14/devmask-manager.key
 2026-11-24T10:42:17.003619Z  INFO 静态托管已启用 dir=manager/webui/dist
 2026-11-24T10:42:17.006344Z  INFO Manager 已就绪 address=127.0.0.1:8765
 === mock log ===

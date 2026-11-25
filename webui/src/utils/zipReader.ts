@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 /**
  * 最小 ZIP 读取器：只为「从 Magisk 模块 ZIP 里取出 system.prop」这一件事服务。
  *
  * 不依赖设备、不落盘——ZIP 在 WebView 里直接解析，因此不需要把用户的 zip
- * 上传到 /data/local/tmp 再 fork `device_faker_cli`。
+ * 上传到 /data/local/tmp 再 fork `devmask_cli`。
  *
  * 支持 stored(0) 与 deflate(8) 两种存储方式（模块 zip 只会用这两种）；
  * ZIP64 直接报错（模块 zip 远不会超过 4 GiB）。
@@ -115,5 +115,5 @@ export async function readZipEntries(buffer: ArrayBuffer): Promise<ZipEntry[]> {
 
 /**
  * 按「先根后子、同级按归档顺序」的深度优先顺序找第一个匹配条目，
- * 与 device_faker_cli 的「解压到临时目录后 WalkDir 遍历」顺序一致。
+ * 与 devmask_cli 的「解压到临时目录后 WalkDir 遍历」顺序一致。
  */

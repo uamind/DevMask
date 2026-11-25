@@ -94,7 +94,7 @@ def http_407():
     payload = b"proxy authentication required\n"
     head = (
         "HTTP/1.1 407 Proxy Authentication Required\r\n"
-        "Proxy-Authenticate: Basic realm=\"device-faker-t9\"\r\n"
+        "Proxy-Authenticate: Basic realm=\"devmask-t9\"\r\n"
         "Content-Type: text/plain; charset=utf-8\r\n"
         "Content-Length: %d\r\n"
         "Connection: close\r\n"

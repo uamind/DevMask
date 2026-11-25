@@ -1,18 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 [package]
-name = "device_faker_manager"
-version = "0.2.0"
+name = "devmask_manager"
+version = "0.0.1"
 edition = "2024"
 authors = ["Seyud"]
 license = "GPL-3.0-or-later"
-description = "Device Faker 多设备管理端 / Relay：设备注册、聚合视图、批量下发与 WebUI 托管"
+description = "DevMask 多设备管理端 / Relay：设备注册、聚合视图、批量下发与 WebUI 托管"
 publish = false
 
 [[bin]]
-name = "device_faker_manager"
+name = "devmask_manager"
 path = "src/main.rs"
 
 [dependencies]

@@ -28,7 +28,7 @@ lastUpdated: false
 ### ⚡ Improvements
 - 🏎️ Zero-fork property reads in companion — existence checks and backups query the property areas directly
 - 👻 Never write properties absent on this ROM — no more enumerable ghost properties
-- 📦 Module no longer bundles device_faker_cli, shrinking the package
+- 📦 Module no longer bundles devmask_cli, shrinking the package
 - 🧱 cow_props split into 11 modules for clearer responsibilities
 - ⬆️ Dependency upgrades: rsbinder 0.11, 20+ WebUI dependencies, CI now on NDK r30
 

@@ -1,26 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 用 adb pull 下来的真实 config.toml 做解析 / 回写语义对比。
 //!
 //! 真机样本不进仓库（含用户模板），通过环境变量传入：
 //!
-//!     adb pull /data/adb/device_faker/config/config.toml /tmp/df_real_config.toml
-//!     DF_REAL_CONFIG=/tmp/df_real_config.toml cargo test -p device_faker_core --test real_config -- --nocapture
+//!     adb pull /data/adb/devmask/config/config.toml /tmp/df_real_config.toml
+//!     DM_REAL_CONFIG=/tmp/df_real_config.toml cargo test -p devmask_core --test real_config -- --nocapture
 //!
-//! 未设置该变量时本测试直接跳过，保证 @@cargo test -p device_faker_core@@ 在干净环境里全绿。
+//! 未设置该变量时本测试直接跳过，保证 @@cargo test -p devmask_core@@ 在干净环境里全绿。
 
 use std::env;
 use std::fs;
 
-use device_faker_core::config::{Config, DeviceTemplate};
-use device_faker_core::edit::{bind_package, delete_app, parse_document, set_app, upsert_template};
-use device_faker_core::validate::{ValidationOptions, unknown_fields, validate_document};
+use devmask_core::config::{Config, DeviceTemplate};
+use devmask_core::edit::{bind_package, delete_app, parse_document, set_app, upsert_template};
+use devmask_core::validate::{ValidationOptions, unknown_fields, validate_document};
 
 fn real_config() -> Option<String> {
-    let path = env::var("DF_REAL_CONFIG").ok()?;
-    Some(fs::read_to_string(&path).expect("DF_REAL_CONFIG 指向的文件必须可读"))
+    let path = env::var("DM_REAL_CONFIG").ok()?;
+    Some(fs::read_to_string(&path).expect("DM_REAL_CONFIG 指向的文件必须可读"))
 }
 
 fn template_names(config: &Config) -> Vec<String> {
@@ -30,7 +30,7 @@ fn template_names(config: &Config) -> Vec<String> {
 #[test]
 fn real_config_roundtrip_is_byte_identical() {
     let Some(original) = real_config() else {
-        eprintln!("DF_REAL_CONFIG 未设置，跳过真机配置对比");
+        eprintln!("DM_REAL_CONFIG 未设置，跳过真机配置对比");
         return;
     };
     let config = Config::from_toml(&original).expect("真机配置必须可解析");
@@ -98,10 +98,10 @@ fn real_config_roundtrip_is_byte_identical() {
     // 4) 做过编辑后再对比：新增条目之外，所有原有条目必须完全等价。
     let mut edited_document = parse_document(&original).expect("parse for edit");
     let new_template = DeviceTemplate {
-        packages: vec!["com.example.device_faker_test".to_string()],
+        packages: vec!["com.example.devmask_test".to_string()],
         brand: Some("Test".to_string()),
         model: Some("Test Model".to_string()),
-        sdk_int: Some(device_faker_core::config::NumberSetting::Value(35)),
+        sdk_int: Some(devmask_core::config::NumberSetting::Value(35)),
         dpi: Some(420),
         ..Default::default()
     };
@@ -110,7 +110,7 @@ fn real_config_roundtrip_is_byte_identical() {
         bind_package(
             &mut edited_document,
             "df_roundtrip_test",
-            "com.example.device_faker_test2"
+            "com.example.devmask_test2"
         )
         .unwrap()
     );
@@ -135,14 +135,14 @@ fn real_config_roundtrip_is_byte_identical() {
     assert_eq!(
         created.packages,
         vec![
-            "com.example.device_faker_test".to_string(),
-            "com.example.device_faker_test2".to_string()
+            "com.example.devmask_test".to_string(),
+            "com.example.devmask_test2".to_string()
         ]
     );
     assert_eq!(created.dpi, Some(420));
     assert_eq!(
         created.sdk_int,
-        Some(device_faker_core::config::NumberSetting::Value(35))
+        Some(devmask_core::config::NumberSetting::Value(35))
     );
 
     let expected_apps: Vec<_> = config
@@ -170,7 +170,7 @@ fn real_config_roundtrip_is_byte_identical() {
 #[test]
 fn real_config_store_roundtrip_creates_backup_and_keeps_tail() {
     let Some(original) = real_config() else {
-        eprintln!("DF_REAL_CONFIG 未设置，跳过真机配置落盘对比");
+        eprintln!("DM_REAL_CONFIG 未设置，跳过真机配置落盘对比");
         return;
     };
 
@@ -184,7 +184,7 @@ fn real_config_store_roundtrip_creates_backup_and_keeps_tail() {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
     }
 
-    let store = device_faker_core::revision::ConfigStore::new(&path);
+    let store = devmask_core::revision::ConfigStore::new(&path);
     let before_snapshot = store.read().expect("read snapshot");
     let config = Config::from_toml(&original).expect("parse");
     let template_name = config
@@ -208,7 +208,7 @@ fn real_config_store_roundtrip_creates_backup_and_keeps_tail() {
     );
     assert_eq!(
         outcome.revision,
-        device_faker_core::revision::revision_of(&fs::read_to_string(&path).unwrap())
+        devmask_core::revision::revision_of(&fs::read_to_string(&path).unwrap())
     );
 
     let backup = outcome.backup.expect("必须产生备份");

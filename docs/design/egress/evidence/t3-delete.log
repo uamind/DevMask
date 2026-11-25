@@ -35,7 +35,7 @@ HTTP 400
 {"error": {"code": "confirmation_required", "details": {"action": "egress_clear"}, "message": "破坏性操作需要 confirm=true", "requestId": "req_Op2SYehr8JSrpQYbE-RCkImp", "retryable": false}}
 ===== DELETE /egress?confirm=true =====
 HTTP 200
-x-df-egress-revision: 79c2c992770eec7f3ea1cf4b6a77b58b08f55257d44628ee52182d3dd1b4e400
+x-dm-egress-revision: 79c2c992770eec7f3ea1cf4b6a77b58b08f55257d44628ee52182d3dd1b4e400
 {
   "revision": "79c2c992770eec7f3ea1cf4b6a77b58b08f55257d44628ee52182d3dd1b4e400",
   "previousRevision": "00f849834a645f0efacebc7e01d32bb71b8d96afb3ef38a8a1eb1d0f32cbddb8",

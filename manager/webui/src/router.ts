@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
@@ -15,7 +15,7 @@ const routes: RouteRecordRaw[] = [
     path: '/devices',
     name: 'devices',
     component: () => import('./pages/DevicesPage.vue'),
-    meta: { title: '设备', subtitle: '添加、删除和同步 Device Faker 设备' },
+    meta: { title: '设备', subtitle: '添加、删除和同步 DevMask 设备' },
   },
   {
     path: '/proxies',

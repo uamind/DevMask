@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 运行时断言（t8 review R1）：apply 的 bulk / assignments 请求体都不得出现 packages。
 // 直接以 Node 的类型剥离运行 TypeScript helper：npm run check:template-payload

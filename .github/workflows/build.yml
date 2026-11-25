@@ -1,4 +1,4 @@
-name: Build Device Faker Module
+name: Build DevMask Module
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     paths:
       - 'src/**'
       - "Cargo.*"
-      - 'device_faker_cli/**'
+      - 'devmask_cli/**'
       - 'module/**'
       - 'webui/**'
       - '.github/workflows/build.yml'
@@ -14,7 +14,7 @@ on:
     paths:
       - 'src/**'
       - "Cargo.*"
-      - 'device_faker_cli/**'
+      - 'devmask_cli/**'
       - 'module/**'
       - 'webui/**'
       - '.github/workflows/build.yml'
@@ -68,7 +68,7 @@ jobs:
           npm ci
           npm run type-check
 
-      - name: Build device_faker
+      - name: Build devmask
         run: |
           cargo run --package xtask -- build -r
 
@@ -80,7 +80,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: device_faker
+          name: devmask
           path: module/
       
       - name: Upload
@@ -142,4 +142,4 @@ jobs:
             -F "chat_id=${CHAT_ID}" \
             -F "message_thread_id=${MESSAGE_THREAD_ID}" \
             -F "media=${MEDIA_JSON}" \
-            -F "file=@output/device_faker-(release).zip"
+            -F "file=@output/devmask-(release).zip"

@@ -1,6 +1,6 @@
-# Device Faker Manager
+# DevMask Manager
 
-管理多台 Device Faker 设备，并把它们聚合成一个 AI 可直接调用的 Relay：
+管理多台 DevMask 设备，并把它们聚合成一个 AI 可直接调用的 Relay：
 Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 
 > 状态（2026-11-24）：**服务端、WebUI、集成测试与运行文档均已落地**。
@@ -14,7 +14,7 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 
     manager/
     ├── README.md              # 本文件
-    ├── Cargo.toml             # device_faker_manager crate
+    ├── Cargo.toml             # devmask_manager crate
     ├── docs/
     │   ├── API.md             # Relay 契约：27 个方法级端点、错误信封、job 结果、curl 验收
     │   ├── ARCH.md            # crate 布局、SQLite DDL、Token 加密、静态托管、设备端映射、测试策略
@@ -81,7 +81,7 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 
     # 1) WebUI + Manager
     cd manager/webui && npm install && npm run build && cd ../..
-    cargo run -p device_faker_manager
+    cargo run -p devmask_manager
 
     # 2) 浏览器打开 http://127.0.0.1:8765，Token 输入 admin123
 
@@ -93,7 +93,7 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 | 监听 | `127.0.0.1:8765` | `--bind` / `DFM_BIND` / `manager.toml` |
 | API | `/relay/api/v1` | 健康检查 `/healthz`（别名 `/relay/api/v1/healthz`，无鉴权） |
 | Token | `admin123` | `--token` / `DFM_TOKEN` / `manager.token` / `manager.toml`；`POST /token/rotate` 轮换 |
-| 数据目录 | 平台默认 | `--data-dir` / `DFM_DATA_DIR`；含 `manager.db`、`manager.key`（0600） |
+| 数据目录 | 平台默认 | `--data-dir` / `DFM_DATA_DIR`；含 `devmask-manager.db`、`devmask-manager.key`（0600） |
 | WebUI | 同进程 `/` | `--static-dir` / `DFM_STATIC_DIR` 指向 `dist` |
 
 > 非 loopback 监听且 Token 仍为默认值时，服务**拒绝启动**（见 [ARCH §7.3](docs/ARCH.md#73-启动安全闸门)）。
@@ -169,10 +169,10 @@ assignments（不同设备不同应用 / 模板）：
 
 ## 测试
 
-    cargo test -p device_faker_manager          # 单元 + 集成（含 egress_flow 出口下发）
-    cargo test -p device_faker_manager --test e2e_flow
+    cargo test -p devmask_manager          # 单元 + 集成（含 egress_flow 出口下发）
+    cargo test -p devmask_manager --test e2e_flow
     cargo fmt --check
-    cargo clippy -p device_faker_manager --all-targets -- -D warnings
+    cargo clippy -p devmask_manager --all-targets -- -D warnings
 
     cd manager/webui && npx vue-tsc --noEmit && npm run build
 
@@ -184,7 +184,7 @@ Mock 设备同时提供可独立运行的 [docs/mock_device.py](docs/mock_device
 - SQLite（WAL）单文件，schema v2：`devices`、`device_overviews`、`jobs`（`kind` 含 `egress`）、`job_results`、`audit`、`schema_migrations`
   + 出口代理三表 `egress_proxies`、`device_egress`、`egress_checks`；完整 DDL 见 [docs/ARCH.md §5](docs/ARCH.md#5-sqlite-数据模型)。
 - 设备 Token：AES-256-GCM 加密后存 `token_cipher`（`v1:` + base64(nonce ‖ ciphertext ‖ tag)），
-  密钥为 `<data-dir>/manager.key` 的 32 字节（0600）；解密只发生在发出设备请求的瞬间。
+  密钥为 `<data-dir>/devmask-manager.key` 的 32 字节（0600）；解密只发生在发出设备请求的瞬间。
   代理凭据复用同一把密钥（`username_cipher` / `password_cipher`，AAD 绑 proxy id + 字段名），响应只给 `hasCredentials`。
 - Token 永不出现在 API 响应、错误详情、审计、日志或前端页面；只在添加设备时由用户输入。
 - 聚合视图（`/devices`、`/apps`、`/overview`、`/templates`）全部读缓存，离线设备不会让页面 5xx；
@@ -235,4 +235,4 @@ Mock 设备同时提供可独立运行的 [docs/mock_device.py](docs/mock_device
 
     SPDX-License-Identifier: GPL-3.0-or-later
     Copyright (c) 2025-2026 Seyud
-    Device Faker: https://github.com/Seyud/device_faker
+    DevMask: https://github.com/uamind/DevMask

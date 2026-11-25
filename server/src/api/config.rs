@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 配置端点：GET/PUT /config、GET /config/revision、POST /config/validate（docs/API.md 5.4-5.7）。
 
@@ -12,8 +12,8 @@ use axum::{
     http::{HeaderMap, StatusCode, header::CONTENT_TYPE},
     response::Response,
 };
-use device_faker_core::Config;
-use device_faker_core::config::{is_known_app_key, is_known_config_key, is_known_template_key};
+use devmask_core::Config;
+use devmask_core::config::{is_known_app_key, is_known_config_key, is_known_template_key};
 use serde_json::Value;
 
 use crate::api::{self, json, with_revision_etag};
@@ -301,9 +301,9 @@ fn nested_unknown_keys(value: &Value) -> Vec<ValidationError> {
 fn validate_toml(text: &str, _request_id: &str) -> (Vec<ValidationError>, Vec<Warning>) {
     match text.parse::<toml_edit::DocumentMut>() {
         Ok(document) => {
-            let report = device_faker_core::validate::validate_document(
+            let report = devmask_core::validate::validate_document(
                 &document,
-                &device_faker_core::validate::ValidationOptions::default(),
+                &devmask_core::validate::ValidationOptions::default(),
             );
             let (mut errors, mut warnings) = map_validation_report(&report);
             if let Ok(config) = Config::from_toml(text) {
@@ -361,9 +361,9 @@ fn validate_json_document(
 
     match params::typed_result::<Config>(&value) {
         Ok(config) => {
-            let report = device_faker_core::validate::validate_config(
+            let report = devmask_core::validate::validate_config(
                 &config,
-                &device_faker_core::validate::ValidationOptions::default(),
+                &devmask_core::validate::ValidationOptions::default(),
             );
             let (mut mapped_errors, mut warnings) = map_validation_report(&report);
             mapped_errors.extend(crate::dto::limit_issues(&config));

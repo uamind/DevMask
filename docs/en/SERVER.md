@@ -1,4 +1,4 @@
-# Device Faker Server — egress proxy diagnostics (English summary)
+# DevMask Server — egress proxy diagnostics (English summary)
 
 > **Scope**: this page covers only what operators need when debugging the **egress proxy**.
 > The complete server manual (build, install, ports, tokens, troubleshooting) is
@@ -9,9 +9,9 @@
 
 | Path | Purpose | Mode |
 | --- | --- | --- |
-| `/data/adb/device_faker/config/egress.toml` | proxy definitions + probe policy (**contains passwords**) | `0600` |
-| `/data/adb/device_faker/config/backups/egress.toml.<stamp>-<rev8>.bak` | pre-write backup (10 kept) | `0600` |
-| `/data/adb/device_faker/config/config.toml` | `[egress].default` + `[[apps]].egress` references only | `0644` |
+| `/data/adb/devmask/config/egress.toml` | proxy definitions + probe policy (**contains passwords**) | `0600` |
+| `/data/adb/devmask/config/backups/egress.toml.<stamp>-<rev8>.bak` | pre-write backup (10 kept) | `0600` |
+| `/data/adb/devmask/config/config.toml` | `[egress].default` + `[[apps]].egress` references only | `0644` |
 
 - A widened mode is healed back to `0600` on read, with the `egress_perm_fixed` warning.
 - `egress.toml` is never part of `GET /config?format=toml` and is never exported by the WebUI;
@@ -21,7 +21,7 @@
 
 ## 2. Replay diagnostics
 
-Logcat tag `DeviceFaker`; the same text goes to the module log when `debug = true` in `config.toml`.
+Logcat tag `DevMask`; the same text goes to the module log when `debug = true` in `config.toml`.
 
 ```
 [egress] replay hook armed package=<pkg>
@@ -57,7 +57,7 @@ creates a thread):
 ## 3. Uninstall and disable
 
 - `uninstall.sh` stops the supervisor → stops the server → clears the system proxy
-  (`settings put global http_proxy :0`) → removes `/data/adb/device_faker`.
+  (`settings put global http_proxy :0`) → removes `/data/adb/devmask`.
 - **Disabling the module by hand does not run `uninstall.sh`**: the system proxy stays in Android
   settings and nothing will clear it. Run `DELETE /api/v1/egress` (or the WebUI switch) first;
   as a last resort with root: `su -c 'settings put global http_proxy :0'`.
@@ -66,7 +66,7 @@ creates a thread):
 
 - The API, logs, audit and WebUI never contain proxy passwords; the only signal is `hasCredentials`.
 - `dry_run` / `diff` responses mask `username` / `password` values as `<redacted>` (intentional).
-- Authenticated proxies work through the **in-device relay** since v1.11.0: the root relay adds HTTP Basic /
+- Authenticated proxies work through the **in-device relay** since v0.0.1: the root relay adds HTTP Basic /
   SOCKS5 RFC1929 and the credentials never enter app processes. Only when the relay is explicitly disabled
   (or the file is unmigrated) does egress fall back to the upstream `host:port`, where an IP allow-list is
   the only authentication. The relay uid firewall is layered: an unknown uid is allowed only while

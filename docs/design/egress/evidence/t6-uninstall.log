@@ -2,7 +2,7 @@
 127.0.0.1:18080
   Global proxy: [127.0.0.1] 18080 xl=
 ===== T6-1 备份运行时目录（便于卸载后恢复） =====
--rw-rw-rw- 1 root root 9641 2026-11-24 21:23 /data/local/tmp/device_faker-runtime.t9.tgz
+-rw-rw-rw- 1 root root 9641 2026-11-24 21:23 /data/local/tmp/devmask-runtime.t9.tgz
 ===== T6-2 执行 module/uninstall.sh =====
 exit=0
 --- 卸载后：settings ---
@@ -18,7 +18,7 @@ ProxyTracker:
   Global proxy: none
   Default proxy: none
 --- 卸载后：进程与运行时目录 ---
-ls: /data/adb/device_faker: No such file or directory
+ls: /data/adb/devmask: No such file or directory
 ===== T6-3 恢复运行时目录并重启服务 =====
 total 33
 drwxr-xr-x 3 root root 3452 2026-11-24 21:22 .
@@ -28,7 +28,7 @@ drwx------ 2 root root 3452 2026-11-24 21:22 backups
 -rw------- 1 root root    0 2026-11-24 16:00 config.toml.lock
 -rw------- 1 root root  349 2026-11-24 21:21 egress.toml
 -rw------- 1 root root    0 2026-11-24 21:12 egress.toml.lock
-root         14555 14550   10987444   6976 futex_wait_queue    0 S device_faker_server
+root         14555 14550   10987444   6976 futex_wait_queue    0 S devmask_server
 127.0.0.1:18080
 --- 服务恢复后 GET /egress（配置仍在，reconcile 重新应用） ---
 {

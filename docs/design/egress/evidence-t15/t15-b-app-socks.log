@@ -67,7 +67,7 @@ Complete
 2026-11-24T22:08:07+0800 proto=socks5 listener=18081 tunnel-request app.fixture 164 bytes
 2026-11-24T22:08:07+0800 proto=socks5 listener=18081 method=noauth methods=? CONNECT 198.51.100.7:80
 2026-11-24T22:08:07+0800 proto=socks5 listener=18081 tunnel-request 198.51.100.7 165 bytes
---- /proc/<pid>/maps 可读性（找 device_faker / arm64-v8a）---
+--- /proc/<pid>/maps 可读性（找 devmask / arm64-v8a）---
 pid=11102
 3170 /proc/11102/maps
 0

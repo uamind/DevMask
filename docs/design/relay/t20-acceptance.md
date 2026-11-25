@@ -22,7 +22,7 @@
 ## 2. F1：去重已修，但 -S 文本比对在真机必然不等
 
     实际 iptables -S:
-    -A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+    -A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
     server 期望串（firewall.rs accept_rule）:
     -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
 
@@ -53,7 +53,7 @@ t17 改成查「客户端那一行（local=对端源端口, rem=监听端口，t
 - **cfg-app-direct**：`http.proxyHost/socksProxyHost=<null>`、`selector.app.fixture=DIRECT`、`fetch.app=UnknownHostException`。
 - **F3**：relay 生效时 PUT/GET warnings 不再含 `egress_auth_unsupported`。
 - **凭据零泄漏**：5/5 路扫描命中 0。
-- **卸载清理**：178xx 无监听、`DF_EGRESS_RLY` 链不存在、`settings=:0`。
+- **卸载清理**：178xx 无监听、`DM_EGRESS_RLY` 链不存在、`settings=:0`。
 - **bind 面**：ss -ltn 仅 127.0.0.1、ss -ltn6 空、`::1` / `127.0.0.2` / `192.168.30.2` 全部 Connection refused。
 - **verify 命令**：module_tests / aarch64 check / fmt --check 全部 exit 0。
 
@@ -65,7 +65,7 @@ t17 改成查「客户端那一行（local=对端源端口, rem=监听端口，t
 
 ## 6. 设备最终状态（已恢复）
 
-重装 t17 构建并 reboot 后：`settings=:0`、无 `DF_EGRESS_RLY` 链、`GET /api/v1/egress` 200（干净安装态）、
+重装 t17 构建并 reboot 后：`settings=:0`、无 `DM_EGRESS_RLY` 链、`GET /api/v1/egress` 200（干净安装态）、
 bin 4200376 B / zygisk 1448528 B（12:21）、fixture 已停止、adb forward 保留 tcp:18686。
 
 注：reboot 后 service.sh 的 supervisor pid 可能是重启前的旧值（日志「守护循环已在运行(pid=…)，跳过启动」），
@@ -73,7 +73,7 @@ bin 4200376 B / zygisk 1448528 B（12:21）、fixture 已停止、adb forward �
 
 ## 7. t22 复验范围（captain 指定，2026-11-25，追加两条判据）
 
-1) **applied=true 且应用级 listener accept**：不能只看 GET 字段，必须贴 `iptables -S DF_EGRESS_RLY_ALLOW / _DENY` 与
+1) **applied=true 且应用级 listener accept**：不能只看 GET 字段，必须贴 `iptables -S DM_EGRESS_RLY_ALLOW / _DENY` 与
    server 期望串逐条对照（语义比较应吸收选项顺序与隐式 `-m tcp`），并给出 `ss -ltn` 里 127.0.0.1:<app_port> 一行。
 2) **uid 归属的两种态都要验**（新策略）：
    - **firewall.applied=true**：拿不到 uid 时按「已 applied」放行 → 应用内探针必须连通（HTTP 200 / SOCKS 05 00）；
@@ -82,6 +82,6 @@ bin 4200376 B / zygisk 1448528 B（12:21）、fixture 已停止、adb forward �
 3) 其余按 t20 §5 / t9 §9 复跑：`#13` 设备内单条 while 循环 + 20 次 restart（协议级 `grep -qw 05` 为空 + 日志 `uid_not_allowed`）、
    `#21` 手工 -F 两链 → applied=false → restart → applied=true 且 -S 三链齐全、应用级 SOCKS5 + 远程 DNS（fixture 落域名的 CONNECT + RFC1929 摘要）。
 
-复验前的固定动作：`cargo test -p device_faker_module_tests` / `cargo check -p device_faker --target aarch64-linux-android` / `cargo fmt --check`，
+复验前的固定动作：`cargo test -p devmask_module_tests` / `cargo check -p devmask --target aarch64-linux-android` / `cargo fmt --check`，
 装机走 `cargo run -p xtask -- build -r`（`ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk`）+ `ksud module install` + reboot，boot 后用
 `service.sh stop && start` 拉起（规避 supervisor 旧 pid），再开始判据。

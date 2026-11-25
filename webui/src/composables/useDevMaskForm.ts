@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 import type { CustomProps, Template, AppConfig } from '../types'
 
-export const DEVICE_FAKER_FORM_KEY: InjectionKey<Ref<DeviceFakerFormData>> =
-  Symbol('deviceFakerForm')
+export const DEVMASK_FORM_KEY: InjectionKey<Ref<DevMaskFormData>> = Symbol('devMaskForm')
 
 export interface CustomPropEntry {
   key: string
   value: string
 }
 
-export interface DeviceFakerFormData {
+export interface DevMaskFormData {
   manufacturer: string
   brand: string
   model: string
@@ -59,7 +58,7 @@ function entriesToCustomProps(entries: CustomPropEntry[]): CustomProps {
   return result
 }
 
-function createEmptyFormData(): DeviceFakerFormData {
+function createEmptyFormData(): DevMaskFormData {
   return {
     manufacturer: '',
     brand: '',
@@ -87,7 +86,7 @@ function createEmptyFormData(): DeviceFakerFormData {
   }
 }
 
-export function formDataToTemplate(formData: DeviceFakerFormData, base?: Template): Template {
+export function formDataToTemplate(formData: DevMaskFormData, base?: Template): Template {
   const template: Template = {
     ...(base || {}),
     manufacturer: formData.manufacturer,
@@ -194,7 +193,7 @@ export function formDataToTemplate(formData: DeviceFakerFormData, base?: Templat
   return template
 }
 
-export function templateToFormData(template: Template): DeviceFakerFormData {
+export function templateToFormData(template: Template): DevMaskFormData {
   return {
     manufacturer: template.manufacturer || '',
     brand: template.brand || '',
@@ -222,7 +221,7 @@ export function templateToFormData(template: Template): DeviceFakerFormData {
   }
 }
 
-export function appConfigToFormData(appConfig: AppConfig): DeviceFakerFormData {
+export function appConfigToFormData(appConfig: AppConfig): DevMaskFormData {
   return {
     manufacturer: appConfig.manufacturer || '',
     brand: appConfig.brand || '',
@@ -250,7 +249,7 @@ export function appConfigToFormData(appConfig: AppConfig): DeviceFakerFormData {
   }
 }
 
-export function formDataToAppConfig(formData: DeviceFakerFormData, packageName: string): AppConfig {
+export function formDataToAppConfig(formData: DevMaskFormData, packageName: string): AppConfig {
   return {
     package: packageName,
     manufacturer: formData.manufacturer,
@@ -284,8 +283,8 @@ export function formDataToAppConfig(formData: DeviceFakerFormData, packageName: 
   }
 }
 
-export function useDeviceFakerForm() {
-  const formData = ref<DeviceFakerFormData>(createEmptyFormData())
+export function useDevMaskForm() {
+  const formData = ref<DevMaskFormData>(createEmptyFormData())
 
   function resetForm() {
     formData.value = createEmptyFormData()
@@ -317,18 +316,16 @@ export function useDeviceFakerForm() {
   }
 }
 
-export function provideDeviceFakerForm() {
-  const form = useDeviceFakerForm()
-  provide(DEVICE_FAKER_FORM_KEY, form.formData)
+export function provideDevMaskForm() {
+  const form = useDevMaskForm()
+  provide(DEVMASK_FORM_KEY, form.formData)
   return form
 }
 
-export function useDeviceFakerFormField() {
-  const formData = inject(DEVICE_FAKER_FORM_KEY)
+export function useDevMaskFormField() {
+  const formData = inject(DEVMASK_FORM_KEY)
   if (!formData) {
-    throw new Error(
-      'useDeviceFakerFormField must be used within a provider of DEVICE_FAKER_FORM_KEY'
-    )
+    throw new Error('useDevMaskFormField must be used within a provider of DEVMASK_FORM_KEY')
   }
   return formData
 }

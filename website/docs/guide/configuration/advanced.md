@@ -19,7 +19,7 @@
 debug = true
 ```
 
-启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/device_faker/logs/device_faker.log`。正常使用建议保持关闭，以免留下不必要的运行痕迹。
+启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/devmask/logs/devmask.log`。正常使用建议保持关闭，以免留下不必要的运行痕迹。
 
 ## 完整配置示例
 

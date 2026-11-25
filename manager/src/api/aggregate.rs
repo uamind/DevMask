@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 聚合快照：设备列 + 应用行 + 计数 + 警告 + 聚合 revision。
 //! 供 /apps、/overview、/templates 共用，保证规则一致。

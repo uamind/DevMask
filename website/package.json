@@ -1,9 +1,9 @@
 {
-  "name": "device_faker-website",
+  "name": "devmask-website",
   "version": "1.7.0",
   "private": true,
   "type": "module",
-  "description": "Device Faker official website",
+  "description": "DevMask official website",
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },

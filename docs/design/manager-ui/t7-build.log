@@ -1,6 +1,6 @@
 === date ===
 2026-11-24T18:03:52+0800
-=== cargo build -p device_faker_manager ===
+=== cargo build -p devmask_manager ===
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.63s
 EXIT=0
 === cd manager/webui && npm install ===
@@ -18,7 +18,7 @@ EXIT=0
 EXIT=0
 === npm run build ===
 
-> device-faker-manager-webui@0.1.0 build
+> devmask-manager-webui@0.1.0 build
 > vite build
 
 vite v8.3.8 building client environment for production...

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! egress.toml 的模型、解析/渲染与 0600 原子写存储（契约 §2.1 / §2.2）。
 //!
@@ -17,7 +17,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use device_faker_core::revision::{FileLock, atomic_write, create_backup, set_mode, sha256_hex};
+use devmask_core::revision::{FileLock, atomic_write, create_backup, set_mode, sha256_hex};
 use toml_edit::{DocumentMut, Item, Table, value};
 
 use crate::egress::{

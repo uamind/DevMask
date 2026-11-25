@@ -1,11 +1,29 @@
 # 📝 Changelog
 
+## 🚀[v0.0.1] - 2026-11-25 · Renamed release
+
+> The project is now **DevMask** and versioning restarts from zero. Sections below are from the Device Faker era, kept for reference.
+
+### 🆕 Features
+- 🌐 Authenticated proxies via an on-device relay (HTTP Basic and SOCKS5/RFC 1929)
+- 🔀 Per-app egress proxy with __DIRECT__ opt-out
+- 🧭 Manager proxy pool: binding, batch apply, exit-IP verification and audit
+- 🛡️ Fail-closed firewall: three iptables chains plus per-uid allow list, with live re-verification
+
+### ⚡ Improvements
+- 📦 Module id, runtime paths, API headers and storage keys now use the devmask prefix
+- 📚 README rewritten around device / network / fleet layers
+
+### ⚠️ Known limits
+- Device-level egress does not support SOCKS5; app-level injection covers the Java stack only
+- Strict uid attribution is still pending (kernel owner match plus rate-limited re-checks for now)
+
 ## ⬆️[v1.10.0 → v1.11.0] - 2026-12-02
 
 ### 🆕 New Features
 - 🔐 **In-device authenticated relay**: proxies with a username/password are forwarded by a relay that only listens on `127.0.0.1` and adds HTTP Basic / SOCKS5 RFC1929 upstream; covers device-wide and per-app egress with zero app changes
 - 🔌 Relay port table: a `[relay]` section plus read-only `local_port` in `egress.toml`; range 17800–17899, device-wide port = `base_port`, per-app ports assigned by a stable hash
-- 🛡️ uid firewall: three iptables chains (`DF_EGRESS_RLY` / `_ALLOW` / `_DENY`) that only let authorized uids connect; rebuilds are **fail-closed** (DENY catch-all, no naked window)
+- 🛡️ uid firewall: three iptables chains (`DM_EGRESS_RLY` / `_ALLOW` / `_DENY`) that only let authorized uids connect; rebuilds are **fail-closed** (DENY catch-all, no naked window)
 - 🔁 `POST /api/v1/egress/relay/restart` (`ops`, forced apply); `GET /egress` gains a `relay` object; `GET /egress/proxies` gains `localPort` / `relayActive`
 - 🔍 Probe gains `via=relay` (default stays `upstream`), covering "local port listening + relay forwarding + upstream auth + target round-trip"; new `relay_not_listening` / `relay_connect` reasons
 
@@ -17,7 +35,7 @@
 - 📚 Docs: API.md / openapi.yaml (30 operations) / CONFIG.md / SERVER.md / Manager contract and architecture; five new `egress_relay_*` warning codes (including `egress_relay_device_socks5_unsupported`)
 
 ### ⚠️ Known Limitations
-- Relay ports (`127.0.0.1:178xx`) and the `DF_EGRESS_RLY` chain names are **detectable**; relay traffic leaves as **root**, so per-uid firewalls such as AFWall+ / NetGuard no longer block that app
+- Relay ports (`127.0.0.1:178xx`) and the `DM_EGRESS_RLY` chain names are **detectable**; relay traffic leaves as **root**, so per-uid firewalls such as AFWall+ / NetGuard no longer block that app
 - **Device-wide egress depends on the relay being alive**: while a listener is down the whole-device proxy path is unavailable; with `fail_open=true` the next failed upstream probe silently falls back to direct (set `[probe].fail_open=false` if you must never leak)
 - Only **credentialed** proxies use the relay; there is no API to disable it (edit `[relay].enabled` in the 0600 `egress.toml` and restart)
 - The relay only covers the **Java layer**: native stacks and WebView are not protected by fail-closed
@@ -33,7 +51,7 @@
 - 📡 Exit-IP probe: `POST /api/v1/egress/probe` requests a configurable probe URL over the effective path and returns exit IP / latency / timestamp, with structured error codes on failure
 - 🗄️ Manager proxy pool: `/relay/api/v1/egress-proxies` CRUD, bindings (device-wide / per-app), batch apply (job `kind=egress`) and manager-side probing
 - 🖥️ Both WebUIs: a "Network egress" card on the device settings page (configure + probe + roll back to direct), plus a "Proxy pool" page in the Manager with exit IP / proxy name on device cards
-- 🔐 Credential hygiene: proxy definitions live in a separate `egress.toml` (`0600`) and every API / log / audit / UI surface only exposes `hasCredentials`; the Manager encrypts credentials with `manager.key` (AES-256-GCM)
+- 🔐 Credential hygiene: proxy definitions live in a separate `egress.toml` (`0600`) and every API / log / audit / UI surface only exposes `hasCredentials`; the Manager encrypts credentials with `devmask-manager.key` (AES-256-GCM)
 
 ### ⚡ Improvements
 - 🧯 Clearing the system proxy uses `settings put global http_proxy :0` only (`settings delete` does not clear it on Android 17 — measured and documented)
@@ -77,7 +95,7 @@
 ### ⚡ Improvements
 - 🏎️ Zero-fork property reads in companion — existence checks and backups query the property areas directly
 - 👻 Never write properties absent on this ROM — no more enumerable ghost properties
-- 📦 Module no longer bundles device_faker_cli, shrinking the package
+- 📦 Module no longer bundles devmask_cli, shrinking the package
 - 🧱 cow_props split into 11 modules for clearer responsibilities
 - ⬆️ Dependency upgrades: rsbinder 0.11, 20+ WebUI dependencies, CI now on NDK r30
 

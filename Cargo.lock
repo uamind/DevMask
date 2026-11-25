@@ -636,11 +636,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 
 [[package]]
-name = "device_faker"
-version = "1.11.0"
+name = "devmask"
+version = "0.0.1"
 dependencies = [
  "anyhow",
- "device_faker_core",
+ "devmask_core",
  "indexmap",
  "jni",
  "libc",
@@ -656,8 +656,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "device_faker_core"
-version = "1.7.0"
+name = "devmask_core"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "indexmap",
@@ -672,8 +672,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "device_faker_manager"
-version = "0.2.0"
+name = "devmask_manager"
+version = "0.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -700,21 +700,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "device_faker_module_tests"
-version = "1.11.0"
+name = "devmask_module_tests"
+version = "0.0.1"
 dependencies = [
- "device_faker_core",
+ "devmask_core",
  "log",
  "toml",
 ]
 
 [[package]]
-name = "device_faker_server"
-version = "1.11.0"
+name = "devmask_server"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "axum",
- "device_faker_core",
+ "devmask_core",
  "http-body-util",
  "percent-encoding",
  "serde",

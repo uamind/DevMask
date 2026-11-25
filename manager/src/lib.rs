@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
-//! Device Faker Manager / Relay：多设备管理端的库入口（lib + bin 拆分便于集成测试）。
+//! DevMask Manager / Relay：多设备管理端的库入口（lib + bin 拆分便于集成测试）。
 
 pub mod api;
 pub mod args;

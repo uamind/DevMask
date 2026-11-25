@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 模板端点（docs/API.md 5.8-5.14）。
 //!
@@ -15,10 +15,10 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use device_faker_core::Config;
-use device_faker_core::config::{DeviceTemplate, is_known_template_key};
-use device_faker_core::edit::{delete_template, unbind_package, upsert_template};
-use device_faker_core::validate::is_valid_package_key;
+use devmask_core::Config;
+use devmask_core::config::{DeviceTemplate, is_known_template_key};
+use devmask_core::edit::{delete_template, unbind_package, upsert_template};
+use devmask_core::validate::is_valid_package_key;
 use serde_json::{Map, Value, json};
 
 use crate::api::{self, json as json_response, with_revision, with_revision_etag};

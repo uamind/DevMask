@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 预渲染的 per-package TOML 配置（全内存，不落盘）。
 //!
@@ -274,11 +274,7 @@ fn watch_config_events() {
         | libc::IN_CREATE
         | libc::IN_DELETE;
     let mut watched = false;
-    for dir in [
-        "/data/adb/device_faker/config",
-        "/data/adb/device_faker",
-        "/data/adb",
-    ] {
+    for dir in ["/data/adb/devmask/config", "/data/adb/devmask", "/data/adb"] {
         let Ok(path) = std::ffi::CString::new(dir) else {
             continue;
         };

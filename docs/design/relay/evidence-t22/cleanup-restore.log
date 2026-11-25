@@ -1,5 +1,5 @@
 # 清理与恢复 —— 2026-11-25T04:54:36Z
-2026-11-25 12:54:36 [uninstall.sh] 已清理 relay 防火墙三条链（DF_EGRESS_RLY 系列）
+2026-11-25 12:54:36 [uninstall.sh] 已清理 relay 防火墙三条链（DM_EGRESS_RLY 系列）
 ## settings
 :0
 ## chains

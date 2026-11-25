@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 静态托管：托管 manager/webui/dist，并为前端路由提供 SPA fallback。
 
@@ -28,9 +28,9 @@ const CSP: &str =
 /// dist 未构建时的可读提示页（API 文档第 11.3 节）。
 pub const PLACEHOLDER_HTML: &str = r#"<!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><title>Device Faker Manager</title></head>
+<head><meta charset="utf-8"><title>DevMask Manager</title></head>
 <body style="font-family: system-ui, sans-serif; padding: 40px; line-height: 1.6">
-  <h1>Device Faker Manager</h1>
+  <h1>DevMask Manager</h1>
   <p>WebUI 尚未构建。运行：</p>
   <pre style="background:#f5f5f5;padding:12px;border-radius:6px">cd manager/webui &amp;&amp; npm install &amp;&amp; npm run build</pre>
   <p>API 已就绪：<code>GET /relay/api/v1/healthz</code></p>

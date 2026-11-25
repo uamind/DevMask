@@ -1,17 +1,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 [package]
-name = "device_faker_server"
-version = "1.11.0"
+name = "devmask_server"
+version = "0.0.1"
 edition = "2024"
 authors = ["Seyud"]
 license = "GPL-3.0-or-later"
-description = "Device Faker 原生 Web 服务：静态托管 module/webroot + /api/v1 控制面"
+description = "DevMask 原生 Web 服务：静态托管 module/webroot + /api/v1 控制面"
 
 [[bin]]
-name = "device_faker_server"
+name = "devmask_server"
 path = "src/main.rs"
 
 [dependencies]
@@ -27,7 +27,7 @@ axum = { version = "0.8", default-features = false, features = [
 # 配置 revision / 原子写 / 备份：server 读写配置的唯一入口，与 zygisk 共用一套语义。
 # 保留默认 feature（edit + store + schema）：下一增量的 /api/v1/schema/config
 # 直接用 core 生成的 JSON Schema，不需要再改依赖。
-device_faker_core = { path = "../core" }
+devmask_core = { path = "../core" }
 percent-encoding = "2.3"
 serde = { version = "1.0.228", features = ["derive", "std"] }
 serde_json = "1.0"

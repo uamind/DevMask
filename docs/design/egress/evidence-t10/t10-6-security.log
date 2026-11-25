@@ -18,10 +18,10 @@ GET /audit HTTP 200
 --- 扫描 evidence-t10 全部文件里的密码明文（只输出命中数）---
   扫描文件数=35 命中=0
 --- 扫描 manager 数据目录（SQLite/密钥/日志）---
-  manager.db                               size=4096     命中=0
-  manager.db-shm                           size=32768    命中=0
-  manager.db-wal                           size=1421432  命中=0
-  manager.key                              size=32       命中=0
+  devmask-manager.db                               size=4096     命中=0
+  devmask-manager.db-shm                           size=32768    命中=0
+  devmask-manager.db-wal                           size=1421432  命中=0
+  devmask-manager.key                              size=32       命中=0
 --- manager 日志里是否出现密码 ---
 0
   manager 日志命中=0

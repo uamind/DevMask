@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! listener 生命周期与运行时状态（契约 §1.5 / §5.4 / §6.1 / §7）。
 //!
@@ -20,8 +20,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use device_faker_core::config::Config;
-use device_faker_core::revision::FileLock;
+use devmask_core::config::Config;
+use devmask_core::revision::FileLock;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 

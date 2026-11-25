@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 校验规则与 JSON Schema 回归。
 
-use device_faker_core::config::{AppConfig, Config, DeviceTemplate, NumberSetting};
-use device_faker_core::edit::parse_document;
-use device_faker_core::schema::{app_schema, bundle, config_schema, template_schema};
-use device_faker_core::validate::{
+use devmask_core::config::{AppConfig, Config, DeviceTemplate, NumberSetting};
+use devmask_core::edit::parse_document;
+use devmask_core::schema::{app_schema, bundle, config_schema, template_schema};
+use devmask_core::validate::{
     Severity, ValidationOptions, duplicate_packages, is_valid_package_key, unknown_fields,
     validate_app, validate_config, validate_document, validate_package_key, validate_template,
 };
 
-fn codes(report: &device_faker_core::validate::ValidationReport) -> Vec<&'static str> {
+fn codes(report: &devmask_core::validate::ValidationReport) -> Vec<&'static str> {
     report.issues.iter().map(|issue| issue.code).collect()
 }
 

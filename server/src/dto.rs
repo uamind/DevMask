@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! API 响应 DTO 与 core 校验结果到契约结构的映射（docs/API.md 6）。
 //!
@@ -9,10 +9,8 @@
 
 use std::collections::HashMap;
 
-use device_faker_core::config::{
-    AppConfig, Config, DeviceTemplate, MergedAppConfig, NumberSetting,
-};
-use device_faker_core::validate::{Severity, ValidationReport, duplicate_packages};
+use devmask_core::config::{AppConfig, Config, DeviceTemplate, MergedAppConfig, NumberSetting};
+use devmask_core::validate::{Severity, ValidationReport, duplicate_packages};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -635,7 +633,7 @@ pub fn egress_section_issues(document: &toml_edit::DocumentMut) -> Vec<Validatio
         return errors;
     };
     for (key, _) in table.iter() {
-        if !device_faker_core::config::is_known_egress_key(key) {
+        if !devmask_core::config::is_known_egress_key(key) {
             errors.push(ValidationError::new(
                 format!("egress.{key}"),
                 "unknown_field",
@@ -651,7 +649,7 @@ pub fn document_warnings(text: &str) -> Vec<Warning> {
     let Ok(document) = text.parse::<toml_edit::DocumentMut>() else {
         return Vec::new();
     };
-    let fields: Vec<String> = device_faker_core::validate::unknown_fields(&document)
+    let fields: Vec<String> = devmask_core::validate::unknown_fields(&document)
         .into_iter()
         .map(|field| format!("{}.{}", field.path, field.key))
         .collect();
@@ -669,8 +667,8 @@ pub fn document_warnings(text: &str) -> Vec<Warning> {
 ///
 /// 复用 core 的 upsert_template / set_app 保证字段写法与结构化端点一致；
 /// custom_props 排序后写入，避免 HashMap 迭代顺序让同样内容产生不同 revision。
-pub fn document_from_config(config: &Config) -> Result<String, device_faker_core::edit::EditError> {
-    use device_faker_core::edit::{set_app, upsert_template};
+pub fn document_from_config(config: &Config) -> Result<String, devmask_core::edit::EditError> {
+    use devmask_core::edit::{set_app, upsert_template};
     use toml_edit::{DocumentMut, Item, Value as TomlValue};
 
     let mut document = DocumentMut::new();

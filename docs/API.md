@@ -1,7 +1,7 @@
-# Device Faker HTTP API（/api/v1）契约
+# DevMask HTTP API（/api/v1）契约
 
 > 文档版本：v1.2（第一增量 + egress 增量冻结）
-> 适用：device_faker v1.11.0 自带的 `device_faker_server`（egress 自 v1.10.0、relay 自 v1.11.0 起提供）
+> 适用：devmask v0.0.1 自带的 `devmask_server`（egress 自 v1.10.0、relay 自 v0.0.1 起提供）
 > 机器可读契约：[openapi.yaml](openapi.yaml) · 面向 AI 摘要：[llms.txt](llms.txt)
 > 设计依据：[docs/dev/server-api-plan.md](dev/server-api-plan.md) 第 5 节（API 设计）与第 10 节（安全设计）、[docs/CONFIG.md](CONFIG.md)
 
@@ -18,7 +18,7 @@
 - 模板：列表、详情、整体替换、字段合并、删除、批量绑定包名、解绑单个包名
 - 应用：列表、详情（含解析结果）、内联写入或模板绑定、删除、重启
 - 包与设备：已安装包元数据、设备信息、getprop 白名单读取、用户列表
-- 出口代理（egress，v1.10.0 新增）：`GET/PUT/DELETE /api/v1/egress`、`POST /api/v1/egress/probe`、`GET /api/v1/egress/proxies`；v1.11.0 增 `POST /api/v1/egress/relay/restart`（设备内认证中继）
+- 出口代理（egress，v1.10.0 新增）：`GET/PUT/DELETE /api/v1/egress`、`POST /api/v1/egress/probe`、`GET /api/v1/egress/proxies`；v0.0.1 增 `POST /api/v1/egress/relay/restart`（设备内认证中继）
 
 合计 **30 个端点**，总表见 §4。
 
@@ -73,7 +73,7 @@
 | API 元数据（响应包装、请求控制字段） | **lowerCamelCase** | `revision`、`nextCursor`、`dryRun`、`previousRevision`、`backupId`、`forceStop`、`detachFromTemplates`、`uptimeSec` |
 | 查询参数 | **snake_case** | `dry_run`、`diff`、`confirm`、`detach_templates`、`allow_duplicate_package`、`format`、`limit`、`cursor` |
 | 路径参数 | 原文，必要时百分号编码 | `com.example.app%40999`（即 `com.example.app@999`） |
-| 请求 / 响应头 | 标准 HTTP 大小写 | `If-Match`、`X-DF-Revision`、`X-Request-Id` |
+| 请求 / 响应头 | 标准 HTTP 大小写 | `If-Match`、`X-DM-Revision`、`X-Request-Id` |
 
 > 一句话：**配置长什么样就 snake_case 照抄；围绕配置的元数据用 camelCase；URL 查询参数用 snake_case。**
 
@@ -93,8 +93,8 @@
 | 头 | 出现位置 | 说明 |
 | --- | --- | --- |
 | `X-Request-Id` | 所有响应 | 客户端未提供时服务端生成 `req_<ulid>` |
-| `X-DF-Revision` | 配置 / 模板 / 应用相关的读写响应 | 不带引号的 revision，如 `9f2c…` |
-| `X-DF-Egress-Revision` | egress 端点（`/egress`、`/egress/probe`、`/egress/proxies`） | **egress revision**（不是 config revision），见 §2.5。egress 端点**不**回 `X-DF-Revision` / `ETag` |
+| `X-DM-Revision` | 配置 / 模板 / 应用相关的读写响应 | 不带引号的 revision，如 `9f2c…` |
+| `X-DM-Egress-Revision` | egress 端点（`/egress`、`/egress/probe`、`/egress/proxies`） | **egress revision**（不是 config revision），见 §2.5。egress 端点**不**回 `X-DM-Revision` / `ETag` |
 | `ETag` | `GET /config`、`GET /config/revision`、`GET /templates/{name}`、`GET /apps/{pkg}` | **带引号**的强校验值（RFC 9110），可直接作为 `If-Match` 回传 |
 | `Retry-After` | 429 | 秒数 |
 | `Idempotent-Replay: true` | 命中幂等键的重放响应 | 响应体为首次结果 |
@@ -105,7 +105,7 @@
     Content-Type: application/json; charset=utf-8
     Cache-Control: no-store
     X-Request-Id: req_01JC7Z6Q3M8V2S9K4T1B0A
-    X-DF-Revision: 9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5
+    X-DM-Revision: 9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5
     ETag: "9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"
     {"revision":"9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5", …}
 
@@ -131,7 +131,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 - 任一文件变化（含只改 `egress.toml` 里的代理密码）都会改变 egress revision。
 - `PUT` / `DELETE /egress` 的 `If-Match` 比较对象是 **egress revision**；`configRevision`（响应体里的另一个字段）只用于排障，**不能**拿来做 egress 端点的 `If-Match`。
 - 缺失 `If-Match` → `428 precondition_required`；不匹配 → `412 config_revision_mismatch` 且 `details` 追加 `resource:"egress"`。
-- egress 端点**不**返回 `X-DF-Revision` / `ETag`（否则会污染 WebUI 缓存的 config revision），改用 `X-DF-Egress-Revision` 头。
+- egress 端点**不**返回 `X-DM-Revision` / `ETag`（否则会污染 WebUI 缓存的 config revision），改用 `X-DM-Egress-Revision` 头。
 
 ### 2.6 dry_run、diff、confirm、allow_duplicate_package
 
@@ -174,7 +174,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 ### 3.1 认证方式
 
 - 唯一方式：`Authorization: Bearer <token>`。Token 可由用户自定义（默认 `admin123`），也支持 `df_` + 43 字符 base64url。
-- 落盘只存 `sha256(token)` 到 `/data/adb/device_faker/config/server.toml`（权限 600），明文只在生成时输出一次。
+- 落盘只存 `sha256(token)` 到 `/data/adb/devmask/config/server.toml`（权限 600），明文只在生成时输出一次。
 - 不使用 Cookie 会话，因此没有 CSRF 面；前端统一加 `Authorization` 头。
 - 缺失、格式错误、未知、已撤销 → `401 unauthorized`（不区分原因，避免枚举）。
 - `GET /api/v1/healthz` 不需要认证；其余端点全部需要。
@@ -201,7 +201,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 
 ### 3.4 Token 供给
 
-- 首次启动：若 `server.toml` 没有任何 Token 且 `bind` 是 loopback，写入名为 `owner` 的默认 Token **`admin123`**（`["read","write","ops","admin"]`），只把哈希写入 `server.toml`，明文同时写一行 `logs/server.log` 横幅 `[device-faker-server] initial token = admin123`。
+- 首次启动：若 `server.toml` 没有任何 Token 且 `bind` 是 loopback，写入名为 `owner` 的默认 Token **`admin123`**（`["read","write","ops","admin"]`），只把哈希写入 `server.toml`，明文同时写一行 `logs/server.log` 横幅 `[devmask-server] initial token = admin123`。
 - 修改 Token：管理器 WebUI → 设置 → 外部访问 → 「访问 Token」输入框，填任意值后保存；WebUI 用 `sha256sum` 算哈希写入 `server.toml`（0600），重启服务后生效。留空表示不修改。
 - `server.toml` 结构（计划书附录 A）：
 
@@ -229,7 +229,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 
 ### 3.6 审计
 
-每次写操作（含 412/422 等失败尝试）在 `/data/adb/device_faker/logs/api-audit.jsonl` 追加一行（`ts、requestId、tokenId、tokenName、remote、method、path、status、revisionBefore、revisionAfter、durationMs、userAgent`）。`remote` 当前恒为 `null`（未接入 ConnectInfo）。本增量**不提供查询端点**；审计不含 Token 明文与完整配置内容。审计文件 `0600`，写失败只记 warn，不影响请求结果。
+每次写操作（含 412/422 等失败尝试）在 `/data/adb/devmask/logs/api-audit.jsonl` 追加一行（`ts、requestId、tokenId、tokenName、remote、method、path、status、revisionBefore、revisionAfter、durationMs、userAgent`）。`remote` 当前恒为 `null`（未接入 ConnectInfo）。本增量**不提供查询端点**；审计不含 Token 明文与完整配置内容。审计文件 `0600`，写失败只记 warn，不影响请求结果。
 
 ---
 
@@ -284,7 +284,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 
     {
       "status": "ok",
-      "version": "1.11.0",
+      "version": "0.0.1",
       "uptimeSec": 3600
     }
 
@@ -299,9 +299,9 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 
     {
       "module": {
-        "id": "device_faker",
-        "version": "v1.11.0",
-        "versionCode": 20261202
+        "id": "devmask",
+        "version": "v0.0.1",
+        "versionCode": 20261125
       },
       "device": {
         "manufacturer": "Google",
@@ -313,7 +313,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
         "abi": "arm64-v8a"
       },
       "server": {
-        "version": "1.11.0",
+        "version": "0.0.1",
         "bind": "127.0.0.1:8686",
         "uptimeSec": 3600,
         "startedAt": "2026-11-24T03:00:00Z",
@@ -350,7 +350,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 ### 5.3 GET /api/v1/schema/config
 
 - 作用域：`read`。
-- 返回 **draft-07** JSON Schema（`$schema: http://json-schema.org/draft-07/schema#`），由 `device_faker_core::schema::config_schema()` 用 schemars 0.8 依据 `Config` 结构生成，服务端原样透传，不做二次加工。
+- 返回 **draft-07** JSON Schema（`$schema: http://json-schema.org/draft-07/schema#`），由 `devmask_core::schema::config_schema()` 用 schemars 0.8 依据 `Config` 结构生成，服务端原样透传，不做二次加工。
 - 这是**单份 Config 的 schema**：`apps` / `debug` / `default_force_denylist_unmount` / `default_hide_maps` / `templates` 直接是顶层 `properties`；被引用的类型放在 `definitions`（`AppConfig`、`DeviceTemplate`、`NumberSetting`），`$ref` 形如 `#/definitions/DeviceTemplate`。
 - 方言就是 draft-07：没有 `$id`、没有 `additionalProperties: false`，引用只出现在 `definitions` 下；客户端不要按更新版本的方言解析，也不要假设 `prefixItems` 之类的新关键字可用。
 
@@ -358,7 +358,7 @@ egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress re
 
     {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "DeviceFakerConfig",
+      "title": "DevMaskConfig",
       "type": "object",
       "properties": {
         "apps": {
@@ -469,7 +469,7 @@ Authorization: Bearer $TOKEN
       }
     }
 
-响应 `200 text/plain; charset=utf-8`（`format=toml`）：响应体为文件原文（保留注释与顺序），头里带 `X-DF-Revision` 与 `ETag`。
+响应 `200 text/plain; charset=utf-8`（`format=toml`）：响应体为文件原文（保留注释与顺序），头里带 `X-DM-Revision` 与 `ETag`。
 
 配置文件不存在时：`200`，`exists:false`，`mtime:null`，`size:0`，`revision` 为空内容字节的 SHA-256，`config` 为空文档（`templates:{}, apps:[]`，布尔字段为 `false`），`warnings:[{"code":"config_missing"}]`。
 
@@ -628,7 +628,7 @@ Content-Type: application/json
 - 作用域：`read`。
 - 路径参数 `name`：模板名，需百分号编码。
 
-响应 `200`（`X-DF-Revision` + `ETag` 同配置 revision）：
+响应 `200`（`X-DM-Revision` + `ETag` 同配置 revision）：
 
     {
       "revision": "9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
@@ -936,7 +936,7 @@ Content-Type: application/json
 响应 `200`：
 
     {
-      "module": { "id": "device_faker", "version": "v1.11.0", "versionCode": 20261202 },
+      "module": { "id": "devmask", "version": "v0.0.1", "versionCode": 20261125 },
       "device": {
         "manufacturer": "Google",
         "brand": "google",
@@ -947,7 +947,7 @@ Content-Type: application/json
         "abi": "arm64-v8a",
         "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
       },
-      "server": { "version": "1.11.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
+      "server": { "version": "0.0.1", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
       "root": { "manager": "kernelsu", "version": "1.0.7" }
     }
 
@@ -1003,14 +1003,14 @@ Content-Type: application/json
 
     {
       "revision": "9f2c5d1e…",
-      "module": { "id": "device_faker", "version": "v1.11.0", "versionCode": 20261202 },
+      "module": { "id": "devmask", "version": "v0.0.1", "versionCode": 20261125 },
       "device": {
         "manufacturer": "Google", "brand": "google", "model": "Pixel 9",
         "device": "tokay", "android": "17", "sdk": 37, "abi": "arm64-v8a",
         "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
       },
       "root": { "manager": "kernelsu", "version": "1.0.7" },
-      "server": { "version": "1.11.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "startedAt": "2026-11-24T03:00:00Z", "pid": 4321 },
+      "server": { "version": "0.0.1", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "startedAt": "2026-11-24T03:00:00Z", "pid": 4321 },
       "config": {
         "revision": "9f2c5d1e…", "mtime": "2026-11-24T03:00:00Z",
         "size": 9361, "exists": true, "templates": 2, "apps": 1, "conflicts": 1
@@ -1036,13 +1036,13 @@ Content-Type: application/json
 
 - `resolved` 与 `GET /apps/{pkg}` 的 `resolved` 相同：最终生效值（含 `fingerprint`、`dpi`、`sdk_int` 等）。
 - `templates[].config` 是模板原始字段（不含 `packages`）。
-- 响应带 `X-DF-Revision`，可用于下一次写操作的 `If-Match`。
+- 响应带 `X-DM-Revision`，可用于下一次写操作的 `If-Match`。
 
 错误：401、403、500。
 
 ### 5.25 GET /api/v1/egress
 
-- 作用域：`read`。无 `If-Match`；响应头带 `X-DF-Egress-Revision`（不带引号），**不带** `X-DF-Revision` / `ETag`。
+- 作用域：`read`。无 `If-Match`；响应头带 `X-DM-Egress-Revision`（不带引号），**不带** `X-DM-Revision` / `ETag`。
 - 用途：一次拿到「当前出口模式 + 设备上真实读回的生效值 + 脱敏上游 + 各应用覆盖 + 最近探测」。不需要自己拼 `egress.toml`。
 
 响应 `200`（状态块字段见 §6.8）：
@@ -1102,13 +1102,13 @@ Content-Type: application/json
     }
 
 - `applied` **只描述方案 A**（设备级 HTTP 代理）：读回值与期望值是否一致；应用级注入（方案 B）无法从服务进程读回，只体现在 `apps[].effective`。
-- `warnings` 可能包含：`egress_proxy_not_found`、`egress_credentials_ignored`、`egress_auth_unsupported`（**只在 relay 未生效且带凭据时**出现：此时凭据不会被使用，`details={scope:"device"|"app", proxy, field:"username"|"password"}`，同一代理只报一次）、`egress_inline_shadows_template`、`egress_app_not_installed`、`egress_degraded_to_direct`（仅在**清直连真的落地**时出现）、`egress_settings_mismatch`（读回不一致，或 `details.reason="settings_unavailable"` 表示 `settings` 命令不可用）、`egress_perm_fixed`、`egress_probe_approximate`、`unknown_field_preserved`（egress.toml 里有未知键，已原样保留），以及 v1.11.0 的 5 个 `egress_relay_*`（见下表）。
+- `warnings` 可能包含：`egress_proxy_not_found`、`egress_credentials_ignored`、`egress_auth_unsupported`（**只在 relay 未生效且带凭据时**出现：此时凭据不会被使用，`details={scope:"device"|"app", proxy, field:"username"|"password"}`，同一代理只报一次）、`egress_inline_shadows_template`、`egress_app_not_installed`、`egress_degraded_to_direct`（仅在**清直连真的落地**时出现）、`egress_settings_mismatch`（读回不一致，或 `details.reason="settings_unavailable"` 表示 `settings` 命令不可用）、`egress_perm_fixed`、`egress_probe_approximate`、`unknown_field_preserved`（egress.toml 里有未知键，已原样保留），以及 v0.0.1 的 5 个 `egress_relay_*`（见下表）。
 - `health.degradedReason` 取值：`probe_failed`、`settings_mismatch`、`settings_unavailable`（降级动作执行了但**清直连没落地**：此时 `effectiveMode` 报实际模式，不会谎报 `direct`）。
-- **`relay`（v1.11.0 新增）**：设备内认证中继的运行态。`enabled` / `basePort` / `failOpen` 是**实际生效值**（`[relay]` 段降级后的结果）；`listeners[]` 每个「应该监听」的中继端口一条（设备级在前，其余按 `port` 升序，`listening=false` 时必有 `lastError`）；`firewall` 给 uid 防火墙的 `applied/rules/allowRules/denyRules`；`portChanges` 与 `restartRequiredApps` **只在写响应（PUT/DELETE/restart）里可能非空**，GET 恒为 `[]`。端口值变化时，引用该定义的应用**需要重启**（见 §5.30）。
+- **`relay`（v0.0.1 新增）**：设备内认证中继的运行态。`enabled` / `basePort` / `failOpen` 是**实际生效值**（`[relay]` 段降级后的结果）；`listeners[]` 每个「应该监听」的中继端口一条（设备级在前，其余按 `port` 升序，`listening=false` 时必有 `lastError`）；`firewall` 给 uid 防火墙的 `applied/rules/allowRules/denyRules`；`portChanges` 与 `restartRequiredApps` **只在写响应（PUT/DELETE/restart）里可能非空**，GET 恒为 `[]`。端口值变化时，引用该定义的应用**需要重启**（见 §5.30）。
 - `proxies[].localPort` 是**持久化事实**（端口表；`[relay].enabled=false` 或无分配时为 `null`），`proxies[].relayActive` 是**运行时事实**（该定义此刻是否正在经中继）。两者都只读：`PUT` 传 `localPort` / `local_port` → `422 unknown_field`（§5.26）。
 - **设备级只中继 http（重要）**：`[egress].default` 指向 `type="socks5"` 定义时**不会**建设备级 listener（`relay.listeners[]` 无 `scope="device"` 条目，`proxies[].relayActive=false`；`base_port` 不监听）。`PUT /egress` 按**合并后的有效 default** 校验：指向非 http → `422 validation_failed`（`details.errors[].code="invalid_egress_default"`、`path="default"`），与 `[relay].enabled` / 凭据无关。**已存在的旧配置**：`enabled=true` → `settings` 写黑洞 `127.0.0.1:9`（不把 HTTP 流量送到 SOCKS 端口、也不泄漏直连），`readback.settingsValue` 回显 `127.0.0.1:9`；`enabled=false` → 按未配置处理（直连），**不写黑洞**。两种都报 `egress_relay_device_socks5_unsupported`（配置提醒、与 enabled 无关）。socks5 定义只能用于 `[[apps]].egress`。
 - **设备级 socks5 的观测与处置**：`egress_relay_device_socks5_unsupported` 的 `details={proxy, scope:"device", reason:"socks5_device_scope_unsupported"}`；同时 `readback.settingsValue=="127.0.0.1:9"` 是「`enabled=true` 时旧配置被黑洞化」的直接证据（`enabled=false` 时 `settingsValue` 为 `:0`）。处置：把 `default` 改成 http 定义或删除，把该 socks5 定义只绑到应用；改完执行 `POST /egress/relay/restart`（如涉及文件编辑）并发一次 `GET /egress` 确认 `settingsValue` 不再是 `127.0.0.1:9`。
-- **分层 uid 策略（v1.11.0 落地）**：应用级端口（`uidPolicy="restricted"`）在 accept 后先判 uid——已归属且在 `allowedUids` → 放行；已归属但不在 → 立即 close；**归属失败时，只有 `relay.firewall.applied=true` 才放行**（内核 `-m owner` 已按 uid 过滤），并记限频日志 `reason=uid_unresolved_firewall_enforced`（不是 warning 码，≤1 次/秒）；`applied=false` / `firewall=false` → close（`uid_unresolved`）。服务放行前会限频复核 `iptables -S`（≤1 次/秒、单次 1s 超时），规则被手工 `-F` 后 ≤1s 内回到 fail-closed。
+- **分层 uid 策略（v0.0.1 落地）**：应用级端口（`uidPolicy="restricted"`）在 accept 后先判 uid——已归属且在 `allowedUids` → 放行；已归属但不在 → 立即 close；**归属失败时，只有 `relay.firewall.applied=true` 才放行**（内核 `-m owner` 已按 uid 过滤），并记限频日志 `reason=uid_unresolved_firewall_enforced`（不是 warning 码，≤1 次/秒）；`applied=false` / `firewall=false` → close（`uid_unresolved`）。服务放行前会限频复核 `iptables -S`（≤1 次/秒、单次 1s 超时），规则被手工 `-F` 后 ≤1s 内回到 fail-closed。
 - **本地端口劫持**：listener 关闭到重绑之间，`127.0.0.1:178xx` 可能被其它本机进程抢占；服务只信任自己 bind 成功的 socket，**下一次 bind 失败（`addr_in_use`）** 是唯一检测信号（`iptables -S` 复核不能判断端口属主）。应用级会换端口并在 `relay.portChanges{reason:"addr_in_use"}` 与 `restartRequiredApps` 里给提示；设备级只有一个候选 `base_port`，失败即不监听并给 `egress_relay_bind_failed`（此时 `settings` 不指向中继）。
 
 egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形状）：
@@ -1131,7 +1131,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | `egress_relay_upstream_unreachable` | `{proxy, port, scope, reason, at}`（`reason` ∈ `connect`/`dns`/`timeout`/`auth_failed`/`protocol_error`） | 数据面最近一次到上游的握手失败；该 listener 下一次成功后自动消失 |
 | `egress_relay_device_socks5_unsupported` | `{proxy, scope:"device", reason:"socks5_device_scope_unsupported"}` | 合并后的有效 `default` 指向**非 http**（socks5）定义：不会建 device listener；`enabled=true` → `settings` 黑洞 `127.0.0.1:9`，`enabled=false` → 按未配置（直连）；`PUT` 直接 422。与是否带凭据无关，`enabled=false` 时仍报（配置提醒） |
 - `relay` 相关的 5 个警告码只出现在 `GET/PUT/DELETE /egress` 与 `POST /egress/relay/restart` 的 `warnings`；`POST /egress/probe` 与数据面响应不带它们。`[relay].enabled=false` 时不产生 relay **运行态**警告（关闭不是故障）；**例外**：`egress_relay_device_socks5_unsupported` 是配置提醒，只要合并后的有效 `default` 指向非 http 定义就报。
-- **带认证的代理自 v1.11.0 起经设备内中继可用**：设备级 / 应用级命中带 `username`/`password` 的定义且 relay 生效时，注入值是 `127.0.0.1:<local_port>`（应用零改造），由 root 进程补 HTTP Basic / SOCKS5 RFC1929；`hasCredentials:true` 仍只表示**存了凭据**，不代表认证一定可用——要看当前链路是否经中继。边界：
+- **带认证的代理自 v0.0.1 起经设备内中继可用**：设备级 / 应用级命中带 `username`/`password` 的定义且 relay 生效时，注入值是 `127.0.0.1:<local_port>`（应用零改造），由 root 进程补 HTTP Basic / SOCKS5 RFC1929；`hasCredentials:true` 仍只表示**存了凭据**，不代表认证一定可用——要看当前链路是否经中继。边界：
   1. 只有 relay 生效（`[relay].enabled=true` 且该定义有 `local_port`）才走中继；
   2. **v1.2 起不再把凭据写进应用进程**（`java.net.socks.username/password` 与 HTTP `Authenticator` 都不写；≤v1.1 会写，实测不生效）；
   3. relay **明确未启用**（`enabled=false`，或文件未迁移：无 `[relay]` 键且无任何 `local_port`）时回退**上游 `host:port`**，认证只能靠代理侧 **IP 白名单**，并给 `egress_auth_unsupported`；
@@ -1232,7 +1232,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | --- | --- | --- | --- |
 | `package` | string | `null` | `null` = 按设备级链路；给定包名 = 用该应用的生效代理定义 |
 | `url` | string | `[probe].url` | 单次覆盖探测 URL；规则同 §5.26 |
-| `via` | `"upstream"` 或 `"relay"` | `"upstream"` | 探测路径（v1.11.0 新增）；其它值 → `422 invalid_value` |
+| `via` | `"upstream"` 或 `"relay"` | `"upstream"` | 探测路径（v0.0.1 新增）；其它值 → `422 invalid_value` |
 
 响应 `200`（字段见 §6.10）：
 
@@ -1253,7 +1253,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 
 `via` 的响应值：`"proxy"` / `"direct"`（`via="upstream"` 的既有语义）或 **`"relay"`**（`via="relay"` 成功时）；`relayPort` 只在 `via="relay"` 时非 `null`。
 
-**判定顺序（冻结，v1.11.0）**：`via="relay"` 先看配置、再看监听、最后才发请求——
+**判定顺序（冻结，v0.0.1）**：`via="relay"` 先看配置、再看监听、最后才发请求——
 
 1. `[relay].enabled=false` 或该定义无凭据 → `409 egress.not_configured`（`details={scope, package?, via:"relay"}`）；
 2. 有凭据但无可用监听端口（无 `local_port` / 端口不在端口表 / `listeners[].listening=false`）→ `502 egress.probe_failed`、`reason="relay_not_listening"`；
@@ -1270,7 +1270,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | `settings` 不可用 | 503 | `upstream_unavailable` | `{component:"settings"}` |
 | `package` / `url` / `via` 非法 | 422 | `validation_failed` | `{errors:[…]}` |
 
-`egress.probe_failed` 的 `reason`（只增不改）：`connect` / `dns` / `timeout` / `tls` / `http_status` / `invalid_response`，以及 v1.11.0 新增的两个 **relay 专属**值 `relay_not_listening` / `relay_connect`。
+`egress.probe_failed` 的 `reason`（只增不改）：`connect` / `dns` / `timeout` / `tls` / `http_status` / `invalid_response`，以及 v0.0.1 新增的两个 **relay 专属**值 `relay_not_listening` / `relay_connect`。
 
 - **fail-open 门控（安全关键）**：只有 **`via="upstream"` 且 `reason` 属于 `connect` / `dns` / `timeout` / `tls`** 才允许按既有规则把设备级系统代理切直连；**`via="relay"` 的失败一律不动 `settings`**（否则中继一死就把全设备静默切成直连 = IP 泄漏）。
 - 探测本身**不回落**：失败就是 502，`via` 不会因为开了 fail-open 变成 `direct`。
@@ -1301,12 +1301,12 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
     }
 
 - `items[].apps` 是引用该定义的包名（按 `[[apps]]` 顺序）；`usedAsDefault` 表示它是否是 `[egress].default`。
-- `items[].localPort` / `relayActive`（v1.11.0 新增，与 `GET /egress` 的 `proxies[]` 同构）：前者是 server 分配的端口表（未分配或中继关闭时 `null`），后者表示该定义此刻是否正在经中继。两者都是只读字段（§5.26）。
+- `items[].localPort` / `relayActive`（v0.0.1 新增，与 `GET /egress` 的 `proxies[]` 同构）：前者是 server 分配的端口表（未分配或中继关闭时 `null`），后者表示该定义此刻是否正在经中继。两者都是只读字段（§5.26）。
 - 列表**不分页**（定义上限 64 条）；**永不含** `username` / `password`，唯一凭据信号是 `hasCredentials`。
 
 错误：401、403、500。
 
-### 5.30 POST /api/v1/egress/relay/restart（v1.11.0 新增）
+### 5.30 POST /api/v1/egress/relay/restart（v0.0.1 新增）
 
 - 作用域：`ops`。无 `If-Match`；**不支持** `Idempotency-Key`（动作型端点）。
 - 用途：重新读取 `[relay]` 与 `[proxies]`，**全量重建** listener 与 uid 防火墙，并重放设备级 `settings`（不清配置）。
@@ -1328,7 +1328,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 
 - `relay.portChanges` / `relay.restartRequiredApps`：本次若发生端口重分配，分别列出 `{proxy, from, to, reason}` 与**需要重启的包名**（去重升序）。非空时调用方必须提示用户重启对应应用（旧端口已关闭，重启前连接会被拒）。
 - 幂等：重复调用不写 `config.toml`、不重新分配端口（除非发现冲突）；端口无变化时上述两个数组为 `[]`，重装后 `-S` 与上次逐条一致。
-- 副作用：全部 listener 暂停 accept（毫秒级；期间中继端口由 DENY 链全拒，不裸奔）→ 重建 `DF_EGRESS_RLY_ALLOW` 并 `-S` 校验 → `DF_EGRESS_RLY_DENY` 只增删 → 设备级中继生效时重放 `settings put global http_proxy 127.0.0.1:<base_port>`。
+- 副作用：全部 listener 暂停 accept（毫秒级；期间中继端口由 DENY 链全拒，不裸奔）→ 重建 `DM_EGRESS_RLY_ALLOW` 并 `-S` 校验 → `DM_EGRESS_RLY_DENY` 只增删 → 设备级中继生效时重放 `settings put global http_proxy 127.0.0.1:<base_port>`。
 - 失败：`egress.toml` 语法错误 → `500 internal_error`（`details.op="egress_parse"`）；`settings` 不可用 → `503 upstream_unavailable`（`details.component="settings"`）；`[relay].enabled=false` → `200` 且 `relay.listeners=[]`（并卸载链，不是错误）。
 - 错误：401、403、422、500、503。
 
@@ -1503,7 +1503,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | `pm_unavailable` | PackageManager 不可用 | `{}` |
 | `no_config` | `GET /apps/{pkg}` 查不到任何配置 | `{package}` |
 
-> egress 相关的警告码见 §5.25（含 v1.11.0 的 5 个 `egress_relay_*`）。**应用侧认证结果不会产生 warning**：服务进程看不到目标进程内的认证/连接结果，症状表现为应用自己的网络错误；只有设备端中继自身的问题（绑定、防火墙、uid、上游握手）才有码。见 §5.25 与 [CONFIG.md「已知限制」](CONFIG.md#已知限制)。
+> egress 相关的警告码见 §5.25（含 v0.0.1 的 5 个 `egress_relay_*`）。**应用侧认证结果不会产生 warning**：服务进程看不到目标进程内的认证/连接结果，症状表现为应用自己的网络错误；只有设备端中继自身的问题（绑定、防火墙、uid、上游握手）才有码。见 §5.25 与 [CONFIG.md「已知限制」](CONFIG.md#已知限制)。
 
 ### 6.7 ValidationError
 
@@ -1538,7 +1538,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 
 ### 6.9 EgressProxySummary（脱敏代理摘要）
 
-`upstream`、`proxies[]`、`GET /egress/proxies` 的 `items[]` 都基于这一组字段，**固定 7 个键**（v1.11.0 起）：
+`upstream`、`proxies[]`、`GET /egress/proxies` 的 `items[]` 都基于这一组字段，**固定 7 个键**（v0.0.1 起）：
 
     { "name": "office_http", "type": "http", "host": "198.51.100.10", "port": 8080,
       "hasCredentials": false, "localPort": null, "relayActive": false }
@@ -1566,11 +1566,11 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | `latencyMs` | integer | 否 | 从发请求到读完响应体的毫秒数 |
 | `checkedAt` | string | 否 | 探测时刻（RFC 3339 UTC） |
 | `scope` | `"device"` \| `"app"` | 否 | 请求里省略 `package` 时为 `device` |
-| `via` | `"proxy"` \| `"direct"` | 否 | 本次实际走的链路；`"relay"` 表示经设备内中继（v1.11.0） |
+| `via` | `"proxy"` \| `"direct"` | 否 | 本次实际走的链路；`"relay"` 表示经设备内中继（v0.0.1） |
 | `proxy` | string | 是 | 实际使用的代理名；`via:"direct"` 时为 `null` |
 | `url` | string | 否 | 实际请求的 URL |
 | `upstreamStatus` | integer | 是 | probe URL 返回的 HTTP 状态码；没拿到响应时为 `null` |
-| `relayPort` | integer 或 null | 是 | `via="relay"` 时实际使用的中继端口，其余为 `null`（v1.11.0） |
+| `relayPort` | integer 或 null | 是 | `via="relay"` 时实际使用的中继端口，其余为 `null`（v0.0.1） |
 | `approximate` | boolean | 否 | `scope:"app"` 时恒 `true`（探测在服务进程内完成，见 §5.28） |
 | `warnings` | Warning[] | 否 | 例如 `egress_probe_approximate` |
 
@@ -1619,8 +1619,8 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | `rate_limited` | 429 | true | `{limit, windowSec}` | P4 限流预留；本增量不会返回（见 §2.9） |
 | `internal_error` | 500 | true | `null` | 未预期错误，用 `requestId` 查日志 |
 | `upstream_unavailable` | 503 | true | `{component}` | `pm` / `am` / `getprop` / `settings` 调用失败或超时 |
-| `egress.not_configured` | 409 | false | `{scope, package?, via?}` | 没有任何可用出口，无法按当前链路探测（v1.10.0 新增；v1.11.0 的 `via="relay"` 只在 relay 未启用 / 无凭据时出现） |
-| `egress.probe_failed` | 502 | true | `{url, reason, timeoutMs, upstreamStatus?, relayPort?, scope?, warnings?}` | 出口探测失败；`reason` ∈ `connect`/`dns`/`timeout`/`tls`/`http_status`/`invalid_response`，v1.11.0 增 `relay_not_listening`/`relay_connect` |
+| `egress.not_configured` | 409 | false | `{scope, package?, via?}` | 没有任何可用出口，无法按当前链路探测（v1.10.0 新增；v0.0.1 的 `via="relay"` 只在 relay 未启用 / 无凭据时出现） |
+| `egress.probe_failed` | 502 | true | `{url, reason, timeoutMs, upstreamStatus?, relayPort?, scope?, warnings?}` | 出口探测失败；`reason` ∈ `connect`/`dns`/`timeout`/`tls`/`http_status`/`invalid_response`，v0.0.1 增 `relay_not_listening`/`relay_connect` |
 
 补充规则：
 
@@ -1685,7 +1685,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 2. 读原始字节，算 revision，与 `If-Match` 比对；不符 → 412，**不做自动合并**。
 3. 用 `toml_edit` 做定点修改：保留注释、空行、键顺序、未知字段与未知表。
 4. 全量语义校验（§8）；失败 → 422，文件不动。
-5. 自动备份到 `/data/adb/device_faker/config/backups/`（文件名 `<UTC 时间>-<revision 前 4 位>`，保留最近 10 份；本增量无备份管理端点）。
+5. 自动备份到 `/data/adb/devmask/config/backups/`（文件名 `<UTC 时间>-<revision 前 4 位>`，保留最近 10 份；本增量无备份管理端点）。
 6. 写临时文件 → `fsync` → `rename` → `fsync` 目录 → `chmod 644`。
 7. 释放锁，返回新 revision（+ 可选 diff + warnings）。
 8. companion 在下一次 `GetSpec` 时发现 mtime 变化，重渲染 per-package spec。
@@ -1819,7 +1819,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 
 出口代理（egress）冒烟：
 
-    # 8) 读当前出口状态（拿 egress revision；注意响应头是 X-DF-Egress-Revision）
+    # 8) 读当前出口状态（拿 egress revision；注意响应头是 X-DM-Egress-Revision）
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" \
       | jq '{revision, configured, mode, effectiveMode, default, applied, readback, health}'
 
@@ -1851,7 +1851,7 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
       "$BASE/egress?confirm=true" | jq '{changed, mode, applied}'
     adb shell su -c 'dumpsys connectivity | grep -i "global proxy"'   # 期望 Global proxy: none
 
-    # 14) 中继（v1.11.0）：状态、探测对照、强制重建
+    # 14) 中继（v0.0.1）：状态、探测对照、强制重建
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq '.relay | {enabled, basePort, listeners, firewall}'
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
       -d '{"via":"relay"}' "$BASE/egress/probe" | jq '{ok, via, exitIp, relayPort}'
@@ -1868,6 +1868,6 @@ egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形�
 | --- | --- | --- |
 | v1 | 2026-11-24 | 第一增量契约冻结：23 个端点、错误码表、revision/If-Match 语义、WebUI 注入与降级规则 |
 | v1.1 | 2026-11-25 | 新增 `GET /overview`（合计 24 个端点）；首次启动 Token 默认 `admin123`，可在管理器 WebUI 修改 |
-| v1.2 | 2026-12-01 | egress 增量（v1.10.0）：新增 `/egress`、`/egress/probe`、`/egress/proxies` 共 5 个端点（合计 29）；新增 `X-DF-Egress-Revision`、egress revision 语义、`egress.not_configured` / `egress.probe_failed` 与两个校验码；`upstream_unavailable` 的 `component` 增加 `settings` |
-| v1.3 | 2026-12-02 | 认证中继（v1.11.0）：新增 `POST /api/v1/egress/relay/restart`（合计 30）；`GET /egress` 增 `relay` 对象，`GET /egress/proxies` 与 `proxies[]` 增 `localPort` / `relayActive`（摘要固定 7 键）；`POST /egress/probe` 增请求 `via`、响应 `relayPort` 与 `reason` 两值；新增 5 个 `egress_relay_*` 警告码（含设备级 socks5 的 `egress_relay_device_socks5_unsupported`）；`PUT /egress` 对 `localPort` / `local_port` / `relay*` → 422 `unknown_field` |
-| v1.4 | 2026-12-02 | 版本收口：模块与服务版本 1.10.0 → **1.11.0**（`module.prop` versionCode 20261202）；端点、字段、错误码**无变化**（合计仍 30） |
+| v1.2 | 2026-12-01 | egress 增量（v1.10.0）：新增 `/egress`、`/egress/probe`、`/egress/proxies` 共 5 个端点（合计 29）；新增 `X-DM-Egress-Revision`、egress revision 语义、`egress.not_configured` / `egress.probe_failed` 与两个校验码；`upstream_unavailable` 的 `component` 增加 `settings` |
+| v1.3 | 2026-12-02 | 认证中继（v0.0.1）：新增 `POST /api/v1/egress/relay/restart`（合计 30）；`GET /egress` 增 `relay` 对象，`GET /egress/proxies` 与 `proxies[]` 增 `localPort` / `relayActive`（摘要固定 7 键）；`POST /egress/probe` 增请求 `via`、响应 `relayPort` 与 `reason` 两值；新增 5 个 `egress_relay_*` 警告码（含设备级 socks5 的 `egress_relay_device_socks5_unsupported`）；`PUT /egress` 对 `localPort` / `local_port` / `relay*` → 422 `unknown_field` |
+| v1.4 | 2026-12-02 | 版本收口：模块与服务版本 1.10.0 → **0.0.1**（`module.prop` versionCode 20261125）；端点、字段、错误码**无变化**（合计仍 30） |

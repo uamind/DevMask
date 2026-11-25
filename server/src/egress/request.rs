@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! PUT /egress 的请求体、字段校验与「省略 = 不改」的合并规则（契约 §1.4 / §2.6）。
 //!
@@ -14,8 +14,8 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 
-use device_faker_core::config::{DIRECT_MARKER, is_valid_egress_app_value};
-use device_faker_core::validate::{is_valid_package_key, validate_egress_proxy_name};
+use devmask_core::config::{DIRECT_MARKER, is_valid_egress_app_value};
+use devmask_core::validate::{is_valid_package_key, validate_egress_proxy_name};
 use serde::{Deserialize, Deserializer};
 
 use crate::dto::ValidationError;
@@ -361,7 +361,7 @@ fn validate_apps(request: &EgressUpdateRequest, errors: &mut Vec<ValidationError
                     "invalid_egress_name",
                     format!(
                         "egress 只能是代理名（{}）或 {DIRECT_MARKER}",
-                        device_faker_core::config::EGRESS_PROXY_NAME_PATTERN
+                        devmask_core::config::EGRESS_PROXY_NAME_PATTERN
                     ),
                 ));
             }

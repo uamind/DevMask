@@ -9,11 +9,11 @@ webroot
 zygisk
 :0
 iptables: No chain/target/match by that name.
-root          3690  3677   11005528   7484 futex_wait_queue    0 S device_faker_server
-/data/adb/modules/device_faker/bin:
+root          3690  3677   11005528   7484 futex_wait_queue    0 S devmask_server
+/data/adb/modules/devmask/bin:
 total 4112
--rwxr-xr-x 1 root root 4203288 2026-11-25 12:09 device_faker_server
+-rwxr-xr-x 1 root root 4203288 2026-11-25 12:09 devmask_server
 
-/data/adb/modules/device_faker/zygisk:
+/data/adb/modules/devmask/zygisk:
 total 1416
 -rw-r--r-- 1 root root 1448528 2026-11-25 12:09 arm64-v8a.so

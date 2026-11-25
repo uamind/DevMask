@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! module.prop 解析（GET /api/v1/status 的 module 块）。
 
@@ -21,7 +21,7 @@ pub struct ModuleInfo {
 }
 
 /// module.prop 缺失或损坏时的 id。
-pub const FALLBACK_ID: &str = "device_faker";
+pub const FALLBACK_ID: &str = "devmask";
 /// module.prop 缺失或损坏时的版本。
 pub const UNKNOWN_VERSION: &str = "unknown";
 
@@ -76,10 +76,9 @@ mod tests {
 
     #[test]
     fn parses_real_module_prop() {
-        let text =
-            "id=device_faker\nname=Device Faker\nversion=v1.7.0\nversionCode=20261109\nauthor=x\n";
+        let text = "id=devmask\nname=DevMask\nversion=v1.7.0\nversionCode=20261109\nauthor=x\n";
         let info = parse(text);
-        assert_eq!(info.id, "device_faker");
+        assert_eq!(info.id, "devmask");
         assert_eq!(info.version, "v1.7.0");
         assert_eq!(info.version_code, 20261109);
     }

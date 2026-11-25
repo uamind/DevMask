@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 批量下发 runner：逐设备 revision → 模板 → bind → restart，结果持久化。
 
@@ -1102,7 +1102,7 @@ async fn execute_egress_device(
                         started,
                         "failed",
                         "device_token_invalid",
-                        "设备 Token 解密失败（manager.key 可能已变更，需要重新登记设备的 Token）",
+                        "设备 Token 解密失败（devmask-manager.key 可能已变更，需要重新登记设备的 Token）",
                         json!({ "deviceId": device_id, "op": "decrypt" }),
                         steps.clone(),
                         warnings.clone(),
@@ -1195,7 +1195,7 @@ async fn execute_egress_device(
                 tracing::error!(
                     error = %error.message(),
                     device_id,
-                    "代理凭据解密失败（manager.key 可能已变更）"
+                    "代理凭据解密失败（devmask-manager.key 可能已变更）"
                 );
             } else {
                 tracing::error!(error = %error.message(), device_id, "组装期望出口状态失败");
@@ -1682,7 +1682,7 @@ async fn build_desired_egress(
 
 /// 组装期望态的错误：解密失败必须给出独立结果码，不能混成 device_error。
 enum DesiredError {
-    /// 代理凭据解密失败（manager.key 变更 / 密文损坏）。
+    /// 代理凭据解密失败（devmask-manager.key 变更 / 密文损坏）。
     Decrypt(String),
     /// 读取绑定 / 代理定义失败。
     Db(String),
@@ -1699,7 +1699,7 @@ impl DesiredError {
     fn message(&self) -> String {
         match self {
             Self::Decrypt(detail) => {
-                format!("代理凭据解密失败（manager.key 可能已变更）：{detail}")
+                format!("代理凭据解密失败（devmask-manager.key 可能已变更）：{detail}")
             }
             Self::Db(_) => "读取代理绑定 / 定义失败".to_string(),
         }
@@ -1711,7 +1711,7 @@ impl DesiredError {
                 "deviceId": device_id,
                 "op": "decrypt",
                 "reason": "credential_decrypt_failed",
-                "message": "代理凭据解密失败（manager.key 可能已变更）",
+                "message": "代理凭据解密失败（devmask-manager.key 可能已变更）",
                 "detail": detail,
             }),
             Self::Db(detail) => json!({

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 
 import os
 import shutil
@@ -123,7 +123,7 @@ def compress_with_upx(upx_exe_path):
     print("使用UPX压缩二进制文件...")
     try:
         binary_path = os.path.join(
-            SCRIPT_DIR, "target", "aarch64-linux-android", "release", "device_faker_cli"
+            SCRIPT_DIR, "target", "aarch64-linux-android", "release", "devmask_cli"
         )
         subprocess.run([upx_exe_path, binary_path], check=True)
         print("UPX压缩完成")
@@ -139,7 +139,7 @@ def copy_binary_to_output():
     print("将构建的二进制文件复制到module文件夹...")
     try:
         workspace_root = os.path.dirname(SCRIPT_DIR)
-        binary_name = "device_faker_cli"
+        binary_name = "devmask_cli"
         source_path = os.path.join(
             SCRIPT_DIR, "target", "aarch64-linux-android", "release", binary_name
         )
@@ -166,7 +166,7 @@ def copy_binary_to_output():
 
 
 def main():
-    print("Device Faker CLI 构建脚本 (仅64位)")
+    print("DevMask CLI 构建脚本 (仅64位)")
     print("=" * 50)
 
     cfg = load_build_config()
@@ -183,7 +183,7 @@ def main():
     print("\n" + "=" * 50)
     print("✅ 构建完成！")
     print("CLI工具文件位于 ../module/bin/ 目录")
-    print("✓ 二进制文件: ../module/bin/device_faker_cli")
+    print("✓ 二进制文件: ../module/bin/devmask_cli")
     print("\n请将 module/ 目录打包为 ZIP 文件后通过root管理器安装")
     print("=" * 50)
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 // 开发环境的模拟数据
 export const mockConfig = `
@@ -29,8 +29,8 @@ fingerprint = "Xiaomi/2509FPN0BC/Xiaomi15Pro:14/UP1A.231005.007/V816.0.3.0.VNBCN
 `
 
 export const mockModuleProp = `
-id=device_faker
-name=Device Faker
+id=devmask
+name=DevMask
 version=1.0.0
 versionCode=100
 author=酷安@瓦力喀/GitHub@Seyud

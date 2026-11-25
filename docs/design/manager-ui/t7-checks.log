@@ -2,9 +2,9 @@
 ## cargo fmt --check
 EXIT=0
 
-## cargo test -p device_faker_manager
+## cargo test -p devmask_manager
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-ef33d6ec8213c0d5)
+     Running unittests src/lib.rs (target/debug/deps/devmask_manager-ef33d6ec8213c0d5)
 
 running 53 tests
 test api::job_dto::tests::accepted_response_exposes_queued ... ok
@@ -63,7 +63,7 @@ test static_files::tests::resolves_first_candidate_with_index ... ok
 
 test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_manager-beeebe0a9f880f2c)
+     Running unittests src/main.rs (target/debug/deps/devmask_manager-beeebe0a9f880f2c)
 
 running 0 tests
 
@@ -151,7 +151,7 @@ test jobs_list_supports_pagination_and_filters ... ok
 
 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
 
-   Doc-tests device_faker_manager
+   Doc-tests devmask_manager
 
 running 0 tests
 
@@ -164,7 +164,7 @@ EXIT=0
 
 ## npm run build
 
-> device-faker-manager-webui@0.1.0 build
+> devmask-manager-webui@0.1.0 build
 > vite build
 
 vite v8.3.8 building client environment for production...
@@ -203,5 +203,5 @@ v26.13.1
 11.20.0
 
 ## manager still healthy after checks
-{"status":"ok","version":"0.1.0","apiVersion":"v1","uptimeSec":150,"startedAt":"2026-11-24T10:04:03Z","db":{"status":"ok","schemaVersion":1,"path":"manager.db"},"devices":{"total":2,"online":2,"offline":0},"jobs":{"queued":0,"running":0}}
+{"status":"ok","version":"0.1.0","apiVersion":"v1","uptimeSec":150,"startedAt":"2026-11-24T10:04:03Z","db":{"status":"ok","schemaVersion":1,"path":"devmask-manager.db"},"devices":{"total":2,"online":2,"offline":0},"jobs":{"queued":0,"running":0}}
 HTTP 200

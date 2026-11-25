@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // Manager Relay API 客户端（API v1）。契约：manager/docs/API.md。
 // - baseUrl 默认同源 /relay/api/v1，可用 VITE_API_BASE 覆盖
-// - Manager Token 存 localStorage.dfm_token；首个请求 401 时抛 AuthError，由 App.vue 弹 Token 对话框
+// - Manager Token 存 localStorage.dm_token；首个请求 401 时抛 AuthError，由 App.vue 弹 Token 对话框
 // - 非 2xx 统一解析错误信封并抛 ApiError（带 status / code / requestId）
 // - 只有 GET 的 retryable 错误会退避重试（250ms / 500ms / 1000ms），写请求不自动重放
 // - 出口代理 egress 契约见 docs/plans/egress-contract.md §6；egress revision 只读
-//   X-DF-Egress-Revision（或响应体 revision），绝不读 X-DF-Revision / ETag 覆盖 config revision
+//   X-DM-Egress-Revision（或响应体 revision），绝不读 X-DM-Revision / ETag 覆盖 config revision
 
 import type {
   AddDeviceRequest,
@@ -61,7 +61,7 @@ import type {
 export const DEFAULT_API_BASE = '/relay/api/v1'
 
 /** Manager Token 在 localStorage 中的键（API.md §2.5）。 */
-export const TOKEN_STORAGE_KEY = 'dfm_token'
+export const TOKEN_STORAGE_KEY = 'dm_token'
 
 /** 内置默认 Token：仅用于初始化输入框，不写入页面 HTML（API.md §2.5）。 */
 export const DEFAULT_TOKEN = 'admin123'
@@ -172,13 +172,13 @@ export function newIdempotencyKey(): string {
 /**
  * egress revision 的唯一响应头来源（docs/plans/egress-contract.md §1.2）。
  *
- * 硬约束：egress 端点**只**认 `X-DF-Egress-Revision`（或响应体里的 `revision`），
- * 绝不读 `X-DF-Revision` / `ETag`。那两个属于 config revision，一旦用 egress 的
+ * 硬约束：egress 端点**只**认 `X-DM-Egress-Revision`（或响应体里的 `revision`），
+ * 绝不读 `X-DM-Revision` / `ETag`。那两个属于 config revision，一旦用 egress 的
  * 值覆盖 WebUI 侧缓存的 config revision，后续 PUT /config 的 If-Match 必然 412。
  */
-export const EGRESS_REVISION_HEADER = 'X-DF-Egress-Revision'
+export const EGRESS_REVISION_HEADER = 'X-DM-Egress-Revision'
 
-/** 每台设备的 egress revision（来自 X-DF-Egress-Revision 或响应体），与 config revision 完全隔离。 */
+/** 每台设备的 egress revision（来自 X-DM-Egress-Revision 或响应体），与 config revision 完全隔离。 */
 const egressRevisions = new Map<string, string>()
 
 /** 读某台设备最近一次 egress revision；未知返回 null。 */
@@ -257,8 +257,8 @@ interface RequestOptions {
   /** GET 默认允许对 retryable 错误退避重试。 */
   retry?: boolean
   /**
-   * 采集 egress revision 用的设备 id：成功响应里只读 `X-DF-Egress-Revision`，
-   * 不碰 `X-DF-Revision` / `ETag`（见 EGRESS_REVISION_HEADER 的说明）。
+   * 采集 egress revision 用的设备 id：成功响应里只读 `X-DM-Egress-Revision`，
+   * 不碰 `X-DM-Revision` / `ETag`（见 EGRESS_REVISION_HEADER 的说明）。
    */
   egressRevisionKey?: string
 }
@@ -544,7 +544,7 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
 
     getDeviceEgress: (id: DeviceId) =>
       send<DeviceEgressResponse>(`/devices/${encodeId(id)}/egress`, {
-        // egress revision 只从 X-DF-Egress-Revision 采集，与 config revision 无关。
+        // egress revision 只从 X-DM-Egress-Revision 采集，与 config revision 无关。
         egressRevisionKey: id,
       }),
 
@@ -564,5 +564,5 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
   }
 }
 
-/** 默认单例：Token 动态读取 localStorage.dfm_token。 */
+/** 默认单例：Token 动态读取 localStorage.dm_token。 */
 export const managerApi = createManagerClient()

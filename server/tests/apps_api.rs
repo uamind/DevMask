@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 应用端点集成测试（docs/API.md 5.15-5.19）。
 
 mod common;
 
 use axum::http::{Method, StatusCode};
-use device_faker_core::Config;
-use device_faker_server::commands::FixtureRunner;
+use devmask_core::Config;
+use devmask_server::commands::FixtureRunner;
 use serde_json::json;
 
 use common::{

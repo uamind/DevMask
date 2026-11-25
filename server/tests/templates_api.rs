@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 模板端点集成测试（docs/API.md 5.8-5.14）。
 
 mod common;
 
 use axum::http::{Method, StatusCode};
-use device_faker_core::Config;
+use devmask_core::Config;
 use serde_json::json;
 
 use common::{
@@ -21,7 +21,7 @@ async fn list_templates_keeps_order_and_fields_set() {
     let response = get_with_token(&fixture.router, "/api/v1/templates", READ_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(current_revision(&fixture).as_str())
     );
     let body = body_json(response).await;

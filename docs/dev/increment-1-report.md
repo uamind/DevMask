@@ -1,4 +1,4 @@
-# 第一增量集成验收报告（device_faker_server / WebUI 原生模式）
+# 第一增量集成验收报告（devmask_server / WebUI 原生模式）
 
 - 日期：2026-11-24
 - 范围：`docs/dev/server-api-plan.md` 第一增量（P0/P1/P2 核心），不含 MCP 与 P3/P4
@@ -15,8 +15,8 @@
 
 | # | 验收项 | 结果 | 关键证据 |
 | --- | --- | --- | --- |
-| 1 | core 单测 | PASS | `cargo test -p device_faker_core` exit 0，**51 passed / 0 failed** |
-| 2 | server 单测 | PASS | `cargo test -p device_faker_server` exit 0，**166 passed / 0 failed** |
+| 1 | core 单测 | PASS | `cargo test -p devmask_core` exit 0，**51 passed / 0 failed** |
+| 2 | server 单测 | PASS | `cargo test -p devmask_server` exit 0，**166 passed / 0 failed** |
 | 3 | xtask 单测 | PASS | `cargo test -p xtask` exit 0，**3 passed / 0 failed** |
 | 4 | WebUI 构建 | PASS | `python3 webui/build_webui.py` exit 0（npm ci + type-check + lint + vite build） |
 | 4b | 测试基线自检 | PASS | `bash tests/check.sh` exit 0，12 项检查 0 失败（bash -n / py_compile / fixture / shim / mock e2e） |
@@ -37,16 +37,16 @@
 
 命令与退出码：
 
-    cargo test -p device_faker_core     # exit 0
-    cargo test -p device_faker_server   # exit 0
+    cargo test -p devmask_core     # exit 0
+    cargo test -p devmask_server   # exit 0
     cargo test -p xtask                 # exit 0
 
 汇总（各测试二进制相加）：
 
 | 包 | passed | failed |
 | --- | ---: | ---: |
-| device_faker_core | 51 | 0 |
-| device_faker_server | 166 | 0 |
+| devmask_core | 51 | 0 |
+| devmask_server | 166 | 0 |
 | xtask | 3 | 0 |
 
 server 侧覆盖了 23 个 operation 的契约测试（t4 输出），本报告不重复其内部用例清单。
@@ -71,12 +71,12 @@ server 侧覆盖了 23 个 operation 的契约测试（t4 输出），本报告�
 
 ## 4. API 冒烟（真实 host server）
 
-启动方式：`target/debug/device_faker_server` + 临时 `server.toml`（单 Token）+ `tests/fixtures/config/minimal.toml`。
+启动方式：`target/debug/devmask_server` + 临时 `server.toml`（单 Token）+ `tests/fixtures/config/minimal.toml`。
 
     BASE=http://127.0.0.1:18880/api/v1 TOKEN=<token> bash tests/api/smoke.sh       # exit 0
     BASE=http://127.0.0.1:18880/api/v1 TOKEN=<token> bash tests/api/concurrency.sh # exit 0
 
-覆盖：healthz / status / config / config.revision / templates CRUD / apps（绑定模板 + 内联 + explain=`GET /apps/{pkg}`）/ packages / 404 错误信封；所有写响应校验 `revision`、`previousRevision`、`X-DF-Revision` 与带引号 `ETag`。
+覆盖：healthz / status / config / config.revision / templates CRUD / apps（绑定模板 + 内联 + explain=`GET /apps/{pkg}`）/ packages / 404 错误信封；所有写响应校验 `revision`、`previousRevision`、`X-DM-Revision` 与带引号 `ETag`。
 
 > 本轮修正测试基线 bug：smoke 的测试包名原为 `com.devicefaker.smoke.<pid>`，包名段以数字开头不是合法 Java 标识符，真实 server 返回 422 `invalid_package`。已改为 `com.devicefaker.smoke.p<pid>`，同步收紧 `tests/api/mock_server.py` 的包名正则（每段以字母/下划线/$ 开头，userId ≤ 3 位）。改动仅在 `tests/**`。
 
@@ -113,13 +113,13 @@ host 与真机各跑一遍：
 
     cargo run -p xtask -- build -r    # exit 0
 
-产物：`output/device_faker-(release).zip`，**74 entries**（含目录条目），2.80 MB。
+产物：`output/devmask-(release).zip`，**74 entries**（含目录条目），2.80 MB。
 
 已核对的条目与权限：
 
 | 条目 | mode | 结果 |
 | --- | --- | --- |
-| `bin/device_faker_server` | `-rwxr-xr-x` (0755) | PASS，3,682,512 bytes |
+| `bin/devmask_server` | `-rwxr-xr-x` (0755) | PASS，3,682,512 bytes |
 | `service.sh` | 0755 | PASS |
 | `customize.sh` | 0755 | PASS |
 | `uninstall.sh` | 0755 | PASS |
@@ -130,14 +130,14 @@ host 与真机各跑一遍：
 
     python3 pack_module.py    # exit 0
 
-产物：`output/device_faker_20261124_122311.zip`，**66 entries**（不含目录条目），2.48 MB；权限与 xtask 一致：
+产物：`output/devmask_20261124_122311.zip`，**66 entries**（不含目录条目），2.48 MB；权限与 xtask 一致：
 
     -rwxr-xr-x customize.sh
     -rw-r--r-- server.default.toml
     -rwxr-xr-x service.sh
     -rwxr-xr-x uninstall.sh
     -rw-r--r-- webroot/index.html
-    -rwxr-xr-x bin/device_faker_server
+    -rwxr-xr-x bin/devmask_server
 
 两个 zip 的差异仅为目录条目（xtask 写入、pack_module 不写），文件集合一致。
 
@@ -147,14 +147,14 @@ host 与真机各跑一遍：
 
 ### 7.1 部署与启动
 
-- `adb push target/aarch64-linux-android/release/device_faker_server /data/local/tmp/df-t9/bin/`，`chmod 755`；
+- `adb push target/aarch64-linux-android/release/devmask_server /data/local/tmp/df-t9/bin/`，`chmod 755`；
 - `module/webroot`（56 文件）与 `module.prop` 推到 `/data/local/tmp/df-t9/`；
-- 临时 `server.toml`：bind `127.0.0.1:18879`、config 指向**真实** `/data/adb/device_faker/config/config.toml`、backup/audit 指向 `/data/local/tmp/df-t9`；
+- 临时 `server.toml`：bind `127.0.0.1:18879`、config 指向**真实** `/data/adb/devmask/config/config.toml`、backup/audit 指向 `/data/local/tmp/df-t9`；
 - 以 `su -c` 启动，`adb forward tcp:18878 tcp:18879`。
 
 服务首次启动输出（stdout 重定向到 server.log）：
 
-    [device-faker-server] initial token = df_i8Ge...
+    [devmask-server] initial token = df_i8Ge...
 
 说明：loopback + 空 token 表时自动生成 Token、只写 sha256、明文仅打印一次，与文档一致。
 
@@ -173,7 +173,7 @@ host 与真机各跑一遍：
 - 配置 mtime 变化：`1793793738 → 1795494229`；
 - 每次写入在临时 backup_dir 生成备份（9 份），未污染真实备份目录；
 - 测试后从 `config.toml.bak` 恢复：sha256 `f9f80df8af73...`、size 9361、mtime 1793793738，与基线一致；
-- 结束后设备上无 `device_faker_server` 进程、无 18878/18879/18882 监听。
+- 结束后设备上无 `devmask_server` 进程、无 18878/18879/18882 监听。
 
 ### 7.3 service.sh
 
@@ -198,7 +198,7 @@ host 与真机各跑一遍：
 
 | 用例 | 结果 | 证据 |
 | --- | --- | --- |
-| 401 → 登录框 | PASS | 首次打开弹出 “Sign in to device_faker”，输入 Token 后 `sessionStorage.device_faker_api_token` 写入 |
+| 401 → 登录框 | PASS | 首次打开弹出 “Sign in to devmask”，输入 Token 后 `sessionStorage.devmask_api_token` 写入 |
 | 登录后加载 | PASS | Pinia store：moduleVersion=v1.7.0，templates=[pixel_9]，apps=1；网络记录 `/status`、`/config?format=toml`、`/packages?limit=500` 均 200 |
 | 保存（次存） | PASS | saveConfig() 后 revision `b4f73d43… → 88c4d454…`，无错误 |
 | 412 | PASS | 外部 PUT 改 revision 后再保存：错误 “Config was modified by another client; revision refreshed, please retry（request ID: req_ooZ_…）”；再次保存成功 |
@@ -231,9 +231,9 @@ host 与真机各跑一遍：
 | 重复包名模板写 → 409 | PASS（`conflict_duplicate_package`） |
 | 语义错误 → 422 | PASS（重复 `[[apps]]`、非法包名） |
 | 缺配置 → mtime=null / size=0 / exists=false | PASS |
-| 注释保留 | PASS：host smoke 后 fixture 的注释行仍在（`# Device Faker 最小可用配置 fixture`） |
+| 注释保留 | PASS：host smoke 后 fixture 的注释行仍在（`# DevMask 最小可用配置 fixture`） |
 | 审计 | PASS：`/tmp/df-t9-ui/audit.jsonl` 10 行，字段含 revisionBefore/After、tokenId、durationMs；`remote:null` 为当前实现 |
-| 静态托管 | PASS：真机 `GET /` 200 且包含 `Device Faker`；host 同样 |
+| 静态托管 | PASS：真机 `GET /` 200 且包含 `DevMask`；host 同样 |
 
 ---
 
@@ -262,7 +262,7 @@ host 与真机各跑一遍：
 | --- | --- | --- |
 | 429 限流未实现；鉴权失败 10 次/分钟封禁未实现；请求超时未强制 | 高频写入/暴力猜 Token 无服务端保护；客户端 429 分支为防御性代码 | server-dev，P4 加中间件；已在 API.md §1.2/§2.9 标注 |
 | WebUI 409 确认分支无法经 `PUT /config` 触发（整份配置允许重复包名） | 409 UX 在当前 server 上不可达；模板/Packages 端点仍会 409 | api-architect + webui-dev 下一增量决定：整份配置是否也做重复包名校验，或删除该 UI 分支 |
-| service.sh 不支持 `RUNTIME_DIR` 环境变量覆盖 | 冒烟需复制脚本并 sed（本轮做法）；真机安装不受影响 | infra-dev，可加一行 `RUNTIME_DIR=${RUNTIME_DIR:-/data/adb/device_faker}`（下一增量） |
+| service.sh 不支持 `RUNTIME_DIR` 环境变量覆盖 | 冒烟需复制脚本并 sed（本轮做法）；真机安装不受影响 | infra-dev，可加一行 `RUNTIME_DIR=${RUNTIME_DIR:-/data/adb/devmask}`（下一增量） |
 | 构建强依赖 `ANDROID_NDK_HOME` | 未设置时 xtask 直接失败（本轮已复现） | infra-dev：文档已补；可在 xtask 里探测常见路径，失败信息指向 SERVER.md |
 | Magisk 矩阵 / Android 12/14 / 断电重启 / 24h 稳定性未跑 | 兼容性结论仅 KernelSU + Android 17 | qa/infra，下一增量按测试矩阵补 |
 | 审计 `remote` 恒为 null | 审计少来源 IP | server-dev，接入 `ConnectInfo` 后补 |
@@ -287,7 +287,7 @@ host 与真机各跑一遍：
 ## 13. 复现命令速查
 
     # 单测
-    cargo test -p device_faker_core && cargo test -p device_faker_server && cargo test -p xtask
+    cargo test -p devmask_core && cargo test -p devmask_server && cargo test -p xtask
 
     # WebUI
     python3 webui/build_webui.py
@@ -307,7 +307,7 @@ host 与真机各跑一遍：
     PORT=18878 REMOTE_PORT=18879 TOKEN=<token> bash tests/device/smoke.sh
 
     # 恢复真机配置（本轮）
-    adb shell 'su -c "cp -p /data/local/tmp/df-t9/config.toml.bak /data/adb/device_faker/config/config.toml"'
+    adb shell 'su -c "cp -p /data/local/tmp/df-t9/config.toml.bak /data/adb/devmask/config/config.toml"'
 
 ---
 

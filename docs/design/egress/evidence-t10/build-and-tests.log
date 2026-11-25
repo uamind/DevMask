@@ -1,10 +1,10 @@
-=== cargo build -p device_faker_manager ===
-   Compiling device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+=== cargo build -p devmask_manager ===
+   Compiling devmask_manager v0.2.0 (/Users/crymang/Works/devmask/manager)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.27s
 BUILD_EXIT=0
--rwxr-xr-x 1 crymang staff 47685816 Nov 24 22:46 target/debug/device_faker_manager
+-rwxr-xr-x 1 crymang staff 47685816 Nov 24 22:46 target/debug/devmask_manager
 
-=== cargo test -p device_faker_manager ===
+=== cargo test -p devmask_manager ===
 running 15 tests
 test low_proxy_preserves_encoded_question_mark_as_path ... ok
 test r3_concurrent_idempotency_keys_share_one_job ... ok
@@ -24,7 +24,7 @@ test r6_oversized_device_reads_are_rejected ... ok
 
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
 
-   Doc-tests device_faker_manager
+   Doc-tests devmask_manager
 
 running 0 tests
 

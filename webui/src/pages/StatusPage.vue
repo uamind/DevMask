@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -58,14 +58,14 @@
               <Transition name="status-swap">
                 <span
                   v-if="configReady"
-                  key="device-faker-count"
+                  key="devmask-count"
                   class="status-value status-value--resolved"
                 >
                   {{ deviceFakerCountDisplay }}
                 </span>
                 <span
                   v-else
-                  key="device-faker-count-skeleton"
+                  key="devmask-count-skeleton"
                   class="status-value-skeleton status-value-skeleton--short"
                 ></span>
               </Transition>

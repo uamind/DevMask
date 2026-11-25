@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 配置端点集成测试：GET/PUT /config、/config/revision、/config/validate、/schema/config。
 
 mod common;
 
 use axum::http::{Method, StatusCode};
-use device_faker_core::Config;
+use devmask_core::Config;
 use serde_json::{Value, json};
 
-use device_faker_server::commands::FixtureRunner;
+use devmask_server::commands::FixtureRunner;
 
 use common::{
     ADMIN_TOKEN, READ_TOKEN, assert_error_envelope, body_json, body_text, current_revision,
@@ -32,7 +32,7 @@ async fn get_config_returns_document_and_headers() {
             .starts_with("application/json")
     );
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(revision.as_str())
     );
     assert_eq!(
@@ -68,7 +68,7 @@ async fn get_config_toml_returns_raw_text_with_comments() {
         Some("text/plain; charset=utf-8")
     );
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(current_revision(&fixture).as_str())
     );
     let text = body_text(response).await;
@@ -81,7 +81,7 @@ async fn missing_config_reports_exists_false_and_null_mtime() {
     let fixture = fixture_with_config(None);
     let response = get_with_token(&fixture.router, "/api/v1/config", ADMIN_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(header(response.headers(), "x-df-revision"), Some(EMPTY_SHA));
+    assert_eq!(header(response.headers(), "x-dm-revision"), Some(EMPTY_SHA));
     let body = body_json(response).await;
     assert_eq!(body["exists"], false);
     assert_eq!(body["mtime"], serde_json::Value::Null);
@@ -195,7 +195,7 @@ async fn put_config_replaces_document_and_creates_backup() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    let new_revision = header(response.headers(), "x-df-revision")
+    let new_revision = header(response.headers(), "x-dm-revision")
         .expect("revision header")
         .to_owned();
     assert_ne!(new_revision, revision);
@@ -503,7 +503,7 @@ async fn schema_config_is_core_generated_draft07() {
     let response = get_with_token(&fixture.router, "/api/v1/schema/config", READ_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
     let body = body_json(response).await;
-    let expected = serde_json::to_value(device_faker_core::schema::config_schema()).unwrap();
+    let expected = serde_json::to_value(devmask_core::schema::config_schema()).unwrap();
     assert_eq!(body, expected, "必须原样返回 core 的 schema");
     assert_eq!(body["$schema"], "http://json-schema.org/draft-07/schema#");
     assert!(body.get("definitions").is_some());

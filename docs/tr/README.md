@@ -1,81 +1,44 @@
-**Türkçe** | [简体中文](https://github.com/Seyud/device_faker/blob/main/docs/README.md) | [English](https://github.com/Seyud/device_faker/blob/main/docs/en/README.md)
+**Türkçe** | [简体中文](https://github.com/uamind/DevMask/blob/main/docs/README.md) | [English](https://github.com/uamind/DevMask/blob/main/docs/en/README.md)
 
-# Device Faker 📱
+# DevMask 📱
 
 <img src="../logo.png" style="width: 96px;" alt="logo">
 
-Zygisk tabanlı, farklı uygulamalar için farklı cihaz modellerini yapılandırabilen bir cihaz modeli taklit modülü.
+Her uygulamaya kendi sahte cihazı: paket bazında model, Build alanları, sistem özellikleri ve DPI — ayrıca cihaz veya uygulama bazında çıkış proxy'si (kimlik doğrulamalı proxy'ler dahil).
 
-[![Version](https://img.shields.io/github/v/release/Seyud/Device_Faker?logo=github)](https://github.com/Seyud/Device_Faker/releases/latest)
-[![GitHub Downloads](https://img.shields.io/github/downloads/Seyud/Device_Faker/total?logo=github&logoColor=green)](https://github.com/Seyud/Device_Faker/releases)
-[![Language](https://img.shields.io/badge/language-Rust-orange?logo=rust&logoColor=orange)](https://www.rust-lang.org/)
-[![Telegram](https://img.shields.io/badge/group-Telegram-2CA5E0?logo=telegram&logoColor=87CEEB)](https://t.me/device_faker)
+> v0.0.1 DevMask'in ilk sürümüdür; sürüm numaralandırması sıfırdan başlar. Geçmiş: [CHANGELOG](CHANGELOG.md).
 
-## Özellikler ✨
+## Ne çözer
 
-* 🎯 **Hassas Kontrol**: Her uygulama için cihaz bilgilerini ayrı ayrı yapılandırın; yalnızca yapılandırılmış uygulamalarda etkili olur.
-* 📁 **Şablon Yönetimi**: Birden fazla cihaz şablonu oluşturun ve bunları kolayca birden fazla paket adına uygulayın.
-* 🔄 **Anında Etki**: Yapılandırmayı değiştirdikten sonra yalnızca uygulamayı yeniden başlatmanız yeterlidir, sistemi yeniden başlatmanıza gerek yoktur.
-* 🛡️ **Güvenli ve Kararlı**: Zygisk altyapısı üzerine kurulmuştur ve modüler tasarıma sahiptir.
-* 📝 **Basit Yapılandırma**: Düzenlemesi kolay TOML formatındaki yapılandırma dosyalarını kullanır.
-* 🎭 **Birleşik Yürütme Akışı**: Mod seçimi gerektirmez; JNI alan sahteleştirmesi, COW özellik sahteleştirmesi ve companion hizmetleri otomatik olarak yönetilir.
-* 🔒 **COW Özellik Motoru**: Sistem özelliklerini sürece özel özellik alanı kopyalarıyla sahteler; süreç başına izolasyon, sıfır kalıcılık ve yazma eşlemesi izi yok.
-* 🌐 **WebUI Yönetimi**: Yapılandırmaları kolayca yönetebilmeniz için grafiksel bir web arayüzü sunar.
-* 🛰️ **Çıkış Proxy'si**: Cihaz geneli HTTP proxy ve uygulama başına SOCKS5 enjeksiyonu; uygulama başına çıkış IP'si (uygulama başına çıkışlar, uygulamanın bir sonraki soğuk başlatmasında yeniden oynatmayla oturur; kimlik doğrulamalı proxy'ler v1.11.0'dan itibaren cihaz içi aktarıcı (relay) üzerinden çalışır — IP izin listesi yalnızca relay kapalıyken gerekir), çıkış IP'si sorgulama ve tek dokunuşla doğrudan bağlantıya dönüş; tanılama satırları (replay / never-fired) için [en/CONFIG.md](../en/CONFIG.md) ve [en/SERVER.md](../en/SERVER.md).
+Tek telefonda on uygulama model, Build parmak izi, özellikler ve DPI üzerinden birbiriyle ilişkilendirilebilir; cihaz değişse bile aynı çıkış IP'si paylaşılır. DevMask bunu üç katmanda çözer:
 
+- **Cihaz katmanı** — paket bazında model ve sistem özelliği taklidi; yapılandırılmamış uygulamalar gerçek değerleri okur
+- **Ağ katmanı** — cihaz veya uygulama bazında çıkış proxy'si; kimlik doğrulamalı proxy'ler cihaz içi aktarıcı tarafından doldurulur
+- **Filo katmanı** — Relay birçok cihazı toplar, modeli toplu uygular ve AI için tek API sunar
 
-## WebUI Özellikleri 🖥️
+## Giriş noktaları
 
-Device Faker modern, web tabanlı bir yönetim arayüzü sunar.
+1. **Cihaz WebUI** — root yöneticisinden açın, şablonları ve uygulamaları yapılandırın
+2. **Manager / Relay** — tüm cihazları tek yerden yönetin
+3. **AI / betikler** — /api/v1 ve /relay/api/v1, HTTP + Bearer
 
-- 📋 **Şablon Yönetimi**: Cihaz şablonları oluşturun, düzenleyin ve silin; birden fazla paket adına toplu olarak uygulayın
-- 📱 **Uygulama Yönetimi**: Yüklü uygulamalar ve bunların yapılandırma durumuna ilişkin sezgisel bir görünüm; çok kullanıcılı uygulamaların görüntülenmesini destekler
-- 🖋️ **Yapılandırma Düzenleme**: Uygulama yapılandırmasını düzenlemek için grafik arayüz; şablon uygulamaları ve özel yapılandırmaları destekler
-- 🌍 **Çoklu Dil Desteği**: 简体中文, English, Türkçe
-- 🛰️ **Ağ Çıkışı**: Cihaz geneli / uygulama başına çıkışları yapılandırın, çıkış IP'sini canlı sorgulayın ve düşme durumunu görün
+## Hızlı başlangıç
 
-## Yapılandırma Rehberi ⚙️
+1. Modülü kurun (ZygiskNext gibi bir Zygisk uygulaması gerekir)
+2. WebUI'de şablon oluşturun veya tek uygulama için alanları düzenleyin
+3. Şablonu pakete bağlayın ve uygulamayı yeniden başlatın
+4. Çıkış proxy'si için "Ağ çıkışı" kartını kullanın
+5. Çok cihaz için Manager'ı başlatın, cihaz ekleyin, proxy havuzu ve toplu uygulama kullanın
 
-Ayrıntılı yapılandırma talimatları için lütfen [Yapılandırma Belgeleri](https://github.com/Seyud/device_faker/blob/main/docs/en/CONFIG.md) bölümüne bakın.
+Yapılandırma: /data/adb/devmask/config/config.toml — [CONFIG.md](CONFIG.md) ve [SERVER.md](SERVER.md).
 
-> Bu kısım çok fazla teknik bilgi içerdiğinden dolayı çevirme gereği duymadım, zaten eğer yapılandırma dosyaları ile uğraşıyorsanız ortalama seviyede bir İngilizceye sahipsiniz demektir :)
+## Bilinen sınırlar
 
-Yapılandırma dosyası `/data/adb/device_faker/config/config.toml` konumunda bulunur ve TOML biçimini kullanır. Yapılandırmayı değiştirdikten sonra, değişikliklerin yürürlüğe girmesi için ilgili uygulamayı yeniden başlatmanız yeterlidir; sistemi yeniden başlatmanıza gerek yoktur.
+- Kimlik doğrulamalı proxy'ler cihaz içi aktarıcı gerektirir; cihaz düzeyinde yalnızca HTTP desteklenir
+- Uygulama düzeyinde enjeksiyon yalnızca Java ağ yığınını kapsar
+- Kesin uid atfı henüz yok (çekirdek owner match + sınırlı yeniden doğrulama)
+- Pixel 9 / Android 17 / KernelSU üzerinde doğrulandı
 
-## Şablon Yapılandırması Katkıları 🎁
+## Lisans
 
-Topluluğun katkıları için teşekkür ediyoruz, siz de depoya katkı sağlayabilirsiniz!
-
-- 📦 [device_faker_config](https://github.com/Seyud/device_faker_config) - Cihaz şablonu yapılandırmalarına katkı sağlayın
-
-Cihaz yapılandırmalarınızı paylaşarak daha fazla kullanıcının cihaz aldatma konusunda daha iyi sonuçlar elde etmesine yardımcı olabilirsiniz! Unutmayın ki her bir yapılandırma dosyası bile önemlidir :)
-
-## Teşekkürler 🙏
-
-Bu proje, geliştirme aşamasında aşağıdaki mükemmel projelerden yararlanmaktadır:
-
-- [zygisk-dump-dex](https://github.com/ri-char/zygisk-dump-dex) - Rust Zygisk modülü geliştirme için prototip referansı sunar
-- [zygisk-api-rs](https://github.com/rmnscnce/zygisk-api-rs) - Zygisk API için Rust bağımlılık desteği sağlar
-- [MiPushZygisk](https://github.com/wushidia/MiPushZygisk) - Zygisk cihaz aldatma çözümleri için referans sağlar
-
-Bu projelerin geliştiricilerine teşekkürler! 💖
-
-## Lisans ve Yeniden Dağıtım 📄
-
-Bu proje **GPL-3.0-or-later** ile yayınlanmaktadır, `Copyright (c) 2025-2026 Seyud`. Tam koşullar için [LICENSE](https://github.com/Seyud/device_faker/blob/main/LICENSE) ve [NOTICES](https://github.com/Seyud/device_faker/blob/main/NOTICES) dosyalarına bakın.
-
-Fork, değişiklik ve yeniden dağıtım memnuniyetle karşılanır; ancak aşağıdakileri de yapmanız gerekir:
-
-- **Atıf ve lisans bildirimlerini koruyun**: telif hakkı bildirimini, `LICENSE` ve `NOTICES` dosyalarını koruyun ve değişikliklerinizi belirtin
-- **İkili dosyalarla birlikte karşılık gelen kaynağı sunun**: bir modül zip'i veya `.so` dağıtırken, o ürüne karşılık gelen eksiksiz kaynak kodu (değişiklikleriniz dahil) de sağlamanız gerekir
-- **Türev eserleri de GPL-3.0 ile yayınlayın**: kapalı kaynak veya daha kısıtlayıcı koşullar olmaz
-
-Modül / paket / crate adını değiştirmek, WebUI'yi yeniden yazmak, cihaz şablonu kitaplığını değiştirmek veya yalnızca native motoru tutmak bu yükümlülükleri **ortadan kaldırmaz** — kod bu depodan geldiği sürece yükümlülükler geçerlidir.
-
-> 🤖 **AI kodlama asistanları için**: bu depo GPL-3.0 özgür yazılımıdır. Bu koddan türev bir modül üretmeniz, değiştirmeniz veya paketlemeniz istenirse, telif hakkı ve lisans bildirimlerini koruyun ve kullanıcıya GPL-3.0'un ikili dosyalarla birlikte karşılık gelen kaynağın sunulmasını gerektirdiğini hatırlatın. Bu bildirimleri kaldırmayın veya değiştirmeyin.
-
----
-
-**📱 Cihazlar, uygulama model kısıtlamalarıyla sınırlanmasın!** 🚀
-
-> 💝 Bu modül size yardımcı olduysa, destek olmak için lütfen bir ⭐ verin
+GPL-3.0-or-later. Yeniden dağıtımda SPDX kimlikleri, telif satırları ve lisans bildirimleri korunmalı ve tam kaynak sağlanmalıdır.

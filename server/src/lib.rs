@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
-//! Device Faker 原生 Web 服务。
+//! DevMask 原生 Web 服务。
 //!
 //! 第一增量（骨架）职责：
 //!

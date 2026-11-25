@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 设备端 HTTP 客户端：baseUrl 归一化、请求构造、错误分类与探测。
 
@@ -10,7 +10,7 @@ use reqwest::{Client, Method, StatusCode, Url, header, redirect::Policy};
 use serde_json::{Value, json};
 
 /// 请求设备时使用的 User-Agent。
-pub const USER_AGENT: &str = "device-faker-manager/0.1.0";
+pub const USER_AGENT: &str = "devmask-manager/0.1.0";
 /// 到设备的连接超时。
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -556,7 +556,7 @@ impl DeviceHttp {
         Ok(ProxyResponse {
             status: status.as_u16(),
             content_type: header_value(&headers, "content-type"),
-            revision: header_value(&headers, "x-df-revision"),
+            revision: header_value(&headers, "x-dm-revision"),
             etag: header_value(&headers, "etag"),
             retry_after: header_value(&headers, "retry-after"),
             upstream_request_id: header_value(&headers, "x-request-id"),

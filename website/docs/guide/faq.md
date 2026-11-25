@@ -4,7 +4,7 @@
 
 ### 安装时提示「未检测到 Zygisk 实现」
 
-Device Faker **不支持 Magisk 自带的 Zygisk**。必须先安装第三方 Zygisk 实现（推荐 **ZygiskNext**），重启后再安装本模块。
+DevMask **不支持 Magisk 自带的 Zygisk**。必须先安装第三方 Zygisk 实现（推荐 **ZygiskNext**），重启后再安装本模块。
 
 ### 支持 Magisk 自带的 Zygisk 吗？
 
@@ -14,7 +14,7 @@ Device Faker **不支持 Magisk 自带的 Zygisk**。必须先安装第三方 Zy
 
 1. 是否已安装并启用 Zygisk 实现？
 2. 安装完成后是否**重启了设备**？
-3. 配置文件路径是否正确：`/data/adb/device_faker/config/config.toml`
+3. 配置文件路径是否正确：`/data/adb/devmask/config/config.toml`
 4. 目标应用的包名是否写对？
 
 ### 更新模块后配置会丢吗？
@@ -22,7 +22,7 @@ Device Faker **不支持 Magisk 自带的 Zygisk**。必须先安装第三方 Zy
 覆盖安装时，默认会保留现有配置（除非在安装选择窗口按了音量 + 使用默认配置）。
 
 ::: warning 卸载会删除配置
-卸载模块时会执行 `rm -rf /data/adb/device_faker`，配置目录会被一并删除。需要保留配置请先手动备份。
+卸载模块时会执行 `rm -rf /data/adb/devmask`，配置目录会被一并删除。需要保留配置请先手动备份。
 :::
 
 ## 配置相关
@@ -33,7 +33,7 @@ Device Faker **不支持 Magisk 自带的 Zygisk**。必须先安装第三方 Zy
 - 检查 `config.toml` 是否有语法错误：TOML 对引号、缩进敏感，一个缺失的引号会导致整份配置解析失败
 - 检查目标应用是否命中了 `[[apps]]` 或模板的 `packages`
 
-### /data/adb/device_faker/config/config.toml 找不到
+### /data/adb/devmask/config/config.toml 找不到
 
 首次安装时如果按了音量 + 选择使用默认配置，配置路径就是上述路径。如果目录不存在，说明安装后未重启或安装被中止。
 
@@ -79,5 +79,5 @@ model = "FakeModel"
 ### 在线模板库加载失败
 
 - 检查设备网络连接
-- 模板源地址：https://github.com/Seyud/device_faker_config
+- 模板源地址：https://github.com/uamind/DevMask_config
 - 部分地区访问 GitHub 需要网络工具

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! revision / 原子写 / flock / 备份轮转回归。
 
 use std::fs;
 use std::path::Path;
 
-use device_faker_core::config::{Config, DeviceTemplate};
-use device_faker_core::edit::upsert_template;
-use device_faker_core::revision::{
+use devmask_core::config::{Config, DeviceTemplate};
+use devmask_core::edit::upsert_template;
+use devmask_core::revision::{
     BACKUP_KEEP, ConfigStore, StoreError, StoreOptions, atomic_write, format_utc_compact,
     revision_of, sha256_hex,
 };
@@ -56,7 +56,7 @@ fn atomic_write_creates_private_temp_and_final_mode() {
     let leftovers: Vec<_> = fs::read_dir(target.parent().unwrap())
         .unwrap()
         .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| name.contains("device_faker.tmp"))
+        .filter(|name| name.contains("devmask.tmp"))
         .collect();
     assert!(leftovers.is_empty(), "临时文件必须清理干净: {leftovers:?}");
 
@@ -255,7 +255,7 @@ fn concurrent_updates_do_not_lose_writes() {
     );
     assert_eq!(
         snapshot.revision,
-        device_faker_core::revision::revision_of(&snapshot.text)
+        devmask_core::revision::revision_of(&snapshot.text)
     );
     assert!(store.backups().unwrap().len() <= BACKUP_KEEP);
 }

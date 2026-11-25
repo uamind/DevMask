@@ -1,6 +1,6 @@
-# Device Faker API 测试（tests/api）
+# DevMask API 测试（tests/api）
 
-面向 device_faker_server `/api/v1` 的可重复契约测试。**契约以
+面向 devmask_server `/api/v1` 的可重复契约测试。**契约以
 [docs/API.md](../../docs/API.md) 为准**。脚本不依赖 jq，JSON 解析统一用 `python3`；
 bash 兼容 3.2（macOS 自带）与 5.x。
 
@@ -34,7 +34,7 @@ BASE=http://127.0.0.1:18686/api/v1 TOKEN=df_xxx bash tests/api/smoke.sh
 ### 2. 本机二进制（host server / 交叉编译后的本机构建）
 
 ```bash
-SERVER_BIN=target/debug/device_faker_server \
+SERVER_BIN=target/debug/devmask_server \
 SERVER_ARGS='--config /tmp/df/server.toml --static-dir module/webroot' \
 TOKEN=df_xxx \
 bash tests/api/smoke.sh
@@ -44,7 +44,7 @@ bash tests/api/smoke.sh
 `SERVER_ARGS` 会按空格拆分；需要 shell 语法（管道、重定向）时改用：
 
 ```bash
-SERVER_CMD='./target/debug/device_faker_server --config ./server.toml' TOKEN=df_xxx bash tests/api/smoke.sh
+SERVER_CMD='./target/debug/devmask_server --config ./server.toml' TOKEN=df_xxx bash tests/api/smoke.sh
 ```
 
 ### 3. 契约自测（不需要真实 server）
@@ -76,7 +76,7 @@ bash tests/check.sh --no-e2e     # 只做静态检查
 | `SERVER_BIN` | 空 | 服务不可达时启动的本机二进制 |
 | `SERVER_ARGS` | 空 | 传给 `SERVER_BIN` 的参数（按空格拆分） |
 | `SERVER_CMD` | 空 | 完全自定义启动命令（优先级高于 `SERVER_BIN`） |
-| `ASSERT_HEADERS` | `1` | 是否断言 `X-Request-Id` / `X-DF-Revision` / `ETag` |
+| `ASSERT_HEADERS` | `1` | 是否断言 `X-Request-Id` / `X-DM-Revision` / `ETag` |
 | `API_TIMEOUT` | `20` | 单请求超时（秒） |
 | `VERBOSE` | `0` | `1` = 打印每次请求的状态码 |
 | `KEEP_TMP` | `0` | `1` = 保留临时目录与 `server.log` 便于排查 |
@@ -85,8 +85,8 @@ bash tests/check.sh --no-e2e     # 只做静态检查
 ## smoke.sh 覆盖范围
 
 1. `GET /healthz` 无鉴权 200（`status=ok`）；
-2. `GET /status` 200，`module.id=device_faker`、`config.revision`；
-3. `GET /config` 200：`config` 对象、`X-DF-Revision`、带引号 `ETag`；
+2. `GET /status` 200，`module.id=devmask`、`config.revision`；
+3. `GET /config` 200：`config` 对象、`X-DM-Revision`、带引号 `ETag`；
 4. `GET /config/revision` 200：revision 与 status/config 三者一致；
 5. `GET /templates` 200：`items` 列表 + `total`（兼容 `items` / `templates` / `data.templates`）；
 6. `PUT /templates/{name}`（If-Match，201/200）→ WriteResult.revision 必须变化；
@@ -111,7 +111,7 @@ bash tests/check.sh --no-e2e     # 只做静态检查
 
     [api-test] == 2/8 status ==
     [api-test]   PASS GET /status -> HTTP 200
-    [api-test]   PASS status.module.id (module.id=device_faker)
+    [api-test]   PASS status.module.id (module.id=devmask)
     ...
     [api-test]   PASS 创建模板 (revision sha256:... -> sha256:...)
     ...
@@ -163,5 +163,5 @@ bash tests/check.sh --no-e2e     # 只做静态检查
 | 400 `confirmation_required` | DELETE 缺少 `confirm=true` |
 | 412 `config_revision_mismatch` | 有外部写入（管理器 WebUI 直写）改变了配置，重跑即可 |
 | 428 `precondition_required` | 写请求缺少 `If-Match` |
-| 缺少 `X-DF-Revision` / `ETag` | server 未实现响应头；可用 `ASSERT_HEADERS=0` 临时跳过断言定位问题 |
+| 缺少 `X-DM-Revision` / `ETag` | server 未实现响应头；可用 `ASSERT_HEADERS=0` 临时跳过断言定位问题 |
 | `GET /config` 非 JSON | server 默认返回 TOML；本测试要求 JSON（`Accept: application/json`） |

@@ -34,7 +34,7 @@ DF_CONC_NAME=$NAME
 df_test_cleanup() {
   [ -n "${DF_CONC_NAME:-}" ] || return 0
   local auth rev
-  auth=(-H 'X-DF-Test-Harness: 1' -H 'Accept: application/json')
+  auth=(-H 'X-DM-Test-Harness: 1' -H 'Accept: application/json')
   if [ -n "$TOKEN" ]; then
     auth+=(-H "Authorization: Bearer $TOKEN")
   fi

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // WebUI 展示层类型。真实数据来自 api/types.ts（API v1），这里只做视图映射：
 // - 应用名称 / 图标 / 颜色是 UI 元数据（API.md §6：package 是唯一键）

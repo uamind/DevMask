@@ -14,11 +14,11 @@
 
 ```sh
 # 1) 全量测试（本次实测 252 passed；t23 报告写 248，差额是本轮新增的 apps 数组 3 条 + 1 条）
-cargo test -p device_faker_server
+cargo test -p devmask_server
 #    lib 120 + egress_api 42 + 其余 90 => 252 passed / 0 failed
-cargo test -p device_faker_module_tests          # 30 passed（模块侧 replay 自检未破坏既有用例）
+cargo test -p devmask_module_tests          # 30 passed（模块侧 replay 自检未破坏既有用例）
 
-# 2) 评审给的复现方式（真实 device_faker_server，未改 server/src）
+# 2) 评审给的复现方式（真实 devmask_server，未改 server/src）
 python3 docs/design/egress/evidence-t24/repro-b1-h1.py
 #    场景 1：只改 probeUrl 的 dry_run；场景 2：同时改 config+egress；场景 3：轮换密码；场景 4：应用级探测失败
 #    => 24 项断言全 PASS / 0 FAIL（见 evidence-t24/repro-b1-h1.out.txt）

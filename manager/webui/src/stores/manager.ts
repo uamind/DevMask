@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // Manager store：所有数据来自 Relay /relay/api/v1（API.md §6 映射表）。
 // - load(): GET /devices + /apps + /templates + /overview + /audit?limit=20
@@ -579,7 +579,7 @@ export const useManagerStore = defineStore('manager', () => {
 
   // ---------------------------------------------------------------- egress
   // 契约：docs/plans/egress-contract.md §6。所有写操作都不带 config revision；
-  // egress revision 由 client.ts 从 X-DF-Egress-Revision 采集，互不覆盖。
+  // egress revision 由 client.ts 从 X-DM-Egress-Revision 采集，互不覆盖。
 
   async function loadEgressProxies(query?: EgressProxyQuery): Promise<void> {
     if (query) egressQueryState.value = query

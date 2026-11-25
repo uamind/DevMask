@@ -1,12 +1,12 @@
 # 带认证中继（Relay）契约冻结
 
 > 文档版本：**relay contract v1.2**（relay 增量冻结；v1.1 = 按 [relay-review-memo.md](relay-review-memo.md) R1–R11 修订，v1.2 = 按 memo §5/§6 R12–R16 修订）
-> 状态：**冻结**。本文件是设备端 `device_faker_server` relay 模块、Zygisk 注入改造、双侧 WebUI 与验收脚本的唯一口径；与实现冲突时**按本文件判缺陷**。
+> 状态：**冻结**。本文件是设备端 `devmask_server` relay 模块、Zygisk 注入改造、双侧 WebUI 与验收脚本的唯一口径；与实现冲突时**按本文件判缺陷**。
 > 日期：2026-11-25（v1.1 修订：2026-12-01；v1.2 修订：2026-12-02）
 > 上游依据：[authenticated-proxy-plan.md](authenticated-proxy-plan.md)（需求与六条已定默认值）、[relay-review-memo.md](relay-review-memo.md)（R1–R11 评审预审记录）、[egress-contract.md](egress-contract.md)（egress contract v1.2，既有契约）、[../API.md](../API.md) §5.25 / §6.6 / §7 / §9、[../CONFIG.md](../CONFIG.md)「网络出口（egress）」、[../SERVER.md](../SERVER.md) §10
 > 实现落点：`server/src/relay/`（新增）、`server/src/api/egress.rs`（扩）、`server/src/egress/`（扩）、`src/egress.rs` + `src/spec.rs`（companion 侧）、`module/uninstall.sh`
 > 交互边界：**本文件不引入实现代码**；`iptables` / `curl` / `adb` 命令是契约文本的一部分，验收必须逐条可执行
-> 许可：GPL-3.0-or-later，`Copyright (c) 2025-2026 Seyud`，`Device Faker: https://github.com/Seyud/device_faker`
+> 许可：GPL-3.0-or-later，`Copyright (c) 2025-2026 Seyud`，`DevMask: https://github.com/uamind/DevMask`
 
 本文件与 [egress-contract.md](egress-contract.md) 的关系：**增量**。egress-contract 的其余条目（revision、0600、`:0` 清除语义、探测契约、注入清单、SQLite v2、job `kind=egress`）全部继续有效；本增量替换/收窄的条目集中在 **§9 与 egress-contract.md 的差异与冲突**，每条都写明「冲突：是/否」与理由。
 
@@ -19,7 +19,7 @@
 | **relay / 中继** | 设备内只监听 `127.0.0.1` 的**认证中继**：应用连本地无认证代理，中继替它向上游出示凭据 | 不是 Manager 的 API 透传（`/relay/api/v1/devices/{id}/proxy/...`） |
 | **端口表（port table）** | `egress.toml` 里每个需要中继的定义上的 `local_port`，由 server 分配并持久化 | 不是 Android `settings` 里的代理值 |
 | **listener** | 一个已绑定的 `127.0.0.1:<local_port>` 监听器（HTTP 代理或 SOCKS5 服务端，由上游 `type` 决定） | 不是防火墙规则 |
-| **防火墙链族** | 三条链：入口 `DF_EGRESS_RLY`（分派）→ 可重建的 `DF_EGRESS_RLY_ALLOW`（只有 ACCEPT）→ 静态兜底 `DF_EGRESS_RLY_DENY`（每端口 REJECT） | 不是单链；不碰 INPUT/FORWARD |
+| **防火墙链族** | 三条链：入口 `DM_EGRESS_RLY`（分派）→ 可重建的 `DM_EGRESS_RLY_ALLOW`（只有 ACCEPT）→ 静态兜底 `DM_EGRESS_RLY_DENY`（每端口 REJECT） | 不是单链；不碰 INPUT/FORWARD |
 | **accept 期 uid 双检** | restricted 端口在 accept 后、读协议字节**之前**再判一次 uid（归属 + 白名单），不符立即 close | 不是 iptables 规则；是规则失效时的第二道防线 |
 | **uid 策略** | 某个 listener 允许哪些本机 uid 连接：`all`（设备级端口）或 `restricted`（应用级端口，按 `pkg@uid` 解析） | 不是 Token 作用域 |
 | **端口重分配（reallocation）** | 既有 `local_port` 不可用（冲突/越界/被占用/角色变化）时换一个新端口并写回文件 | 不是重新分配上游端口 |
@@ -209,7 +209,7 @@
 ### 2.1 完整结构（0600）
 
     # egress.toml —— 代理定义、探测策略、认证中继端口表。权限 0600。
-    # 本文件由 device_faker_server 维护；手工编辑后执行 POST /api/v1/egress/relay/restart 生效
+    # 本文件由 devmask_server 维护；手工编辑后执行 POST /api/v1/egress/relay/restart 生效
     # （或重启服务）。local_port 是服务端分配字段，手工改会被校验/重分配。
     version = 1
 
@@ -431,7 +431,7 @@
 
 其余 reason 沿用 `connect` / `dns` / `timeout` / `tls` / `http_status` / `invalid_response`；`via="relay"` 时它们描述的是**中继到上游**那一段（中继把上游失败映射成 `502`，探测侧多数会看到 `http_status` / `invalid_response`，两种都允许）。
 5. **fail-open 门控（安全关键，memo R2/R9）**：只有 **`via="upstream"` 且 `reason ∈ {connect, dns, timeout, tls}`** 才允许按既有三时点规则触发 fail-open（清 `settings` 回直连）。**`via="relay"` 的失败一律不动 `settings`**——即使 `reason="timeout"` 也不触发。否则「中继死 → 探测红 → 清系统代理 → 全设备静默直连」，把 fail-closed 变成 IP 泄漏。`via="relay"` 的失败只回错误信封（`scope:"app"` 时仍带既有 `egress_probe_scope_app` 警告语义），**不**产生 §6.4 的 relay 运行态警告。
-6. **能力边界（必须写进文档）**：`via="relay"` 由 root（uid 0）发起，而 `DF_EGRESS_RLY_ALLOW` 对 uid 0 永远放行（§5.2）。因此它证明的是「**中继数据面可用**」，**不证明**「目标应用 uid 能连」——后者只能由 t9 在应用 uid 下实测（§5.7 第 2 组、§10.4）。
+6. **能力边界（必须写进文档）**：`via="relay"` 由 root（uid 0）发起，而 `DM_EGRESS_RLY_ALLOW` 对 uid 0 永远放行（§5.2）。因此它证明的是「**中继数据面可用**」，**不证明**「目标应用 uid 能连」——后者只能由 t9 在应用 uid 下实测（§5.7 第 2 组、§10.4）。
 
 ---
 
@@ -592,7 +592,7 @@
 
 ---
 
-## §5 uid 防火墙（`DF_EGRESS_RLY` 链族，fail-closed）
+## §5 uid 防火墙（`DM_EGRESS_RLY` 链族，fail-closed）
 
 ### 5.1 三条链、挂接与绑定面硬断言
 
@@ -600,20 +600,20 @@
 
 | 链 | 作用 | 重建策略 |
 | --- | --- | --- |
-| `DF_EGRESS_RLY` | **入口/分派**（链名 K2 冻结）：`-j ALLOW` → `-j DENY` → `-j RETURN` | 只在缺链/缺跳转时创建；常规重建**不改**它 |
-| `DF_EGRESS_RLY_ALLOW` | 只有 ACCEPT（root / 设备级端口全 uid / 应用级端口按 uid） | **全量重建**：`-F` 后按序 `-A` |
-| `DF_EGRESS_RLY_DENY` | 每个中继端口一条 REJECT | **只按 spec 增删，永不 `-F`** |
+| `DM_EGRESS_RLY` | **入口/分派**（链名 K2 冻结）：`-j ALLOW` → `-j DENY` → `-j RETURN` | 只在缺链/缺跳转时创建；常规重建**不改**它 |
+| `DM_EGRESS_RLY_ALLOW` | 只有 ACCEPT（root / 设备级端口全 uid / 应用级端口按 uid） | **全量重建**：`-F` 后按序 `-A` |
+| `DM_EGRESS_RLY_DENY` | 每个中继端口一条 REJECT | **只按 spec 增删，永不 `-F`** |
 
     # 幂等：三条链不存在则创建；OUTPUT 跳转不存在则插到第 1 条
-    iptables -w 2 -N DF_EGRESS_RLY        2>/dev/null || true
-    iptables -w 2 -N DF_EGRESS_RLY_ALLOW  2>/dev/null || true
-    iptables -w 2 -N DF_EGRESS_RLY_DENY   2>/dev/null || true
-    iptables -w 2 -C OUTPUT -j DF_EGRESS_RLY 2>/dev/null || iptables -w 2 -I OUTPUT 1 -j DF_EGRESS_RLY
+    iptables -w 2 -N DM_EGRESS_RLY        2>/dev/null || true
+    iptables -w 2 -N DM_EGRESS_RLY_ALLOW  2>/dev/null || true
+    iptables -w 2 -N DM_EGRESS_RLY_DENY   2>/dev/null || true
+    iptables -w 2 -C OUTPUT -j DM_EGRESS_RLY 2>/dev/null || iptables -w 2 -I OUTPUT 1 -j DM_EGRESS_RLY
 
     # 入口链的固定三条（-C 幂等）
-    iptables -w 2 -C DF_EGRESS_RLY -j DF_EGRESS_RLY_ALLOW 2>/dev/null || iptables -w 2 -A DF_EGRESS_RLY -j DF_EGRESS_RLY_ALLOW
-    iptables -w 2 -C DF_EGRESS_RLY -j DF_EGRESS_RLY_DENY  2>/dev/null || iptables -w 2 -A DF_EGRESS_RLY -j DF_EGRESS_RLY_DENY
-    iptables -w 2 -C DF_EGRESS_RLY -j RETURN              2>/dev/null || iptables -w 2 -A DF_EGRESS_RLY -j RETURN
+    iptables -w 2 -C DM_EGRESS_RLY -j DM_EGRESS_RLY_ALLOW 2>/dev/null || iptables -w 2 -A DM_EGRESS_RLY -j DM_EGRESS_RLY_ALLOW
+    iptables -w 2 -C DM_EGRESS_RLY -j DM_EGRESS_RLY_DENY  2>/dev/null || iptables -w 2 -A DM_EGRESS_RLY -j DM_EGRESS_RLY_DENY
+    iptables -w 2 -C DM_EGRESS_RLY -j RETURN              2>/dev/null || iptables -w 2 -A DM_EGRESS_RLY -j RETURN
 
 **绑定面硬断言（memo R4，不是散文）**：
 
@@ -629,26 +629,26 @@
 
     # ── A. DENY（静态兜底）：先保证「每个端口都有 REJECT」 ───────────────────
     # 对 P_deny 里每个尚未出现的端口（-C 幂等）：
-    iptables -w 2 -C DF_EGRESS_RLY_DENY -p tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable 2>/dev/null || iptables -w 2 -A DF_EGRESS_RLY_DENY -p tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+    iptables -w 2 -C DM_EGRESS_RLY_DENY -p tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable 2>/dev/null || iptables -w 2 -A DM_EGRESS_RLY_DENY -p tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
     # ... 每个 P_deny 端口一条
 
     # ── B. ALLOW（可重建）：先整链清空，再按序追加 ───────────────────────────
-    iptables -w 2 -F DF_EGRESS_RLY_ALLOW
+    iptables -w 2 -F DM_EGRESS_RLY_ALLOW
 
     # B1) root（uid 0）永远放行：排障/自测用；也是显式事实
-    iptables -w 2 -A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
-    iptables -w 2 -A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 0 -j ACCEPT
+    iptables -w 2 -A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+    iptables -w 2 -A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 0 -j ACCEPT
     # ... 每个 P_all 端口一条
 
     # B2) 设备级端口：放行【全部 uid】，但只允许回环目的地址
-    iptables -w 2 -A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -j ACCEPT
+    iptables -w 2 -A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17800 -j ACCEPT
 
     # B3) 应用级端口：按解析出的 uid 逐条放行（uid 升序，端口升序）
-    iptables -w 2 -A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 10123 -j ACCEPT
-    iptables -w 2 -A DF_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 10200 -j ACCEPT
+    iptables -w 2 -A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 10123 -j ACCEPT
+    iptables -w 2 -A DM_EGRESS_RLY_ALLOW -o lo -d 127.0.0.0/8 -p tcp --dport 17831 -m owner --uid-owner 10200 -j ACCEPT
 
     # ── C. 收尾：已释放端口从 DENY 删除（放在 accept 恢复之后，见 §5.4 第 10 步）──
-    # iptables -w 2 -D DF_EGRESS_RLY_DENY -p tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+    # iptables -w 2 -D DM_EGRESS_RLY_DENY -p tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
 
 顺序与理由（不可变）：
 
@@ -701,13 +701,13 @@
     5. 端口分配：按 §1.3 直接 bind 成 paused socket（本进程刚释放的端口不算外部占用）
     6. 端口表有变化 → 原子写回 egress.toml（0600）；写失败 → 相关新 listener 不 accept
     7. 链与跳转幂等存在；DENY 增补 P_deny 里缺失的端口（-C + -A）
-    8. -F DF_EGRESS_RLY_ALLOW，按 §5.2 B1→B3 顺序 -A；随后 -S 三链校验
+    8. -F DM_EGRESS_RLY_ALLOW，按 §5.2 B1→B3 顺序 -A；随后 -S 三链校验
     9. 恢复 accept（仅通过 1–8 的 listener）
     10. 删除已释放端口的 DENY spec；刷新内存状态（listening / portChanges / restartRequiredApps）。实现上 prune 可能发生在本轮 accept 恢复之前——与被关闭端口**等价**（没有 listener 就没有新连接，残留 DENY 只会多拒一个不再使用的端口，§4.6.1「prune 等价性」）。
 
 **「重建期间无裸奔」的论证（评审用，逐条可验）**：
 
-1. 任何时刻 `DF_EGRESS_RLY_DENY` 都包含 `P_deny` 里**全部端口**的 REJECT：「只增不减」，删除只发生在 accept 恢复之后（第 10 步）。因此不存在「某端口没有兜底 REJECT」的时间点。
+1. 任何时刻 `DM_EGRESS_RLY_DENY` 都包含 `P_deny` 里**全部端口**的 REJECT：「只增不减」，删除只发生在 accept 恢复之后（第 10 步）。因此不存在「某端口没有兜底 REJECT」的时间点。
 2. 重建只清空 `ALLOW`；空 `ALLOW` 不产生任何 ACCEPT，目标端口**必然**落到 `DENY` 的 REJECT。`-F` 与第一条 `-A` 之间的毫秒级间隙因此是**全拒**，不是放行。
 3. 新增端口时 DENY 先加（第 7 步）、listener 最后才 accept（第 9 步）——不会出现「端口已监听、DENY 里没有它」。
 4. 已建立的连接不受规则变更影响（内核语义）；它们在上一次 accept 时已过 uid 双检（§4.6），因此无需重判。重建期间**新**连接即使被内核排进 backlog，恢复 accept 后仍要过一次 uid 双检，未授权 uid 拿不到隧道。
@@ -728,7 +728,7 @@
   - 应用级：按 §1.3 线性探测换端口 → 原子写回 `egress.toml` → `relay.portChanges{reason:"addr_in_use"}` → `relay.restartRequiredApps` 列出引用该定义、需要重启的应用；旧端口上的连接在重启前会被拒绝或落到抢占者。
   - 设备级（只有 `base_port` 一个候选）：listener 不监听，`egress_relay_bind_failed{scope:"device", reason:"addr_in_use"}`；`settings` 按 §7.1 **不指向中继**（清成直连），不写一个没人监听的端口。
   - listener 运行期中途退出（`listener_exited`）走同一套：先退避重绑（1s/5s/15s，最多 3 次），仍失败就停在「失败 + 可见」，等 restart。
-- **残留风险（写进文档）**：抢占要赢得毫秒级窗口；应用使用旧端口且尚未重启时，无法从服务侧阻止它连到抢占者。缓解：把 `relay.portChanges` 当作**唯一权威信号**并立刻按 `restartRequiredApps` 重启应用；root 排障时用 `ss -ltnp | grep 178` 核对端口属主是否为 `device_faker_server`；不要把 `[relay].firewall=false` 当成排障手段（它同时会削弱 accept 期双检的兜底）。
+- **残留风险（写进文档）**：抢占要赢得毫秒级窗口；应用使用旧端口且尚未重启时，无法从服务侧阻止它连到抢占者。缓解：把 `relay.portChanges` 当作**唯一权威信号**并立刻按 `restartRequiredApps` 重启应用；root 排障时用 `ss -ltnp | grep 178` 核对端口属主是否为 `devmask_server`；不要把 `[relay].firewall=false` 当成排障手段（它同时会削弱 accept 期双检的兜底）。
 ### 5.5 失败策略
 
 | 情形 | 行为 |
@@ -743,29 +743,29 @@
 
 补充 A（v1.2 统一口径，R16）：`firewall=false` 时**规则层不设防**——设备级端口本来就全 uid 可达；应用级端口仍由 accept 期双检按 `allowedUids` 拒绝（归属失败也 close）。因此关掉防火墙只是把「内核先拒」退化成「服务层再拒」，未授权 uid 仍拿不到隧道；凭据暴露面**小于**「全 uid 可用」的说法。它仍是「排障开关」、不能作为默认；`GET /egress.relay.firewall.applied=false` 是显式可见事实。
 
-补充 B（**未变 listener 不受本轮 apply 失败影响**，v1.11.0 实现口径）：apply 失败只让**本轮需要重建**的应用级 listener 不监听（paused socket 直接关闭，`lastError.code=egress_relay_firewall_failed`）；**端口与 uid 集合未变的 listener 保持监听**——它们的规则可能已经被 `-F ALLOW` 清空，此刻唯一防线是 **accept 期 uid 双检**（§4.6 第 5 条）。因此本节的「应用级端口全部不监听」应理解为「**本轮重建的应用级端口**」，不是「所有应用级端口」，也不是「未变 listener 被关闭」。
+补充 B（**未变 listener 不受本轮 apply 失败影响**，v0.0.1 实现口径）：apply 失败只让**本轮需要重建**的应用级 listener 不监听（paused socket 直接关闭，`lastError.code=egress_relay_firewall_failed`）；**端口与 uid 集合未变的 listener 保持监听**——它们的规则可能已经被 `-F ALLOW` 清空，此刻唯一防线是 **accept 期 uid 双检**（§4.6 第 5 条）。因此本节的「应用级端口全部不监听」应理解为「**本轮重建的应用级端口**」，不是「所有应用级端口」，也不是「未变 listener 被关闭」。
 
-补充 C（**可用性抖动窗口**）：重建 `DF_EGRESS_RLY_ALLOW` 时（`-F` 到首条 `-A` 之间、以及整个重建期间），**未变 listener 的新连接也会短暂全拒**——因为入口链先走 ALLOW，空 ALLOW 不产生 ACCEPT，随后落到 DENY 的 REJECT。窗口是毫秒级，方向是**安全失败**（拒绝而不是裸奔）；已建立的连接不受影响。这个抖动换来的是「任何时刻都不存在无规则窗口」，属有意取舍。
+补充 C（**可用性抖动窗口**）：重建 `DM_EGRESS_RLY_ALLOW` 时（`-F` 到首条 `-A` 之间、以及整个重建期间），**未变 listener 的新连接也会短暂全拒**——因为入口链先走 ALLOW，空 ALLOW 不产生 ACCEPT，随后落到 DENY 的 REJECT。窗口是毫秒级，方向是**安全失败**（拒绝而不是裸奔）；已建立的连接不受影响。这个抖动换来的是「任何时刻都不存在无规则窗口」，属有意取舍。
 
 ### 5.6 卸载与清理（幂等，三条链）
 
     # 服务正常退出（SIGTERM / 退出兜底），或 [relay].enabled=false 时：
     # 1) 摘 OUTPUT 跳转 → 2) 删叶子链 ALLOW → 3) 删叶子链 DENY → 4) 删入口链
-    iptables -w 2 -D OUTPUT -j DF_EGRESS_RLY 2>/dev/null || true
-    iptables -w 2 -F DF_EGRESS_RLY_ALLOW 2>/dev/null || true
-    iptables -w 2 -X DF_EGRESS_RLY_ALLOW 2>/dev/null || true
-    iptables -w 2 -F DF_EGRESS_RLY_DENY  2>/dev/null || true
-    iptables -w 2 -X DF_EGRESS_RLY_DENY  2>/dev/null || true
-    iptables -w 2 -F DF_EGRESS_RLY       2>/dev/null || true
-    iptables -w 2 -X DF_EGRESS_RLY       2>/dev/null || true
+    iptables -w 2 -D OUTPUT -j DM_EGRESS_RLY 2>/dev/null || true
+    iptables -w 2 -F DM_EGRESS_RLY_ALLOW 2>/dev/null || true
+    iptables -w 2 -X DM_EGRESS_RLY_ALLOW 2>/dev/null || true
+    iptables -w 2 -F DM_EGRESS_RLY_DENY  2>/dev/null || true
+    iptables -w 2 -X DM_EGRESS_RLY_DENY  2>/dev/null || true
+    iptables -w 2 -F DM_EGRESS_RLY       2>/dev/null || true
+    iptables -w 2 -X DM_EGRESS_RLY       2>/dev/null || true
 
 - **顺序**：先 `-D` 摘掉 OUTPUT 跳转（此后新连接不进链）→ 再按「叶子链 → 入口链」删（被引用的链不能 `-X`）。
 - **服务退出只清规则与监听，不清 `settings`**（与既有语义一致：卸载才清系统代理）。
-- **`uninstall.sh` 的插入点**：停守护循环 → 停 server → 清三条链（上面六行）→ `settings put global http_proxy :0` + 清排除列表 → `rm -rf /data/adb/device_faker`。前两步顺序不变（否则守护会拉回进程），防火墙清理放在 `settings` 之前（先把门关上再拆代理）。
+- **`uninstall.sh` 的插入点**：停守护循环 → 停 server → 清三条链（上面六行）→ `settings put global http_proxy :0` + 清排除列表 → `rm -rf /data/adb/devmask`。前两步顺序不变（否则守护会拉回进程），防火墙清理放在 `settings` 之前（先把门关上再拆代理）。
 - **模块被禁用（不跑 `uninstall.sh`）**：链与 `settings` 都可能残留 → 禁用前先 `DELETE /egress`（清 settings）**并**手工清链：
 
-      adb shell su -c 'iptables -D OUTPUT -j DF_EGRESS_RLY; iptables -F DF_EGRESS_RLY_ALLOW; iptables -X DF_EGRESS_RLY_ALLOW; iptables -F DF_EGRESS_RLY_DENY; iptables -X DF_EGRESS_RLY_DENY; iptables -F DF_EGRESS_RLY; iptables -X DF_EGRESS_RLY'
-      adb shell su -c 'iptables -S DF_EGRESS_RLY'    # 期望：No chain/target/match by that name
+      adb shell su -c 'iptables -D OUTPUT -j DM_EGRESS_RLY; iptables -F DM_EGRESS_RLY_ALLOW; iptables -X DM_EGRESS_RLY_ALLOW; iptables -F DM_EGRESS_RLY_DENY; iptables -X DM_EGRESS_RLY_DENY; iptables -F DM_EGRESS_RLY; iptables -X DM_EGRESS_RLY'
+      adb shell su -c 'iptables -S DM_EGRESS_RLY'    # 期望：No chain/target/match by that name
 
 - 规则**不持久化**（不写 `iptables-save`）：每次开机由 server 启动 reconcile 重建。开机到 server 就绪之间端口本来就不监听，不存在「有规则无服务」的窗口。
 
@@ -776,10 +776,10 @@
 **第 1 组：结构与绑定面（memo R3/R4）**
 
     # 三条链都在，入口链是固定的三条跳转
-    adb shell su -c 'iptables -S DF_EGRESS_RLY'
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_ALLOW'
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_DENY'
-    adb shell su -c 'iptables -C OUTPUT -j DF_EGRESS_RLY; echo $?'        # 0
+    adb shell su -c 'iptables -S DM_EGRESS_RLY'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_ALLOW'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_DENY'
+    adb shell su -c 'iptables -C OUTPUT -j DM_EGRESS_RLY; echo $?'        # 0
 
     # 只监听 127.0.0.1（IPv4）；IPv6 侧必须为空
     adb shell su -c 'ss -ltn  | grep -E ":178[0-9]{2}"'                   # 每行都是 127.0.0.1:178xx
@@ -795,7 +795,7 @@
     # 拒绝用例：**不加 su**（adb shell 是 uid 2000）。判据是协议级——服务端在 accept 后、读首字节前
     # 完成 uid 双检（先检后读），所以连 SOCKS 问候的回复都不会出现；-q 必带
     adb shell 'printf "\005\001\000" | toybox nc -q 3 -w 6 127.0.0.1 17831 | od -An -tx1'   # 期望：空输出（无 05 00）
-    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/device_faker/logs/server.log'   # >= 1
+    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/devmask/logs/server.log'   # >= 1
 
     # 允许用例（本机唯一可用）：**应用内探针**——target app（或 fixtures/probe-app）在自身进程里
     # 连 127.0.0.1:<应用级端口>，期望 SOCKS 回 05 00 / HTTP 拿到响应；结果从 logcat 或探针输出读。
@@ -804,14 +804,14 @@
 
     # 规则被人为清空：入口链 RETURN -> OUTPUT 默认 ACCEPT -> **内核仍会完成握手**，
     # 因此不能用 nc 的退出码判定（rc 通常 0）；用协议级证据 + 服务端日志
-    adb shell su -c 'iptables -F DF_EGRESS_RLY_ALLOW; iptables -F DF_EGRESS_RLY_DENY'
+    adb shell su -c 'iptables -F DM_EGRESS_RLY_ALLOW; iptables -F DM_EGRESS_RLY_DENY'
     adb shell 'printf "\005\001\000" | toybox nc -q 3 -w 6 127.0.0.1 17831 | od -An -tx1'   # 期望：空输出（先检后读）
-    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/device_faker/logs/server.log'
+    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/devmask/logs/server.log'
 
     # restart 必须强制 apply（R14）；从主机调用（设备无 curl）
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
       "$BASE/egress/relay/restart" | jq '.relay.firewall'      # applied=true、denyRules>0
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_DENY' | wc -l   # > 0（规则已恢复）
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_DENY' | wc -l   # > 0（规则已恢复）
 
 **第 3 组：重建零空窗（memo R1/R15；判据必须是协议级）**
 
@@ -825,19 +825,19 @@
     done
     wait                                                       # 输出里必须没有 HIT
     # 交叉证据：期间服务端日志应出现 uid_not_allowed（而不是「连接被接受并服务」）
-    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/device_faker/logs/server.log'
+    adb shell su -c 'grep -c "reason=uid_not_allowed" /data/adb/devmask/logs/server.log'
 
 **第 4 组：幂等、强制 apply 与端口稳定（memo R6/R14）**
 
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_ALLOW' > /tmp/fw-before
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_ALLOW' > /tmp/fw-before
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
       "$BASE/egress/relay/restart" >/dev/null
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_ALLOW' > /tmp/fw-after
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_ALLOW' > /tmp/fw-after
     diff /tmp/fw-before /tmp/fw-after                     # 无差异（幂等：重装后逐字节相同）
-    adb shell su -c 'grep local_port /data/adb/device_faker/config/egress.toml'
+    adb shell su -c 'grep local_port /data/adb/devmask/config/egress.toml'
 
     # 强制 apply：手工清空后用 restart 修复，applied 必须由 -S 推出
-    adb shell su -c 'iptables -F DF_EGRESS_RLY_ALLOW; iptables -F DF_EGRESS_RLY_DENY'
+    adb shell su -c 'iptables -F DM_EGRESS_RLY_ALLOW; iptables -F DM_EGRESS_RLY_DENY'
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq '.relay.firewall.applied'    # false
     curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
       "$BASE/egress/relay/restart" | jq '.relay.firewall'   # applied=true、denyRules>0
@@ -848,15 +848,15 @@
     adb shell su -c 'ss -ltn | grep -E ":9( |$)"'          # 期望：空
 
     # 卸载清理
-    adb shell su -c 'sh /data/adb/modules/device_faker/uninstall.sh'
-    adb shell su -c 'iptables -S DF_EGRESS_RLY'            # 链不存在
+    adb shell su -c 'sh /data/adb/modules/devmask/uninstall.sh'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY'            # 链不存在
     adb shell su -c 'settings get global http_proxy'       # :0 或 null
 
 ---
 
 ## §6 API 变更（设备端 `/api/v1`）
 
-通用约定全部沿用 egress-contract §1.1：Bearer Token、作用域、`Cache-Control: no-store`、`X-Request-Id`、统一错误信封；**egress 端点不设 `X-DF-Revision` / `ETag`**（新端点同样不设），egress revision 仍在响应体与 `X-DF-Egress-Revision` 口径里。
+通用约定全部沿用 egress-contract §1.1：Bearer Token、作用域、`Cache-Control: no-store`、`X-Request-Id`、统一错误信封；**egress 端点不设 `X-DM-Revision` / `ETag`**（新端点同样不设），egress revision 仍在响应体与 `X-DM-Egress-Revision` 口径里。
 
 ### 6.1 `GET /egress` 新增 `relay` 对象
 
@@ -916,8 +916,8 @@
 | `listeners[].lastError` | object 或 null | 是 | `{code, reason, at}`；`code` 属于 §6.4 的 relay 警告码，`reason` 为该码 `details.reason` 的值，`at` 为最近一次失败时刻 |
 | `relay.firewall.applied` | boolean | 否 | **由 `iptables -S` 推出**：`GET /egress` 每次现算三链并与期望比对（R14）；`firewall=false` 或校验失败时为 `false`，手工 `-F` 后下一次 GET 必须变 `false` |
 | `relay.firewall.rules` | integer | 否 | 三条链规则总条数（入口链 3 + ALLOW + DENY，不含 `OUTPUT` 跳转） |
-| `relay.firewall.allowRules` | integer | 否 | `DF_EGRESS_RLY_ALLOW` 的条数（便于验收断言「链内无该端口 ACCEPT」） |
-| `relay.firewall.denyRules` | integer | 否 | `DF_EGRESS_RLY_DENY` 的条数（必须等于 `P_deny` 的端口数，§5.4） |
+| `relay.firewall.allowRules` | integer | 否 | `DM_EGRESS_RLY_ALLOW` 的条数（便于验收断言「链内无该端口 ACCEPT」） |
+| `relay.firewall.denyRules` | integer | 否 | `DM_EGRESS_RLY_DENY` 的条数（必须等于 `P_deny` 的端口数，§5.4） |
 | `relay.firewall.lastError` | object 或 null | 是 | `{code:"egress_relay_firewall_failed", reason, op, at}` |
 | `relay.portChanges` | object[] | 否 | **仅写响应可能非空**；GET 恒 `[]`。元素 `{proxy, from, to, reason}`（`from` 为 `null` 表示首次分配；`reason` 属于 `initial` / `collision` / `out_of_range` / `addr_in_use` / `role_change` / `credentials_change`） |
 | `relay.restartRequiredApps` | string[] | 否 | **仅写响应可能非空**；GET 恒 `[]`。§1.7 的包名列表（升序去重） |
@@ -964,9 +964,9 @@
 
 - **幂等（v1.2 口径，R14）**：重复调用不写 `config.toml`、不重新分配端口（除非 §1.5 C2/C3）；但**每次都强制重装规则与监听**（不短路），以保证手工 `-F` 后能被 restart 修复；端口无变化时 `portChanges:[]`、`restartRequiredApps:[]`，且重装后 `-S` 与上次逐条一致。
 - 副作用清单（写清楚，别让调用方意外）：
-  1. **所有 listener 暂停 accept**（毫秒级；期间中继端口由 `DF_EGRESS_RLY_DENY` 全拒，不裸奔）；端口与 uid 集合**未变**的 listener 不关闭、不中断连接；
+  1. **所有 listener 暂停 accept**（毫秒级；期间中继端口由 `DM_EGRESS_RLY_DENY` 全拒，不裸奔）；端口与 uid 集合**未变**的 listener 不关闭、不中断连接；
   2. 端口/uid 集合变化的 listener 才关闭重建（**先关后开**，§5.4）；
-  3. 重建 `DF_EGRESS_RLY_ALLOW`（`-F` + 按序 `-A`）并按 §5.4 校验；`DF_EGRESS_RLY_DENY` 只增删 spec。**restart 无条件执行本步**（即使 `-S` 已一致），这是「强制 apply」的落点；
+  3. 重建 `DM_EGRESS_RLY_ALLOW`（`-F` + 按序 `-A`）并按 §5.4 校验；`DM_EGRESS_RLY_DENY` 只增删 spec。**restart 无条件执行本步**（即使 `-S` 已一致），这是「强制 apply」的落点；
   4. 若设备级中继生效，重放 `settings put global http_proxy 127.0.0.1:<base_port>`（读回校验照旧）；
   5. 可能写一次 `egress.toml`（仅当发生端口重分配/补齐），从而推进 egress revision。
 - 失败：
@@ -982,7 +982,7 @@
 | code | details | 触发（状态反射，不是事件流） |
 | --- | --- | --- |
 | `egress_relay_bind_failed` | `{proxy, port, scope, reason}`：`proxy` string；`port` integer 或 null；`scope` 属于 `"device"` / `"app"`；`reason` 属于 `"addr_in_use"` / `"permission_denied"` / `"address_not_available"` / `"not_loopback"` / `"pool_exhausted"` / `"persist_failed"` / `"listener_exited"` / `"other"` | 该中继端口绑定/持久化失败、或 listener 中途退出。`port` 在 `pool_exhausted` 时为 `null` |
-| `egress_relay_firewall_failed` | `{op, reason, chain, ports, exitCode}`：`op` 属于 `"apply"` / `"clear"`；`reason` 属于 `"iptables_missing"` / `"owner_match_unsupported"` / `"command_failed"` / `"permission_denied"`；`chain` 属于 `"DF_EGRESS_RLY"` / `"DF_EGRESS_RLY_ALLOW"` / `"DF_EGRESS_RLY_DENY"`；`ports` 为 integer[]（升序，`op="clear"` 时可为空）；`exitCode` 为 integer 或 null | 防火墙规则未能落地或未能清理 |
+| `egress_relay_firewall_failed` | `{op, reason, chain, ports, exitCode}`：`op` 属于 `"apply"` / `"clear"`；`reason` 属于 `"iptables_missing"` / `"owner_match_unsupported"` / `"command_failed"` / `"permission_denied"`；`chain` 属于 `"DM_EGRESS_RLY"` / `"DM_EGRESS_RLY_ALLOW"` / `"DM_EGRESS_RLY_DENY"`；`ports` 为 integer[]（升序，`op="clear"` 时可为空）；`exitCode` 为 integer 或 null | 防火墙规则未能落地或未能清理 |
 | `egress_relay_uid_unknown` | `{proxy, port, scope, package, userId, reason}`：`scope` 恒为 `"app"`；`package` string；`userId` integer 或 null；`reason` 属于 `"package_not_installed"` / `"user_not_found"` / `"pm_unavailable"` / `"parse_failed"` | 应用级端口的 `pkg@uid` 解析失败 → 该端口**不监听**（§5.3） |
 | `egress_relay_upstream_unreachable` | `{proxy, port, scope, reason, at}`：`scope` 属于 `"device"` / `"app"`；`reason` 属于 `"connect"` / `"dns"` / `"timeout"` / `"auth_failed"` / `"protocol_error`；`at` 为该次失败时刻 | 数据面最近一次到上游的握手失败；该 listener 下一次握手成功后自动消失 |
 | `egress_relay_device_socks5_unsupported` | `{proxy, scope, reason}`：`scope` 恒为 `"device"`；`reason` 恒为 `"socks5_device_scope_unsupported"` | `[egress].default`（合并后的有效值）指向**非 http**（socks5）定义：不建 device listener；`enabled=true` 时 `settings` 写黑洞 `127.0.0.1:9`，`enabled=false` 时按未配置（直连）；`PUT` 对这种 default 直接 `422`。与是否带凭据无关；`enabled=false` 时仍报（配置提醒，不是运行态故障） |
@@ -1115,7 +1115,7 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 
 1. `GET /egress.relay`：`enabled` / `listeners[]` / `firewall`（`applied` 由 `-S` 现算）/ `portChanges`（写响应）/ `restartRequiredApps`（写响应）。
 2. 服务日志：`relay listen` / `relay listener exited` / `relay upstream ... failed` / `relay firewall ...` / `relay port reallocated`（都不含凭据）。
-3. 人工/QA：`ss -ltn`（只回环）、`ss -ltn6`（必须为空）、`iptables -S DF_EGRESS_RLY` / `-S DF_EGRESS_RLY_ALLOW` / `-S DF_EGRESS_RLY_DENY`（三链）、`settings get global http_proxy`（`127.0.0.1:17800` 或 `:0`）。
+3. 人工/QA：`ss -ltn`（只回环）、`ss -ltn6`（必须为空）、`iptables -S DM_EGRESS_RLY` / `-S DM_EGRESS_RLY_ALLOW` / `-S DM_EGRESS_RLY_DENY`（三链）、`settings get global http_proxy`（`127.0.0.1:17800` 或 `:0`）。
 
 `relay` 状态**只在内存**（进程重启清零、按文件重建），不落盘（与 `health`/`lastProbe` 同口径；设备端没有数据库）。
 
@@ -1131,9 +1131,9 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 | P2 | 端口区间**固定**（17800–17899），可被一次性扫描 | 能看到自身 socket 的检测代码只能看到自己连的那个端口；root 扫描可全见 | 中 |
 | P3 | 应用侧代理地址从「真实上游」变成 `127.0.0.1`（`http.proxyHost` / `Proxy.getDefaultHost()` 可读） | 应用进程内自检代码 | **强**（最明显） |
 | P4 | 设备级 `settings global http_proxy` 变成 `127.0.0.1:17800` | 任何能读系统代理的应用（`Proxy.getDefaultHost()`） | **强** |
-| P5 | `iptables` 链 `DF_EGRESS_RLY`（固定名）与规则 | 只有 root / `CAP_NET_ADMIN`；普通应用看不到 | 低 |
+| P5 | `iptables` 链 `DM_EGRESS_RLY`（固定名）与规则 | 只有 root / `CAP_NET_ADMIN`；普通应用看不到 | 低 |
 | P6 | 中继端口对所有 uid 可达（当 `firewall=false`） | 同机任意应用可白用凭据 | 安全代价（配置项，默认不开） |
-| P7 | 中继进程常驻（与既有 `device_faker_server` 同进程，不新增进程） | 无新增可检出面 | 无 |
+| P7 | 中继进程常驻（与既有 `devmask_server` 同进程，不新增进程） | 无新增可检出面 | 无 |
 | P8 | **中继把「应用出网」变成「root 出网」**：任何按 uid 生效的第三方防火墙（AFWall+、NetGuard、厂商联网管控）看到的都是 root 的连接，用户「禁止该应用联网」的策略被中继绕过；`settings` 指向 `127.0.0.1` 会放大这一点 | 第三方 uid 防火墙、root | 中 |
 | P9 | **fail-open 会改出口**：`[probe].fail_open` 默认 `true`，relay 生效后上游探测失败（`connect`/`dns`/`timeout`/`tls`）会清 `settings` 回 `:0` → 全设备**静默直连**。对「带认证代理 = 指定出口」的用户就是 IP 泄漏 | 出口 IP 的观察者、用户自己 | 中 |
 | P10 | **设备级 socks5 配置不工作（已 fail-closed，不是暴露面）**：`default` 指向 socks5 定义 → `PUT` 直接 422；旧配置在 `enabled=true` 时 `settings` 写黑洞 `127.0.0.1:9`（`enabled=false` 按未配置/直连），并报 warning `egress_relay_device_socks5_unsupported`；设备级没有出口，`base_port` 上**没有** SOCKS5 listener | 配置了该形态的用户 | 低（有显式 422 / warning） |
@@ -1152,7 +1152,7 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 
 | 文件 | 章节 | 写什么 | 语言 |
 | --- | --- | --- | --- |
-| `docs/CONFIG.md` | 「网络出口（egress）」→「已知限制」 | 新增 2 条：① 中继端口（`127.0.0.1:178xx`）与链名 `DF_EGRESS_RLY` 属可检出项（P1–P5，与「armed 进程常驻代码页」同级表述）；② `[relay]` 开关与代价（关掉就回到「带凭据不可用」） | zh |
+| `docs/CONFIG.md` | 「网络出口（egress）」→「已知限制」 | 新增 2 条：① 中继端口（`127.0.0.1:178xx`）与链名 `DM_EGRESS_RLY` 属可检出项（P1–P5，与「armed 进程常驻代码页」同级表述）；② `[relay]` 开关与代价（关掉就回到「带凭据不可用」） | zh |
 | `docs/CONFIG.md` | 「已知限制」→ 追加 3 条（memo R8/R9） | ③ 中继 = **root 出网**：第三方 uid 防火墙（AFWall+/NetGuard）不再拦住该应用（P8）；④ `[probe].fail_open` 默认开 → 认证代理下探测失败会**静默直连**，要「绝不直连」请设为 `false`（P9）；⑤ **关闭中继没有 API**：编辑 0600 的 `egress.toml` 的 `[relay].enabled` + `POST /egress/relay/restart` | zh |
 | `docs/CONFIG.md`、`docs/SERVER.md` | 「已知限制」→ 追加 3 条（memo R12/R13，v1.2；**三语同改**） | ⑥ **回退窗口 · 凭据载体结论（移除）**：中继明确未启用（`enabled=false` / 文件未迁移）时应用拿到上游 `host:port`；**v1.2 起不再写任何凭据载体**——「SOCKS 凭据回到应用进程、同 uid 可读」这一旧行为在 v1.2 之后不再发生（≤v1.1 会发生）；HTTP Basic 从来不可用。**备选（不采纳）**：若保留载体，只允许在显式 `enabled=false`，且必须声明「SOCKS 凭据会进应用进程属性、同 uid 可读；HTTP Basic 仍不可用」。该状态下的带认证代理只能靠 IP 白名单 | zh |
 | `docs/CONFIG.md`、`docs/SERVER.md` | 同上 | ⑦ **fail-closed**：relay 开启但端口未就绪 / spec 视图非法时，应用被指向 `127.0.0.1:9`（断网），**不静默直连、凭据不进应用进程**；只覆盖 Java 层，native/WebView 不受控 | zh |
@@ -1179,7 +1179,7 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 | # | egress-contract 原文 / 位置 | 本契约 | 冲突 | 理由 |
 | --- | --- | --- | --- | --- |
 | K1 | §5.1 第 7 项 + §8 #7：`hasCredentials` 时必须注入凭据载体（`java.net.socks.username`/`password`、`Authenticator`）；实测不成立，降级为文档限制 | **v1.2 起任何路径都不注入凭据载体**：relay 生效时认证由中继承担；回退窗口（`enabled=false` / 文件未迁移）也只注入上游 `host:port`（§3.2 规则 5、§9.2 B13）。`egress_auth_unsupported` 保留，语义收窄为「该代理在当前状态下不走中继、认证不可用」 | **是**（行为替代，范围比 v1.1 更大） | 凭据写进应用进程（同 uid 可读）只增加暴露面、不增加可用性（memo R13）；中继是唯一会出示凭据的地方 |
-| K2 | §5.1 说明：「只操作 **Java 层**……**不写 iptables**」 | 本增量**新增** `iptables` **链族**：入口 `DF_EGRESS_RLY` + 可重建 `DF_EGRESS_RLY_ALLOW` + 静态兜底 `DF_EGRESS_RLY_DENY`（只针对 178xx，§5） | **是**（范围扩大） | uid 隔离是「不把设备变成开放代理」的唯一可行手段（计划 §5.1）。原句描述的是 **v1.10.0 应用级注入**的作用域，不是 relay 的边界；文档收口时改成「注入侧不写 iptables；uid 防火墙属设备级 relay 实现」 |
+| K2 | §5.1 说明：「只操作 **Java 层**……**不写 iptables**」 | 本增量**新增** `iptables` **链族**：入口 `DM_EGRESS_RLY` + 可重建 `DM_EGRESS_RLY_ALLOW` + 静态兜底 `DM_EGRESS_RLY_DENY`（只针对 178xx，§5） | **是**（范围扩大） | uid 隔离是「不把设备变成开放代理」的唯一可行手段（计划 §5.1）。原句描述的是 **v1.10.0 应用级注入**的作用域，不是 relay 的边界；文档收口时改成「注入侧不写 iptables；uid 防火墙属设备级 relay 实现」 |
 | K3 | §3.7 第 2 条 + §8 #7：「设备级**不承载认证**（`settings` 只写 `host:port`）；指向带凭据的代理时给 `egress_credentials_ignored`」 | relay 生效时设备级**承载认证**（`settings` 写 `127.0.0.1:base_port`，中继补 Basic/RFC1929），**不再**产生 `egress_credentials_ignored`；`enabled=false` 时回到旧行为 | **是**（限制解除） | 决策 #1（设备级也走中继）。`egress_credentials_ignored` 保留但收窄为「relay 关闭时的设备级带凭据」 |
 
 ### 9.2 补足项（不改既有语义，只是把空白填上）
@@ -1218,7 +1218,7 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 | §4.4 `reason` 枚举 | 同上两项（只增不改） |
 | §5.1 / §5.2 / §5.5 | 注入清单收窄 + `[egress_proxy]` 的 `relay` 键（K1、§3.3） |
 | §5.1 第 7 项（凭据载体） | v1.2 起**任何路径都不注入**（含回退窗口），文档同步（§9.1 K1、§8.3） |
-| 附录 B 版本收口 | 设备端端点 29 → **30**；设备端版本 1.10.0 → **1.11.0**（建议）；`CAPABILITIES` 不变；三语文档 + `manager/docs/API.md` |
+| 附录 B 版本收口 | 设备端端点 29 → **30**；设备端版本 1.10.0 → **0.0.1**（建议）；`CAPABILITIES` 不变；三语文档 + `manager/docs/API.md` |
 
 > 版本号建议只作参考（t8 决定）：本增量是**可选能力**，`/api/v1` 前缀不变，按既有 semver 习惯走 minor 递增。
 
@@ -1284,7 +1284,7 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
       "$BASE/egress/relay/restart" | jq '{restartedAt, relay}'
 
     # 6) 端口表落盘
-    adb shell su -c 'grep -n "local_port\|relay" /data/adb/device_faker/config/egress.toml'
+    adb shell su -c 'grep -n "local_port\|relay" /data/adb/devmask/config/egress.toml'
 
 ### 10.3 设备侧断言（t9 用）
 
@@ -1293,8 +1293,8 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
     adb shell su -c 'dumpsys connectivity | grep -i "global proxy"'      # Global proxy: [127.0.0.1] port: 17800
 
     # 文件权限与端口表
-    adb shell su -c 'ls -l /data/adb/device_faker/config/egress.toml'    # -rw------- root root
-    adb shell su -c 'grep -c local_port /data/adb/device_faker/config/egress.toml'
+    adb shell su -c 'ls -l /data/adb/devmask/config/egress.toml'    # -rw------- root root
+    adb shell su -c 'grep -c local_port /data/adb/devmask/config/egress.toml'
 
     # 绑定面：只监听 127.0.0.1（IPv4），IPv6 侧为空；非回环目的地连不上（§5.7 第 1 组）
     adb shell su -c 'ss -ltn  | grep -E ":178[0-9]{2}"'
@@ -1304,9 +1304,9 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
     adb shell 'toybox nc -w 2 <LAN_IP> 17831 </dev/null; echo rc=$?'       # 非 0
 
     # 防火墙三链与顺序（完整验收见 §5.7 第 1–5 组）
-    adb shell su -c 'iptables -S DF_EGRESS_RLY'
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_ALLOW'
-    adb shell su -c 'iptables -S DF_EGRESS_RLY_DENY'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_ALLOW'
+    adb shell su -c 'iptables -S DM_EGRESS_RLY_DENY'
 
     # uid 授权：拒绝用例**不加 su**（adb shell 是 uid 2000）；放行证据只能用**应用内探针**
     # （setpriv 本机不存在；run-as 出网被 SELinux 拦 —— 见 §5.7 第 2 组）
@@ -1319,8 +1319,8 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
     # 注：以上以 root 执行，只证明「中继数据面可用」；证明 uid 授权必须用应用内探针（§3.5 第 6 条）
 
     # 凭据零泄漏（跑完增删改 + 若干请求后）
-    adb shell su -c 'grep -Eci "password|Proxy-Authorization" /data/adb/device_faker/logs/*.log'   # 0
-    adb shell su -c 'grep -ci "password" /data/adb/device_faker/logs/api-audit.jsonl'              # 0
+    adb shell su -c 'grep -Eci "password|Proxy-Authorization" /data/adb/devmask/logs/*.log'   # 0
+    adb shell su -c 'grep -ci "password" /data/adb/devmask/logs/api-audit.jsonl'              # 0
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq -e 'tostring|test("password")|not'
     curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress/proxies" | jq -e '[.items[]|has("password")]|any|not'
 
@@ -1360,4 +1360,4 @@ egress-contract §3.5 的三时点判定**不变**；本增量只补充「relay 
 | --- | --- | --- |
 | relay contract v1.2 | 2026-12-02 | 按 [relay-review-memo.md](relay-review-memo.md) §5/§6（R12–R16）修订：① **R12 fail-closed 注入**：非法 relay 视图不再按「未配置」返回，改为哨兵 `127.0.0.1:9`（`RELAY_FAIL_CLOSED_PORT`）经 `injection_plan` 注入并 arm replay，日志 `relay fail-closed ... reason=invalid_target` / `reason=port_missing`；唯一例外（仅多带凭据）剥凭据照常注入；`type=direct` + `relay=true` 按主动直连；残留风险（只覆盖 Java 层）写明；② **R13 回退收窄**：只有「中继明确未启用」（`enabled=false` 或文件未迁移）才回退上游，且**回退也不再写凭据载体**（§9.2 B13）；`enabled=true` 且已迁移但缺端口 → fail-closed；③ **R14 restart 强制 apply**：restart 跳过 §5.4 短路，短路判定必须含 `iptables -S` 三链校验，`firewall.applied` 由 `-S` 推出；④ **R15 验收判据协议化**：§5.7 第 2/3 组与 §10.4 #13 改为「收不到 `05 00` / 日志 `uid_not_allowed`」，并写明「先检后读」；⑤ **R16**：`firewall=false` 不再声称「全 uid 可达」（accept 期双检仍生效）；⑥ 按 t9 实测改写 §5.7/§10.2/§10.3 为**本机可执行**版本（设备无 curl/setpriv、run-as 出网被 SELinux 拦、fixture 上游用 LAN IP、API 走 `adb forward`） |
 | relay contract v1.1 | 2026-12-01 | 按 [relay-review-memo.md](relay-review-memo.md) R1–R11 修订：① 防火墙改 **fail-closed 三链**（入口 + 可重建 ALLOW + 静态 DENY），给出「无裸奔」论证与 listener 五步生命周期（R1/R2/R7）；② bind 面硬断言 `getsockname` + 五项验收（R3/R4）；③ uid 失败口径统一为 fail-closed（规则期不监听 + accept 期双检），消除 §4.6/§4.8 矛盾（R5/R11）；④ 探测加请求字段 `via`（`upstream` / `relay`）、响应 `relayPort`、`relay_not_listening`/`relay_connect`，并禁止 relay 失败触发 fail-open（R2/R9）；⑤ §5.7/§10.3 验收命令重写（拒绝用 uid 2000、允许用真实 uid）（R3/R6）；⑥ 端口重建「先关后开 + 分配即持有 socket」，消除 EADDRINUSE 误重分配与 TOCTOU（R6/R10）；⑦ §8 增 P8（root 出网绕过 uid 防火墙）/ P9（fail-open 改出口）与关闭通道说明（R8/R9） |
-| relay contract v1 | 2026-11-25 | 首版冻结：端口分配（17800–17899、设备级占 `base_port`、FNV-1a + 线性探测）、`egress.toml [relay]` 与只读 `local_port`（0600）、设备级/应用级三条生效优先级、数据面（本地 HTTP CONNECT/absolute-URI + 本地 SOCKS5 `0x00` + 上游 Basic/RFC1929、32 KiB 头、10s/120s、256/64）、uid 防火墙（`DF_EGRESS_RLY`、`pkg@uid`、失败不监听、幂等重建与卸载清理）、API（`relay` 对象、`localPort`/`relayActive`、`POST /egress/relay/restart`、警告码（首版 4 条，v1.3 起 5 条）、`local_port` → 422）、失败与降级、可检出性代价与三语声明位置、与 egress-contract 的 3 条冲突与 10 条补足 |
+| relay contract v1 | 2026-11-25 | 首版冻结：端口分配（17800–17899、设备级占 `base_port`、FNV-1a + 线性探测）、`egress.toml [relay]` 与只读 `local_port`（0600）、设备级/应用级三条生效优先级、数据面（本地 HTTP CONNECT/absolute-URI + 本地 SOCKS5 `0x00` + 上游 Basic/RFC1929、32 KiB 头、10s/120s、256/64）、uid 防火墙（`DM_EGRESS_RLY`、`pkg@uid`、失败不监听、幂等重建与卸载清理）、API（`relay` 对象、`localPort`/`relayActive`、`POST /egress/relay/restart`、警告码（首版 4 条，v1.3 起 5 条）、`local_port` → 422）、失败与降级、可检出性代价与三语声明位置、与 egress-contract 的 3 条冲突与 10 条补足 |

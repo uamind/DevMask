@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 进程内 Mock 设备：实现 Manager 需要的 /api/v1/status 与 /api/v1/overview。
 
@@ -1352,7 +1352,7 @@ fn overview_payload(options: &MockOptions) -> Value {
     let revision = revision_of(options);
     json!({
         "revision": revision,
-        "module": { "id": "device_faker", "version": "v1.9.0", "versionCode": 20261125 },
+        "module": { "id": "devmask", "version": "v1.9.0", "versionCode": 20261125 },
         "device": {
             "manufacturer": "Google",
             "brand": options.brand,

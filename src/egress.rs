@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 应用级出口代理（方案 B）：见 docs/plans/egress-contract.md §2.4 与 §5。
 //!
@@ -47,7 +47,7 @@ use crate::config::{Config, DIRECT_MARKER};
 pub const SPEC_SECTION: &str = "egress_proxy";
 
 /// 代理定义与探测策略文件：0600，只有 root 域（companion / server）读得到。
-pub const EGRESS_PATH: &str = "/data/adb/device_faker/config/egress.toml";
+pub const EGRESS_PATH: &str = "/data/adb/devmask/config/egress.toml";
 
 /// `egress.toml` 目前唯一支持的 `version`（契约 §2.1）。
 const SUPPORTED_VERSION: i64 = 1;
@@ -1206,7 +1206,7 @@ impl ArmOutcome {
             Self::Armed => None,
             Self::DisabledByDebugProp => Some(
                 "[egress] replay hook unavailable reason=debug_disable_replay \
-                 (debug.device_faker.egress.disable_replay is set; one-shot injection only)"
+                 (debug.devmask.egress.disable_replay is set; one-shot injection only)"
                     .to_string(),
             ),
             Self::Unavailable(failure) => Some(failure.log_line()),

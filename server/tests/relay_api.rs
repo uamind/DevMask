@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 设备内认证中继（relay）的集成测试：listener / 端口表 / 数据面 / API / 失败路径。
 //!
@@ -28,7 +28,7 @@ use common::{
     ADMIN_TOKEN, OPS_TOKEN, body_json, body_text, fixture_with_relay_and_runner, get_with_token,
     if_match, json_call,
 };
-use device_faker_server::commands::{CommandOutcome, CommandRunner};
+use devmask_server::commands::{CommandOutcome, CommandRunner};
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
@@ -1366,7 +1366,7 @@ async fn manual_flush_makes_unknown_uid_connections_fail_closed() {
     );
 
     // 手工 -F 掉 ALLOW 链（模拟第三方脚本/排障误操作），并等过复核窗口
-    sim.flush_chain("DF_EGRESS_RLY_ALLOW");
+    sim.flush_chain("DM_EGRESS_RLY_ALLOW");
     tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
 
     // 不依赖 GET：直接再连，必须被 fail-closed 关闭
@@ -1540,7 +1540,7 @@ async fn colliding_port_is_reallocated_and_reports_changes() {
     let _guard = relay_guard();
     let upstream = spawn_upstream().await;
     // 占住该名字的首选端口，强迫分配器线性探测到下一个候选
-    let preferred = device_faker_server::relay::port::candidate_ports("jp_app", BASE_PORT)[0];
+    let preferred = devmask_server::relay::port::candidate_ports("jp_app", BASE_PORT)[0];
     let blocker = tokio::net::TcpListener::bind(("127.0.0.1", preferred))
         .await
         .expect("占住首选端口");
@@ -2078,7 +2078,7 @@ async fn app_scoped_listener_resolves_uids_and_requires_restart() {
 
     // 规则证据（契约 §5.2）：应用级端口只有 root + 绑定 uid 两条 ACCEPT，
     // 其它 uid 落不到 ALLOW → 命中 DENY 的 REJECT；入口链顺序冻结。
-    let allow = sim.chain_rules("DF_EGRESS_RLY_ALLOW");
+    let allow = sim.chain_rules("DM_EGRESS_RLY_ALLOW");
     assert!(
         allow
             .iter()
@@ -2094,17 +2094,17 @@ async fn app_scoped_listener_resolves_uids_and_requires_restart() {
             && !rule.contains("--uid-owner")),
         "应用级端口不得出现放行全部 uid 的规则: {allow:?}"
     );
-    let deny = sim.chain_rules("DF_EGRESS_RLY_DENY");
+    let deny = sim.chain_rules("DM_EGRESS_RLY_DENY");
     assert!(
         deny.iter()
             .any(|rule| rule.contains(&format!("--dport {port} ")) && rule.contains("REJECT")),
         "{deny:?}"
     );
     assert_eq!(
-        sim.chain_rules("DF_EGRESS_RLY"),
+        sim.chain_rules("DM_EGRESS_RLY"),
         vec![
-            "-j DF_EGRESS_RLY_ALLOW".to_owned(),
-            "-j DF_EGRESS_RLY_DENY".to_owned(),
+            "-j DM_EGRESS_RLY_ALLOW".to_owned(),
+            "-j DM_EGRESS_RLY_DENY".to_owned(),
             "-j RETURN".to_owned()
         ],
         "入口链必须是 ALLOW→DENY→RETURN"
@@ -2237,10 +2237,10 @@ async fn firewall_applied_comes_from_live_snapshot_and_restart_repairs() {
         "3 + ALLOW + DENY: {body}"
     );
     assert!(body["relay"]["firewall"]["lastError"].is_null(), "{body}");
-    assert!(sim.chain_len("DF_EGRESS_RLY_ALLOW") >= 2);
+    assert!(sim.chain_len("DM_EGRESS_RLY_ALLOW") >= 2);
 
     // 手工 -F ALLOW（等价于被外部清掉）→ 现算必须 false，reason=state_mismatch
-    sim.flush_chain("DF_EGRESS_RLY_ALLOW");
+    sim.flush_chain("DM_EGRESS_RLY_ALLOW");
     let after = body_json(get_with_token(router, "/api/v1/egress", ADMIN_TOKEN).await).await;
     assert_eq!(after["relay"]["firewall"]["applied"], false, "{after}");
     assert_eq!(
@@ -2254,7 +2254,7 @@ async fn firewall_applied_comes_from_live_snapshot_and_restart_repairs() {
         .find(|warning| warning["code"] == "egress_relay_firewall_failed")
         .expect("防火墙不一致必须有 warning");
     assert_eq!(warning["details"]["reason"], "state_mismatch", "{warning}");
-    assert_eq!(warning["details"]["chain"], "DF_EGRESS_RLY", "{warning}");
+    assert_eq!(warning["details"]["chain"], "DM_EGRESS_RLY", "{warning}");
 
     // restart 强制 apply → 修回 applied=true；随后 GET 仍是 true（无 TTL 缓存也稳定）
     let repaired = body_json(
@@ -2275,7 +2275,7 @@ async fn firewall_applied_comes_from_live_snapshot_and_restart_repairs() {
 
     // 服务退出 / 中继关闭：三链被删（与 settings 清理同一条收口路径）
     shutdown(&fixture).await;
-    for chain in ["DF_EGRESS_RLY", "DF_EGRESS_RLY_ALLOW", "DF_EGRESS_RLY_DENY"] {
+    for chain in ["DM_EGRESS_RLY", "DM_EGRESS_RLY_ALLOW", "DM_EGRESS_RLY_DENY"] {
         assert!(
             sim.chain_rules(chain).is_empty(),
             "退出后必须删链 {chain}: {:?}",
@@ -2322,7 +2322,7 @@ async fn multi_user_package_resolves_each_user_uid() {
     .await;
     let listener = &body["relay"]["listeners"][0];
     assert_eq!(listener["allowedUids"], json!([0, 10123, 10199]), "{body}");
-    let allow = sim.chain_rules("DF_EGRESS_RLY_ALLOW");
+    let allow = sim.chain_rules("DM_EGRESS_RLY_ALLOW");
     for uid in ["0", "10123", "10199"] {
         assert!(
             allow
@@ -2387,7 +2387,7 @@ async fn firewall_failure_blocks_app_ports_but_keeps_device() {
         .expect("防火墙失败必须有 warning");
     assert_eq!(warning["details"]["op"], "apply", "{warning}");
     assert_eq!(warning["details"]["reason"], "command_failed", "{warning}");
-    assert_eq!(warning["details"]["chain"], "DF_EGRESS_RLY", "{warning}");
+    assert_eq!(warning["details"]["chain"], "DM_EGRESS_RLY", "{warning}");
 
     // 应用级端口确实没有 listener（连接被内核拒绝）
     let app_port = u16::try_from(app["port"].as_u64().expect("port")).expect("u16");

@@ -6,18 +6,18 @@
 code=200
 {"firewall": {"applied": true, "rules": 10, "allowRules": 4, "denyRules": 3, "lastError": null}, "listeners": [{"proxy": "dev_http", "port": 17800, "listening": true}, {"proxy": "app_http", "port": 17835, "listening": true}]}
 ## -S 三链
--N DF_EGRESS_RLY
--A DF_EGRESS_RLY -j DF_EGRESS_RLY_ALLOW
--A DF_EGRESS_RLY -j DF_EGRESS_RLY_DENY
--A DF_EGRESS_RLY -j RETURN
+-N DM_EGRESS_RLY
+-A DM_EGRESS_RLY -j DM_EGRESS_RLY_ALLOW
+-A DM_EGRESS_RLY -j DM_EGRESS_RLY_DENY
+-A DM_EGRESS_RLY -j RETURN
 ---
--N DF_EGRESS_RLY_ALLOW
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
--A DF_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
+-N DM_EGRESS_RLY_ALLOW
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -m owner --uid-owner 0 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 0 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17800 -j ACCEPT
+-A DM_EGRESS_RLY_ALLOW -d 127.0.0.0/8 -o lo -p tcp -m tcp --dport 17835 -m owner --uid-owner 10325 -j ACCEPT
 ---
--N DF_EGRESS_RLY_DENY
--A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
--A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
--A DF_EGRESS_RLY_DENY -p tcp -m tcp --dport 17864 -j REJECT --reject-with icmp-port-unreachable
+-N DM_EGRESS_RLY_DENY
+-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17800 -j REJECT --reject-with icmp-port-unreachable
+-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17835 -j REJECT --reject-with icmp-port-unreachable
+-A DM_EGRESS_RLY_DENY -p tcp -m tcp --dport 17864 -j REJECT --reject-with icmp-port-unreachable

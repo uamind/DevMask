@@ -15,7 +15,7 @@
 ## 1. 复核方式与命令
 
 ```sh
-cargo test -p device_faker_manager
+cargo test -p devmask_manager
 # 71 + 14 + 14 + 4 + 14(egress_flow) + 17 + 8 + 15 => 157 passed / 0 failed
 
 # t12 的两份复现（真实 manager 二进制 + t10 fixture），数字已随修复翻转：
@@ -26,7 +26,7 @@ python3 docs/design/egress/evidence-t12/repro-manager-egress.py
 python3 docs/design/egress/evidence-t30/repro-b1-b3-fixed.py
 #   A/B/C/D 共 17 项断言全 PASS（dryRun 无副作用、轮换再发 PUT、解绑后设备归零、非法 Idempotency-Key 422）
 
-# captain 指定核对项：显式 null 是否真的清掉设备端凭据（真实 device_faker_server）：
+# captain 指定核对项：显式 null 是否真的清掉设备端凭据（真实 devmask_server）：
 python3 docs/design/egress/evidence-t30/repro-null-clears-device-credential.py
 #   password:null / username:null 后 egress.toml 里凭据行消失、代理定义保留、hasCredentials=false
 ```
@@ -41,7 +41,7 @@ python3 docs/design/egress/evidence-t30/repro-null-clears-device-credential.py
 | **B-2** | ✅ fixed | 总是 PUT + `value["changed"]` 判定 `unchanged`（jobs.rs:1233-1274）；凭据字段总是显式（无密文发 `null`，jobs.rs:1602-1641）；`credential_rotation_and_clear_reach_device`（最后 PUT body 带新密码；清除后 `username/password` 为 null 且 mock `hasCredentials=false`）；t30 复现 B（PUT 1→2、code=None）；t30 复现「null 清设备凭据」（真机 device server） |
 | **B-3** | ✅ fixed | 零 app 绑定时 `apps: null`（jobs.rs:1657-1672）；`unbinding_apps_clears_device_state_and_sends_null`（body.logs `apps` 为 null、default null、proxies []，mock 设备侧归零）；t30 复现 C 全 PASS；mock 的合并语义按 t12 L-8 要求改过（已声明，不记缺陷） |
 | **M-1** | ✅ fixed | `valid_idempotency_key`（api/egress.rs:1893，1-128/无空白）+ 重放在校验之前（:1488-1510）+ UNIQUE 冲突回查重放（:1567-1575）；`invalid_idempotency_key_is_rejected_before_any_write`、`concurrent_same_idempotency_key_yields_one_job`；t30 复现 D（非法 key → 422） |
-| **M-2** | ✅ fixed | `DesiredError::{Decrypt,Db}` → `decrypt_failed` / `device_error`（jobs.rs:1683-1724，details.op=decrypt）；设备 Token → `device_token_invalid`（jobs.rs:1104）；`credential_decrypt_failure_is_its_own_result_code`（decrypt_failed + op=decrypt + message 含 manager.key + 设备零请求）、`device_token_decrypt_failure_has_own_code` |
+| **M-2** | ✅ fixed | `DesiredError::{Decrypt,Db}` → `decrypt_failed` / `device_error`（jobs.rs:1683-1724，details.op=decrypt）；设备 Token → `device_token_invalid`（jobs.rs:1104）；`credential_decrypt_failure_is_its_own_result_code`（decrypt_failed + op=decrypt + message 含 devmask-manager.key + 设备零请求）、`device_token_decrypt_failure_has_own_code` |
 | **L-1** | ✅ fixed | `is_valid_proxy_host`：含 `:` 时只接受 IPv6 字面量（api/egress.rs:105-126） |
 | **L-2** | ✅ fixed | probe 解密失败 `ApiError::internal("decrypt")`（api/egress.rs:1077）；job 侧 details.op=decrypt |
 | **L-3** | ✅ fixed | 请求明文显式 `zeroize`（api/egress.rs:418/664/690/857，`zeroize_credentials`），解密侧仍 `Zeroizing`（:1059-1079）；`zeroizes_request_credentials_after_encryption` |

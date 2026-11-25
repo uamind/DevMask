@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! t14 独立复验：R1-R9 修复与关键低危项。
 //!
@@ -21,7 +21,7 @@ use common::{
     mock_device::{MockApp, MockDevice, MockOptions, MockTemplate},
     send, send_json, send_json_with_headers, send_raw_body, start_app, start_app_with_token,
 };
-use device_faker_manager::state::{TokenSource, TokenState};
+use devmask_manager::state::{TokenSource, TokenState};
 use serde_json::{Value, json};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -977,7 +977,7 @@ async fn start_raw_device() -> RawDevice {
                     let path = target.split('?').next().unwrap_or_default();
                     let payload = if path.ends_with("/status") {
                         json!({
-                            "module": {"id": "device_faker", "version": "v1.9.0"},
+                            "module": {"id": "devmask", "version": "v1.9.0"},
                             "device": {
                                 "manufacturer": "Google", "brand": "google",
                                 "model": "Raw Device", "device": "raw",
@@ -1016,7 +1016,7 @@ async fn start_raw_device() -> RawDevice {
 fn raw_overview() -> Value {
     json!({
         "revision": "rev-raw",
-        "module": {"id": "device_faker", "version": "v1.9.0"},
+        "module": {"id": "devmask", "version": "v1.9.0"},
         "device": {
             "manufacturer": "Google", "brand": "google", "model": "Raw Device",
             "device": "raw", "android": "17", "sdk": 37, "fingerprint": "raw"
@@ -1092,7 +1092,7 @@ async fn low_proxy_preserves_encoded_question_mark_as_path() {
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use device_faker_manager::device_client::{DeviceCallError, DeviceHttp};
+use devmask_manager::device_client::{DeviceCallError, DeviceHttp};
 
 struct ChunkedDevice {
     base_url: String,

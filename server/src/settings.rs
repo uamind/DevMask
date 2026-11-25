@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! server.toml、命令行覆盖与启动前安全校验（docs/API.md 2.1、3.4；计划书附录 A）。
 //!
@@ -27,9 +27,9 @@ pub const DEFAULT_BIND: &str = "127.0.0.1:8686";
 /// 默认 `/data/adb` 根目录（root 管理器探测）。
 pub const DEFAULT_ADB_DIR: &str = "/data/adb";
 /// 默认静态资源目录（模块安装位置）。
-pub const DEFAULT_STATIC_DIR: &str = "/data/adb/modules/device_faker/webroot";
+pub const DEFAULT_STATIC_DIR: &str = "/data/adb/modules/devmask/webroot";
 /// 默认配置路径。
-pub const DEFAULT_CONFIG_PATH: &str = "/data/adb/device_faker/config/config.toml";
+pub const DEFAULT_CONFIG_PATH: &str = "/data/adb/devmask/config/config.toml";
 /// 默认请求体上限：2 MiB。
 pub const DEFAULT_BODY_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 /// 默认读请求限流（本增量只记录，执行留给后续增量）。
@@ -156,7 +156,7 @@ impl Settings {
 
     /// 审计日志路径：显式配置优先，否则 `<数据目录>/logs/api-audit.jsonl`。
     ///
-    /// 设备上 config.toml 在 `/data/adb/device_faker/config/`，因此数据目录是它的父目录；
+    /// 设备上 config.toml 在 `/data/adb/devmask/config/`，因此数据目录是它的父目录；
     /// host 上如果配置不在 `config/` 子目录里，就放在配置同目录的 `logs/` 下。
     pub fn audit_path(&self) -> PathBuf {
         if let Some(path) = &self.audit_log {

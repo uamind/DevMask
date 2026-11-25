@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! `GET /egress.relay` 的响应视图与 4 个 relay 警告码（契约 §6.1 / §6.4）。
 //!
@@ -55,9 +55,9 @@ pub struct RelayFirewallView {
     pub applied: bool,
     /// 三条链规则总条数。
     pub rules: usize,
-    /// `DF_EGRESS_RLY_ALLOW` 条数。
+    /// `DM_EGRESS_RLY_ALLOW` 条数。
     pub allow_rules: usize,
-    /// `DF_EGRESS_RLY_DENY` 条数。
+    /// `DM_EGRESS_RLY_DENY` 条数。
     pub deny_rules: usize,
     /// 最近一次失败。
     pub last_error: Option<RelayFirewallErrorView>,

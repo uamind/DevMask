@@ -51,7 +51,7 @@ If-Match revision = 3691c8e1e4e9bf1b8d0f800fa5f6c66d8f7483d579296176a74ff16428a6
 }
 HTTP 200
 HTTP/1.1 200 OK
-x-df-egress-revision: 4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
+x-dm-egress-revision: 4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
 {
   "revision": "4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c",
   "previousRevision": "3691c8e1e4e9bf1b8d0f800fa5f6c66d8f7483d579296176a74ff16428a6ceaa",
@@ -114,4 +114,4 @@ fail_open = true
 361:[egress]
 362-default = "mac_http"
 363-
--rw------- 1 root root 282 2026-11-24 21:16 /data/adb/device_faker/config/egress.toml
+-rw------- 1 root root 282 2026-11-24 21:16 /data/adb/devmask/config/egress.toml

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! GET /api/v1/packages（docs/API.md 5.20）。
 
@@ -11,7 +11,7 @@ use axum::{
     http::StatusCode,
     response::Response,
 };
-use device_faker_core::validate::is_valid_package_key;
+use devmask_core::validate::is_valid_package_key;
 use serde::Serialize;
 
 use crate::api::json as json_response;

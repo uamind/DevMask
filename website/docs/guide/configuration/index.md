@@ -5,7 +5,7 @@
 ## 配置文件路径
 
 ```
-/data/adb/device_faker/config/config.toml
+/data/adb/devmask/config/config.toml
 ```
 
 配置为**热加载**：模块在每次应用启动时重新读取配置文件。修改配置后只需重启目标应用，**无需重启系统**。
@@ -20,7 +20,7 @@ debug = false                        # 调试日志（默认关闭）
 default_force_denylist_unmount = false
 ```
 
-- `debug`：启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/device_faker/logs/device_faker.log`；正常使用建议保持关闭，以免留下不必要的运行痕迹
+- `debug`：启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/devmask/logs/devmask.log`；正常使用建议保持关闭，以免留下不必要的运行痕迹
 - `default_force_denylist_unmount`：为目标应用启用 Zygisk 的 `FORCE_DENYLIST_UNMOUNT`，可在模板/应用里用 `force_denylist_unmount` 覆盖
 
 ## 编辑配置

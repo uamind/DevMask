@@ -1,7 +1,7 @@
 # t18 复验（第三轮）：设备端出口代理（Pixel 9）
 
 - 设备：Pixel 9（tokay），4A190DLAQ002QR，Android 17 / SDK 37，KernelSU root
-- 模块：v1.10.0，/data/adb/modules/device_faker；设备端服务 device_faker_server 1.10.0
+- 模块：v1.10.0，/data/adb/modules/devmask；设备端服务 devmask_server 1.10.0
 - 代码基线：HEAD 822bbc7 + 未提交改动（含 t14 重放修复与 t17 的排障开关/降级路径收敛）
 - 本轮验证 t17 交付：**未修改任何实现代码**，改动只在 docs/design/egress/
 - 装机：libzygisk.so（t17 构建，22:33）推送后 adb reboot 重新加载；服务启动日志 tokens=1
@@ -26,18 +26,18 @@
 真机无关的三条命令（原始输出 evidence-t18/verify-commands.log）：
 
 ~~~
-=== cargo check -p device_faker --target aarch64-linux-android ===
+=== cargo check -p devmask --target aarch64-linux-android ===
 CHECK_EXIT=0
 
-=== cargo fmt -p device_faker --check ===
+=== cargo fmt -p devmask --check ===
 FMT_EXIT=0
 
-=== cargo clippy -p device_faker --target aarch64-linux-android --all-targets -- -D warnings ===
+=== cargo clippy -p devmask --target aarch64-linux-android --all-targets -- -D warnings ===
 CLIPPY_EXIT=0
 ~~~
 
 补充（单测为什么不在 macOS 上跑）：本 crate 的 prop-rs-android 依赖是 Android-only，macOS 上
-cargo test -p device_faker --lib 直接编译失败（真实错误：cannot find value SYS_futex / FUTEX_WAKE in crate libc）。
+cargo test -p devmask --lib 直接编译失败（真实错误：cannot find value SYS_futex / FUTEX_WAKE in crate libc）。
 因此改为 **把 aarch64 单测二进制推到真机执行**（见第 4 节），比宿主机跑更接近真实目标。
 
 ## 2. 装置
@@ -70,7 +70,7 @@ PUT HTTP 200 {"changed": true, "mode": "proxy", "default": "mac_http",
 2026-11-24T22:39:12+0800 proto=http listener=18080 CONNECT phonedeviceverification-pa.googleapis.com:443 auth=0
 2026-11-24T22:39:17+0800 proto=http listener=18080 CONNECT digitalassetlinks.googleapis.com:443 auth=0
 
---- DeviceFaker logcat ---
+--- DevMask logcat ---
 22:39:07.958 [egress] replay hook armed package=io.df.egressprobe
 22:39:07.979 [egress] replay hook fired symbol=setpriority
 22:39:07.979 [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
@@ -121,8 +121,8 @@ D-1 设备级 default=mac_http 开启（继承场景）
   settings=127.0.0.1:18080
   module log 行数 before=4282 after=4282 delta=0
   该包 [egress] 行=0
-  该进程 DeviceFaker logcat 行=1（该行是 adbd 记录我们自己的 grep 命令行，不是模块日志）
-  pid=11132 maps 命中 device_faker|arm64-v8a|zygisk=0
+  该进程 DevMask logcat 行=1（该行是 adbd 记录我们自己的 grep 命令行，不是模块日志）
+  pid=11132 maps 命中 devmask|arm64-v8a|zygisk=0
 
 D-2 设备级 :0 直连（未配置场景）
   module log 行数 before=4283 after=4283 delta=0
@@ -134,12 +134,12 @@ D-2 设备级 :0 直连（未配置场景）
 
 ### 4.1 降级分支的宿主单测可在仓库内直接跑通（t21 交付形态）
 
-t21 新增的 workspace 成员 **device_faker_module_tests**（module-tests/）把 src/egress.rs 的纯逻辑
+t21 新增的 workspace 成员 **devmask_module_tests**（module-tests/）把 src/egress.rs 的纯逻辑
 （含 plan_replay_arm / finish_replay_arm / 三条降级路径）搬成宿主可编译的独立 crate，依赖面压到
-log + toml + device_faker_core，**严禁引入 Android-only crate**。仓库内直接跑：
+log + toml + devmask_core，**严禁引入 Android-only crate**。仓库内直接跑：
 
 ~~~
-$ cargo test -p device_faker_module_tests
+$ cargo test -p devmask_module_tests
 running 30 tests
 test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
 test egress::tests::missing_libandroid_runtime_degrades_with_the_expected_log ... ok
@@ -153,7 +153,7 @@ MODULE_TESTS_EXIT=0
 
 （evidence-t18/module-tests-in-repo.log）——降级分支不是「只在 /tmp harness 里」，CI 可直接执行。
 
-补充（更贴近目标平台，非必需）：device_faker 本体在 macOS 上编不出来（prop-rs-android 是 Android-only，
+补充（更贴近目标平台，非必需）：devmask 本体在 macOS 上编不出来（prop-rs-android 是 Android-only，
 真实错误：cannot find value SYS_futex / FUTEX_WAKE in crate libc），所以另把 **aarch64 单测二进制推到真机**
 跑了一遍同一套用例：30 passed / 0 failed，单用例复跑（missing_libandroid_runtime / commit_failure /
 debug_switch / arm_plan）各 1 passed。见 evidence-t18/unit-tests-on-device.log。
@@ -161,10 +161,10 @@ debug_switch / arm_plan）各 1 passed。见 evidence-t18/unit-tests-on-device.l
 ### 4.2 装机二进制含两条降级文案
 
 ~~~
-$ strings /data/adb/modules/device_faker/zygisk/arm64-v8a.so | grep -E 'replay hook unavailable|debug_disable_replay'
+$ strings /data/adb/modules/devmask/zygisk/arm64-v8a.so | grep -E 'replay hook unavailable|debug_disable_replay'
 [egress] replay hook unavailable reason=commit_failed error=
 [egress] replay hook unavailable reason=libandroid_runtime_not_found
-[egress] replay hook unavailable reason=debug_disable_replay (debug.device_faker.egress.disable_replay is set; one-shot injection only)
+[egress] replay hook unavailable reason=debug_disable_replay (debug.devmask.egress.disable_replay is set; one-shot injection only)
 ~~~
 
 ### 4.3 正常路径 hook fired 有真机日志
@@ -179,9 +179,9 @@ $ strings /data/adb/modules/device_faker/zygisk/arm64-v8a.so | grep -E 'replay h
 ~~~
 $ grep -rn 'env::var|getenv|std::env' src/            -> (none)
 $ grep -rn 'cfg(feature|cfg(debug_assertions' src/    -> (none)
-$ grep -rn '"debug\.|"device_faker\.' src/
-src/hooks.rs:749:  const NAME: &std::ffi::CStr = c"debug.device_faker.egress.disable_replay";
-src/egress.rs:775: "[egress] replay hook unavailable reason=debug_disable_replay (debug.device_faker.egress.disable_replay is set; one-shot injection only)"
+$ grep -rn '"debug\.|"devmask\.' src/
+src/hooks.rs:749:  const NAME: &std::ffi::CStr = c"debug.devmask.egress.disable_replay";
+src/egress.rs:775: "[egress] replay hook unavailable reason=debug_disable_replay (debug.devmask.egress.disable_replay is set; one-shot injection only)"
 ~~~
 
 即：**整个 src/ 里只有一个系统属性读取点**，且它是 t17 按复核要求新增的排障开关。
@@ -190,9 +190,9 @@ src/egress.rs:775: "[egress] replay hook unavailable reason=debug_disable_replay
 
 ~~~
 $ strings arm64-v8a.so | grep -E '^(debug|persist|ro)\.'
-debug.device_faker.egress.disable_replay        <- egress 唯一开关
+debug.devmask.egress.disable_replay        <- egress 唯一开关
 ro.build./ro.product./ro.vendor.../persist.sys.timezone  <- COW 机型伪装用的属性名（既有功能，与 egress 无关）
-$ strings arm64-v8a.so | grep -E 'DEVICE_FAKER_|DF_[A-Z_]+' -> (none)
+$ strings arm64-v8a.so | grep -E 'DEVMASK_|DF_[A-Z_]+' -> (none)
 ~~~
 
 ### 5.3 该开关不构成旁路（它只降级、且有两条护栏）
@@ -217,7 +217,7 @@ E1 关键原文：
 
 ~~~
 [2026-11-24 22:40:15.490] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
-[2026-11-24 22:40:15.490] [WARN] zygisk::hooks - [egress] replay hook unavailable reason=debug_disable_replay (debug.device_faker.egress.disable_replay is set; one-shot injection only)
+[2026-11-24 22:40:15.490] [WARN] zygisk::hooks - [egress] replay hook unavailable reason=debug_disable_replay (debug.devmask.egress.disable_replay is set; one-shot injection only)
 11-24 22:40:21.490 11559 I EGRESSPROBE: http.proxyPort=18080
 2026-11-24T22:40:17+0800 proto=http listener=18080 GET http://app.fixture/ host=app.fixture auth=0
 ~~~
@@ -258,11 +258,11 @@ E1 关键原文：
 
 ~~~
 armed pid=11689
-按名命中 device_faker|arm64-v8a|libzygisk = 0
+按名命中 devmask|arm64-v8a|libzygisk = 0
 maps 总行数 = 3198；含 [anon 的行数 = 478
 
 companion 进程（pid 2004）maps 里能看到模块路径：
-7c2ae8e000-7c2aed1000 r--p 00000 fe:40 170938 /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+7c2ae8e000-7c2aed1000 r--p 00000 fe:40 170938 /data/adb/modules/devmask/zygisk/arm64-v8a.so
 7c2aed4000-7c2aafe7000 r-xp 00042000 ...（同上，r-xp 段）
 ~~~
 
@@ -321,7 +321,7 @@ $ adb reverse --list                          -> （空）
 
 已清理：DELETE /egress；移除测试期 [[apps]] io.df.egressprobe 记录；恢复 server.toml 备份；
 卸载探针应用；删除 /data/local/tmp 下的单测二进制与临时文件；删除测试期 egress.toml；
-清除 debug.device_faker.egress.disable_replay（空值）；停 fixture；adb reverse --remove-all / forward --remove；
+清除 debug.devmask.egress.disable_replay（空值）；停 fixture；adb reverse --remove-all / forward --remove；
 config.toml 的 debug 行恢复为 t14 时的 true。
 
 ## 9. 非阻塞观察
@@ -331,7 +331,7 @@ config.toml 的 debug 行恢复为 t14 时的 true。
    本轮 socks 用例用 noauth 代理验证链路，契约 §5.1 第 7 项在该机型的限制仍建议文档标注。
 2. **O2 重放窗口时长固定 2000ms**：本轮实测 elapsed=2000–2001ms、probes=118；框架在 handleBindApplication 只写一次，
    因此窗口外的设备级改动不会纠正（需重启应用），与文档一致。属设计取舍，不是缺陷。
-3. **O3（已由 t21 解决）** device_faker 本体在 macOS 上编不出来（prop-rs-android Android-only），
+3. **O3（已由 t21 解决）** devmask 本体在 macOS 上编不出来（prop-rs-android Android-only），
    但 t21 的 module-tests crate 让同一套逻辑在仓库内可直接跑（本轮实测 30 passed）；真机执行 aarch64 单测
    作为额外佐证保留。建议 CI 同时跑 module-tests（宿主机）与真机二进制（发布前）。
 
@@ -341,7 +341,7 @@ config.toml 的 debug 行恢复为 t14 时的 true。
 | --- | --- |
 | evidence-t18/verify-commands.log | git log、cargo check/fmt/clippy（aarch64）原始输出 + 宿主单测失败原因 + android 单测构建 |
 | evidence-t18/unit-tests-on-device.log | 真机执行 aarch64 单测：30 passed（含两条降级用例与护栏用例） |
-| evidence-t18/module-tests-in-repo.log | 仓库内 cargo test -p device_faker_module_tests：30 passed（t21 交付形态，CI 可直接跑） |
+| evidence-t18/module-tests-in-repo.log | 仓库内 cargo test -p devmask_module_tests：30 passed（t21 交付形态，CI 可直接跑） |
 | evidence-t18/t18-a-app-http.log | A 组（F1）：属性 18082 + fixture listener=18082 + hook fired/replay t=32ms |
 | evidence-t18/t18-b-app-socks.log | B 组：socks5 属性/互斥 + SOCKS tunnel-request |
 | evidence-t18/t18-c-direct.log | C 组（F2）：__DIRECT__ 属性全空 + app.fixture 命中 0 + 设备级仍 18080 |
@@ -358,11 +358,11 @@ config.toml 的 debug 行恢复为 t14 时的 true。
 # 0) 构建 + 装机
 export ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk
 RUSTFLAGS="-C default-linker-libraries" cargo +nightly ndk --platform 31 -t arm64-v8a build --release
-adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+adb push target/aarch64-linux-android/release/libzygisk.so /data/adb/modules/devmask/zygisk/arm64-v8a.so
 adb reboot
 
 # 0b) 单测（本 crate 不能在 macOS 跑，改在真机执行）
-cargo ndk --platform 31 -t arm64-v8a test -p device_faker --lib --no-run
+cargo ndk --platform 31 -t arm64-v8a test -p devmask --lib --no-run
 adb push target/aarch64-linux-android/debug/deps/zygisk-<hash> /data/local/tmp/df_unit_tests
 adb shell 'chmod 0755 /data/local/tmp/df_unit_tests && /data/local/tmp/df_unit_tests --test-threads=1'
 
@@ -374,8 +374,8 @@ adb forward tcp:18686 tcp:8686
 # 2) A/B/C：PUT /egress {"default":"mac_http","proxies":[...],"apps":[{probe,<mac_http2|mac_socks|__DIRECT__>}]}
 adb install -r docs/design/egress/fixtures/probe-app/egress-probe.apk
 adb shell 'am force-stop io.df.egressprobe; logcat -c; am start -W -n io.df.egressprobe/.MainActivity; sleep 5'
-adb shell 'logcat -d -s EGRESSPROBE:I'; adb shell 'logcat -d | grep -a DeviceFaker'
+adb shell 'logcat -d -s EGRESSPROBE:I'; adb shell 'logcat -d | grep -a DevMask'
 
-# 3) E：setprop debug.device_faker.egress.disable_replay 1 / 0 / ""（配 debug=true 才生效）
+# 3) E：setprop debug.devmask.egress.disable_replay 1 / 0 / ""（配 debug=true 才生效）
 # 4) 收尾：DELETE /egress?confirm=true；adb shell 'settings put global http_proxy :0'
 ~~~

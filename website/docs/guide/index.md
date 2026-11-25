@@ -1,4 +1,4 @@
-# Device Faker 📱
+# DevMask 📱
 
 一个基于 Zygisk 的机型伪装模块，可以为不同的应用配置不同的设备型号。
 
@@ -15,7 +15,7 @@
 
 ## WebUI 功能 🖥️
 
-Device Faker 提供了现代化的 Web 管理界面
+DevMask 提供了现代化的 Web 管理界面
 
 - 📋 **模板管理**: 创建、编辑和删除机型模板，批量应用到多个包名
 - 📱 **应用管理**: 直观查看已安装应用及其配置状态，支持多用户应用显示
@@ -26,13 +26,13 @@ Device Faker 提供了现代化的 Web 管理界面
 
 详细的配置说明请参考 [配置文档](./configuration/index.md)。
 
-配置文件位于 `/data/adb/device_faker/config/config.toml`，使用 TOML 格式。修改配置后仅需重启对应应用即可生效，无需重启系统。
+配置文件位于 `/data/adb/devmask/config/config.toml`，使用 TOML 格式。修改配置后仅需重启对应应用即可生效，无需重启系统。
 
 ## 模板配置贡献 🎁
 
-感谢社区成员的贡献，你也可以参与！Device Faker 配置仓库：
+感谢社区成员的贡献，你也可以参与！DevMask 配置仓库：
 
-- 📦 [device_faker_config](https://github.com/Seyud/device_faker_config) - 贡献机型模板配置
+- 📦 [devmask_config](https://github.com/uamind/DevMask_config) - 贡献机型模板配置
 
 贡献设备配置，帮助更多用户获得更好的机型伪装效果！
 

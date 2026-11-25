@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 #[cfg(target_os = "android")]
 mod atexit;
@@ -34,11 +34,11 @@ use zygisk_api::{
     raw::ZygiskRaw,
 };
 
-pub(crate) const CONFIG_PATH: &str = "/data/adb/device_faker/config/config.toml";
+pub(crate) const CONFIG_PATH: &str = "/data/adb/devmask/config/config.toml";
 
 /// 版本 banner 用的构建标识，格式为
 /// `v<版本> (<git hash>, built <YYYY-MM-DD HH:MM:SS ±HH:MM>) <上游仓库>`，例如
-/// `v1.7.0 (16e269f, built 2026-10-31 04:28:53 +08:00) <https://github.com/Seyud/device_faker>`。
+/// `v1.7.0 (16e269f, built 2026-10-31 04:28:53 +08:00) <https://github.com/uamind/DevMask>`。
 ///
 /// - `DF_GIT_HASH` / `DF_BUILD_EPOCH` 由 `build.rs` 在编译期注入（工作区脏会带 `-dirty`）；
 /// - 时间按**设备本地时区**渲染并附 UTC 偏移——真机上排查「时钟/时区」相关问题时，
@@ -51,7 +51,7 @@ pub(crate) fn build_ident() -> String {
         .and_then(format_epoch_local)
         .unwrap_or_else(|| "unknown".to_string());
 
-    format!("v{version} ({hash}, built {built}) <https://github.com/Seyud/device_faker>")
+    format!("v{version} ({hash}, built {built}) <https://github.com/uamind/DevMask>")
 }
 
 /// epoch 秒 → 设备本地时间字符串（`YYYY-MM-DD HH:MM:SS ±HH:MM`），失败返回 `None`。
@@ -464,7 +464,7 @@ fn load_config_for(
     Ok(Some((config, egress_proxy)))
 }
 
-/// 只在 companion 侧使用：读取 `/data/adb/device_faker/config/config.toml` 用于渲染 spec。
+/// 只在 companion 侧使用：读取 `/data/adb/devmask/config/config.toml` 用于渲染 spec。
 /// 模块进程（zygote 域）读不到该路径，不会走到这里。
 pub(crate) fn load_config() -> anyhow::Result<Option<Config>> {
     if !Path::new(CONFIG_PATH).exists() {

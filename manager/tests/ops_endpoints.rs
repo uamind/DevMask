@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 契约读 / 运维端点：templates、overview、audit、token rotate、proxy、jobs 列表。
 
@@ -16,7 +16,7 @@ use common::{
     send, send_json, send_json_with_headers, send_raw_with_content_type, start_app,
     start_app_with_token,
 };
-use device_faker_manager::state::{TokenSource, TokenState};
+use devmask_manager::state::{TokenSource, TokenState};
 use serde_json::{Value, json};
 
 async fn add_device(app: &TestApp, mock: &MockDevice, name: &str) -> Value {

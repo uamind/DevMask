@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 配置写事务：同一个 flock 内完成「读 → If-Match → 编辑 → 语义校验 → 备份 → 原子写」。
 //!
@@ -13,10 +13,10 @@ use std::fs;
 use std::path::Path;
 
 use axum::http::{HeaderMap, header::IF_MATCH};
-use device_faker_core::config::Config;
-use device_faker_core::edit::{self, EditError};
-use device_faker_core::revision::{self, ConfigStore, FileLock, StoreError};
-use device_faker_core::validate::{self, ValidationOptions, ValidationReport};
+use devmask_core::config::Config;
+use devmask_core::edit::{self, EditError};
+use devmask_core::revision::{self, ConfigStore, FileLock, StoreError};
+use devmask_core::validate::{self, ValidationOptions, ValidationReport};
 use toml_edit::DocumentMut;
 
 use crate::error::ApiError;

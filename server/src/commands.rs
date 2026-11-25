@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 系统命令执行抽象。
 //!
@@ -480,14 +480,14 @@ mod tests {
     #[test]
     fn fixture_runner_renders_device_style_chain() {
         let runner = FixtureRunner::new().with_iptables();
-        runner.run("iptables", &["-w", "2", "-N", "DF_EGRESS_RLY_ALLOW"]);
+        runner.run("iptables", &["-w", "2", "-N", "DM_EGRESS_RLY_ALLOW"]);
         let added = runner.run(
             "iptables",
             &[
                 "-w",
                 "2",
                 "-A",
-                "DF_EGRESS_RLY_ALLOW",
+                "DM_EGRESS_RLY_ALLOW",
                 "-o",
                 "lo",
                 "-d",
@@ -505,7 +505,7 @@ mod tests {
             ],
         );
         assert!(added.is_ok(), "{added:?}");
-        let listing = runner.run("iptables", &["-w", "2", "-S", "DF_EGRESS_RLY_ALLOW"]);
+        let listing = runner.run("iptables", &["-w", "2", "-S", "DM_EGRESS_RLY_ALLOW"]);
         let text = listing.stdout().expect("stdout");
         assert!(
             text.contains("-d 127.0.0.0/8 -o lo"),
@@ -524,7 +524,7 @@ mod tests {
     #[test]
     fn fixture_runner_rejects_unknown_iptables_subcommand() {
         let runner = FixtureRunner::new().with_iptables();
-        let outcome = runner.run("iptables", &["-w", "2", "-Z", "DF_EGRESS_RLY"]);
+        let outcome = runner.run("iptables", &["-w", "2", "-Z", "DM_EGRESS_RLY"]);
         match outcome {
             CommandOutcome::Failed { code, stderr } => {
                 assert_eq!(code, Some(2), "未注册子命令必须显式失败");
@@ -549,7 +549,7 @@ mod tests {
 
     #[test]
     fn missing_binary_is_unavailable() {
-        let outcome = SystemRunner::default().run("device-faker-definitely-not-a-binary", &[]);
+        let outcome = SystemRunner::default().run("devmask-definitely-not-a-binary", &[]);
         assert!(matches!(outcome, CommandOutcome::Unavailable { .. }));
     }
 

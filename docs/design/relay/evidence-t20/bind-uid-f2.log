@@ -18,6 +18,6 @@ nc: connect: Connection refused
 ## server.log reason 行
 grep: client: No such file or directory
 grep: rejected: No such file or directory
-/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:16.244864Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
-/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:26.677086Z[0m [32m INFO[0m relay restarted [3mlisteners[0m[2m=[0m2
-/data/adb/device_faker/logs/server.log:[2m2026-11-25T04:19:32.604361Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"
+/data/adb/devmask/logs/server.log:[2m2026-11-25T04:19:16.244864Z[0m [32m INFO[0m relay listen [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3mscope[0m[2m=[0m"app" [3mkind[0m[2m=[0m"http" [3muid_policy[0m[2m=[0m"restricted"
+/data/adb/devmask/logs/server.log:[2m2026-11-25T04:19:26.677086Z[0m [32m INFO[0m relay restarted [3mlisteners[0m[2m=[0m2
+/data/adb/devmask/logs/server.log:[2m2026-11-25T04:19:32.604361Z[0m [33m WARN[0m relay client rejected [3mproxy[0m[2m=[0mapp_http [3mport[0m[2m=[0m17835 [3muid[0m[2m=[0m"unknown" [3mreason[0m[2m=[0m"uid_unresolved"

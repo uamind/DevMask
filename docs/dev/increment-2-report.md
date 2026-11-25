@@ -3,7 +3,7 @@
 - 日期：2026-11-24
 - 范围：t13「管理器模式外部访问卡片」验收；不改业务代码、不 commit
 - 设备：Pixel 9 / Android 17 / KernelSU（root）；手机 IP 192.168.30.2，Mac 192.168.30.149（同一 /24）
-- 服务二进制：target/aarch64-linux-android/release/device_faker_server（t9 构建，t4 之后版本）
+- 服务二进制：target/aarch64-linux-android/release/devmask_server（t9 构建，t4 之后版本）
 - 结论：开关、端口、Token 三条路径全部通过；UI 卡片自动化点击受共享浏览器 hidden 限制，改为「t13 纯函数 + 真机 server.toml 等价写入 + 模式门控」验证，并给出手工步骤。
 
 ---
@@ -27,13 +27,13 @@
 ## 2. 构建与单测
 
     python3 webui/build_webui.py        # exit 0
-    cargo test -p device_faker_core      # exit 0
-    cargo test -p device_faker_server    # exit 0
+    cargo test -p devmask_core      # exit 0
+    cargo test -p devmask_server    # exit 0
 
 | 项 | passed | failed |
 | --- | ---: | ---: |
-| device_faker_core | 51 | 0 |
-| device_faker_server | 166 | 0 |
+| devmask_core | 51 | 0 |
+| devmask_server | 166 | 0 |
 | WebUI（type-check + lint + build） | — | 0 |
 
 ---
@@ -64,27 +64,27 @@
 
 | 项 | 值 |
 | --- | --- |
-| /data/adb/device_faker/config/config.toml | 9361 bytes，sha256 f9f80df8af73…，mtime 1793793738，mode 600 |
-| /data/adb/device_faker/config/server.toml | 不存在（记录 absent，结束时删除重建的文件即恢复） |
+| /data/adb/devmask/config/config.toml | 9361 bytes，sha256 f9f80df8af73…，mtime 1793793738，mode 600 |
+| /data/adb/devmask/config/server.toml | 不存在（记录 absent，结束时删除重建的文件即恢复） |
 | 已安装模块 | 旧版本：只有 module.prop / uninstall.sh / webroot / zygisk，没有 service.sh、bin/、server.default.toml |
 | 备份 | config.toml → /data/local/tmp/df-t14/config.toml.bak（sha256 一致） |
 
 说明：当前设备模块是 t7 之前安装的旧版；为走真实 service.sh restart 路径，临时把 t7 的
-module/service.sh、module/server.default.toml、release device_faker_server 放进
-/data/adb/modules/device_faker/，验收结束后全部删除（见 4.6）。用户安装新模块 zip 后即自带这些文件。
+module/service.sh、module/server.default.toml、release devmask_server 放进
+/data/adb/modules/devmask/，验收结束后全部删除（见 4.6）。用户安装新模块 zip 后即自带这些文件。
 
 ### 4.2 模拟 UI 写入（与 t13 save() 同一套纯函数）
 
 用 t13 的 applyServerSettings + appendTokenBlock + stripTokenBlocks 处理
 module/server.default.toml（等价于 UI 在没有 server.toml 时使用默认模板），生成
 bind = "0.0.0.0:18901"、allow_lan = true、一条 [[tokens]]（sha256），push 到真实
-/data/adb/device_faker/config/server.toml 并 chmod 600。
+/data/adb/devmask/config/server.toml 并 chmod 600。
 
     parseServerSettings -> {"bind":"0.0.0.0:18901","host":"0.0.0.0","port":18901,"allowLan":true,"hasToken":true,"tokenCount":1}
 
 ### 4.3 开启：LAN 连通
 
-    su -c "sh /data/adb/modules/device_faker/service.sh restart"   # 见下方 exit 124 说明
+    su -c "sh /data/adb/modules/devmask/service.sh restart"   # 见下方 exit 124 说明
     service.sh status -> supervisor: running (pid=29746) / server: running (pid=29751)
     ss -ltn -> LISTEN 0.0.0.0:18901
 
@@ -134,8 +134,8 @@ bind = "0.0.0.0:18901"、allow_lan = true、一条 [[tokens]]（sha256），push
 | 恢复 config.toml | sha256 f9f80df8af73…、size 9361、mtime 1793793738，与基线一致 |
 | 删除测试 server.toml | 原状态 absent，已删除 |
 | 删除临时模块文件 | service.sh / server.default.toml / bin/ 已移除；模块目录恢复为 module.prop/uninstall.sh/webroot/zygisk |
-| 清理 pid / server.log / backups | 已删除；logs/device_faker.log 原文件保留 |
-| 端口/进程/forward | ss 无 18901/18902 监听；无 device_faker_server 进程；adb forward --list 为空 |
+| 清理 pid / server.log / backups | 已删除；logs/devmask.log 原文件保留 |
+| 端口/进程/forward | ss 无 18901/18902 监听；无 devmask_server 进程；adb forward --list 为空 |
 
 config.toml.lock 是 t9 遗留的空锁文件，本轮开始时就存在，保持原样未动。
 
@@ -156,7 +156,7 @@ native/readonly 不渲染。本轮在此基础上补了真机 server.toml + serv
 
 ### 手工点击步骤（可复现）
 
-1. 安装新模块 zip（含 service.sh、bin/device_faker_server、server.default.toml），重启设备或执行 su -c "sh /data/adb/modules/device_faker/service.sh start"。
+1. 安装新模块 zip（含 service.sh、bin/devmask_server、server.default.toml），重启设备或执行 su -c "sh /data/adb/modules/devmask/service.sh start"。
 2. 管理器打开 WebUI → Settings → External access 卡片。
 3. 打开开关，端口改为 18901 → Save；若没有 Token，会弹出一次性 Token 明文，复制保存。
 4. 手机与 Mac 同一 Wi-Fi；Mac 执行：
@@ -191,21 +191,21 @@ native/readonly 不渲染。本轮在此基础上补了真机 server.toml + serv
 ## 8. 复现命令速查
 
     # 单测 / 构建
-    cargo test -p device_faker_core
-    cargo test -p device_faker_server
+    cargo test -p devmask_core
+    cargo test -p devmask_server
     python3 webui/build_webui.py
     node --experimental-strip-types tests/webui/server-config.test.mjs
 
     # 真机（root，t7+ 模块）
-    adb shell 'su -c "cp -p /data/adb/device_faker/config/config.toml /data/local/tmp/config.toml.bak"'
+    adb shell 'su -c "cp -p /data/adb/devmask/config/config.toml /data/local/tmp/config.toml.bak"'
     # 用 UI 或 serverConfig 纯函数生成 server.toml（bind 0.0.0.0:18901 + allow_lan=true + [[tokens]]）
     adb push server.toml /data/local/tmp/server.toml
-    adb shell 'su -c "cp /data/local/tmp/server.toml /data/adb/device_faker/config/server.toml && chmod 600 /data/adb/device_faker/config/server.toml"'
-    adb shell 'su -c "sh /data/adb/modules/device_faker/service.sh restart"'
+    adb shell 'su -c "cp /data/local/tmp/server.toml /data/adb/devmask/config/server.toml && chmod 600 /data/adb/devmask/config/server.toml"'
+    adb shell 'su -c "sh /data/adb/modules/devmask/service.sh restart"'
     curl -H "Authorization: Bearer $TOKEN" http://<phone-ip>:18901/api/v1/status
     # 关闭：bind 127.0.0.1 + allow_lan=false，重启后再 curl 应失败
-    adb shell 'su -c "sh /data/adb/modules/device_faker/service.sh stop"'
-    adb shell 'su -c "cp -p /data/local/tmp/config.toml.bak /data/adb/device_faker/config/config.toml; rm -f /data/adb/device_faker/config/server.toml"'
+    adb shell 'su -c "sh /data/adb/modules/devmask/service.sh stop"'
+    adb shell 'su -c "cp -p /data/local/tmp/config.toml.bak /data/adb/devmask/config/config.toml; rm -f /data/adb/devmask/config/server.toml"'
 
 ---
 

@@ -28,7 +28,7 @@ lastUpdated: false
 ### ⚡ 改进
 - 🏎️ companion 读取属性零 fork —— 存在性判定与备份直接查属性区
 - 👻 属性写入「本机不存在就不写」，不再留下可枚举的幽灵属性
-- 📦 模块不再打包 device_faker_cli，安装包体积减小
+- 📦 模块不再打包 devmask_cli，安装包体积减小
 - 🧱 cow_props 拆分为 11 个模块，职责分层便于维护
 - ⬆️ 依赖全量升级：rsbinder 0.11、WebUI 依赖 20+ 项、CI 升 NDK r30
 

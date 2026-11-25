@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -34,13 +34,13 @@ import {
  * 正常情况下路径由 `ksu.moduleInfo().moduleDir` 给出：模块目录名取决于安装方式
  * （Magisk/KernelSU 装到 `/data/adb/modules/<目录名>`，未重启的新版模块在
  * `/data/adb/modules_update/<目录名>`），目录名与 module.prop 里的 `id` 不保证
- * 相同，硬编码 `device_faker` 会在这些情况下读到不存在的文件。
+ * 相同，硬编码 `devmask` 会在这些情况下读到不存在的文件。
  */
 const MODULE_PROP_FALLBACK_PATHS = [
-  '/data/adb/modules/device_faker/module.prop',
-  '/data/adb/modules_update/device_faker/module.prop',
+  '/data/adb/modules/devmask/module.prop',
+  '/data/adb/modules_update/devmask/module.prop',
 ]
-const CONFIG_BACKUP_KEY = 'device_faker_config_backup_v1'
+const CONFIG_BACKUP_KEY = 'devmask_config_backup_v1'
 
 /** 429 限流冷却截止时间（毫秒时间戳）：冷却期内直接拒绝保存（契约 §10.5）。 */
 let rateLimitedUntil = 0
@@ -314,7 +314,7 @@ export const useConfigStore = defineStore('config', () => {
     // 首次 401 → 登录成功后重跑一次加载，避免界面停在「--」
     if (!tokenListenerRegistered && typeof window !== 'undefined') {
       tokenListenerRegistered = true
-      window.addEventListener('device-faker:token-changed', (event) => {
+      window.addEventListener('devmask:token-changed', (event) => {
         if ((event as CustomEvent<string>).detail !== 'login') return
         configReady.value = false
         moduleMetaReady.value = false
@@ -396,7 +396,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   // 兼容旧的函数式 API
-  function getDeviceFakerCount(): number {
+  function getDevMaskCount(): number {
     return deviceFakerCount.value
   }
 
@@ -590,7 +590,7 @@ export const useConfigStore = defineStore('config', () => {
     getApps,
     setApp,
     deleteApp,
-    getDeviceFakerCount,
+    getDevMaskCount,
     isPackageConfigured,
     getPackageConfig,
     resolvePackageMatchesFor,

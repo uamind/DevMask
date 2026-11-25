@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -202,9 +202,9 @@
 <script setup lang="ts">
 import { ChevronDown, Plus, Trash } from '@lucide/vue'
 import { useI18n } from '../../utils/i18n'
-import { useDeviceFakerFormField } from '../../composables/useDeviceFakerForm'
+import { useDevMaskFormField } from '../../composables/useDevMaskForm'
 
-const formData = useDeviceFakerFormField()
+const formData = useDevMaskFormField()
 
 const { t } = useI18n()
 

@@ -1,14 +1,14 @@
 === git log -1 ===
 822bbc7 feat(manager): add multi-device relay service and console
 
-=== cargo check -p device_faker --target aarch64-linux-android ===
+=== cargo check -p devmask --target aarch64-linux-android ===
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
 CHECK_EXIT=0
 
-=== cargo fmt -p device_faker --check ===
+=== cargo fmt -p devmask --check ===
 FMT_EXIT=0
 
-=== cargo clippy -p device_faker --target aarch64-linux-android --all-targets -- -D warnings ===
+=== cargo clippy -p devmask --target aarch64-linux-android --all-targets -- -D warnings ===
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
 CLIPPY_EXIT=0
 
@@ -58,9 +58,9 @@ error[E0425]: cannot find value `FUTEX_WAKE` in crate `libc`
    Compiling rsproperties v0.6.0
    Compiling prop-rs-android v0.2.0 (https://github.com/KernelSU2/ksu_props?rev=ddb6ee7294467f7f25bad2118e9e24eee104144b#ddb6ee72)
    Compiling serde_json v1.0.151
-   Compiling device_faker_core v1.7.0 (/Users/crymang/Works/device_faker/core)
+   Compiling devmask_core v1.7.0 (/Users/crymang/Works/devmask/core)
    Compiling zygisk-api v0.0.2 (https://github.com/Seyud/zygisk-api-rs.git#7fc690a3)
    Compiling rsbinder v0.11.0
-   Compiling device_faker v1.10.0 (/Users/crymang/Works/device_faker)
+   Compiling devmask v1.10.0 (/Users/crymang/Works/devmask)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 33.61s
 ANDROID_TEST_BUILD_EXIT=0

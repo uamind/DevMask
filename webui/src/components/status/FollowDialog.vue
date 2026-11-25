@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -177,10 +177,10 @@ const moduleAuthor = computed(() => configStore.moduleAuthor)
 
 const qqGroupUrl =
   'https://qun.qq.com/universal-share/share?ac=1&authKey=ls4nlfcsF%2Bxp5SPnVsXRgpbeV1axPZb%2FmJCMXms6ZCHjgAwvOyl1LV%2BDNVL1btgL&busi_data=eyJncm91cENvZGUiOiI4NTQxODgyNTIiLCJ0b2tlbiI6IlE1WVVyZTZxUXVjZUtGUUxWSGFmbzkvMEd3UWNRSiszdklTZDhHejU0RDRyT0lWRTFqS3d4UGJSM1ltaXpkS3MiLCJ1aW4iOiIxMTA1NzgzMDMzIn0%3D&data=IbvhTKt9HwCSsCsl_610-rQ8p6H2NgLmxhEKkMcn-BMWPb86jygWBZJfWLQGm7J8LwpVV2yhPafxTMXYGkjRVA&svctype=4&tempid=h5_group_info'
-const telegramIntentUrl = 'tg://resolve?domain=device_faker'
-const telegramWebUrl = 'https://t.me/device_faker'
-const websiteUrl = 'https://seyud.github.io/device_faker/'
-const repositoryUrl = 'https://github.com/Seyud/device_faker'
+const telegramIntentUrl = 'tg://resolve?domain=devmask'
+const telegramWebUrl = 'https://t.me/devmask'
+const websiteUrl = 'https://seyud.github.io/devmask/'
+const repositoryUrl = 'https://github.com/uamind/DevMask'
 const authorGithubUrl = 'https://github.com/Seyud'
 
 const authorLinks = computed(() => {

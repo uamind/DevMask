@@ -1,6 +1,6 @@
 ===== E-1 配置：设备级 mac_http(18080) + 应用级 mac_http2(18082) =====
 PUT HTTP 200
-===== E-2 冷启动探针，按时间点抓 logcat(DeviceFaker) 与 /proc/<pid>/maps =====
+===== E-2 冷启动探针，按时间点抓 logcat(DevMask) 与 /proc/<pid>/maps =====
 --- 累计等待 0.4 s，pid=13242 ---
 maps 命中行：
 maps 命中数=0
@@ -10,13 +10,13 @@ maps 命中数=0
 --- 累计等待 6 s，pid=13242 ---
 maps 命中行：
 maps 命中数=0
---- logcat DeviceFaker（hook armed/fired/start/replay/done）---
-11-24 22:15:02.252 13242 13242 I DeviceFaker: [egress] replay hook armed package=io.df.egressprobe
-11-24 22:15:02.274 13242 13242 I DeviceFaker: [egress] replay hook fired symbol=setpriority
-11-24 22:15:02.274 13242 13242 I DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
-11-24 22:15:04.277 13242 13246 W DeviceFaker: [egress] replay package=io.df.egressprobe t=26ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
-11-24 22:15:04.278 13242 13246 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
-11-24 22:15:12.202  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -12'
+--- logcat DevMask（hook armed/fired/start/replay/done）---
+11-24 22:15:02.252 13242 13242 I DevMask: [egress] replay hook armed package=io.df.egressprobe
+11-24 22:15:02.274 13242 13242 I DevMask: [egress] replay hook fired symbol=setpriority
+11-24 22:15:02.274 13242 13242 I DevMask: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:15:04.277 13242 13246 W DevMask: [egress] replay package=io.df.egressprobe t=26ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:15:04.278 13242 13246 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:15:12.202  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -12'
 --- 探针进程内属性（此刻应为 18082）---
 11-24 22:15:08.253 13242 13242 I EGRESSPROBE: http.proxyPort=18082
 11-24 22:15:08.253 13242 13242 I EGRESSPROBE: socksProxyHost=<null>
@@ -29,13 +29,13 @@ companion pid=2024
 58b6474000-58b6640000 r-xp 00000000 fe:40 149135                         /data/adb/modules/zygisksu/bin/zygiskd64
 58b6643000-58b6645000 r--p 001cb000 fe:40 149135                         /data/adb/modules/zygisksu/bin/zygiskd64
 58b6648000-58b664f000 rw-p 001cc000 fe:40 149135                         /data/adb/modules/zygisksu/bin/zygiskd64
-7bb2687000-7bb26ca000 r--p 00000000 fe:40 161195                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
-7bb26cd000-7bb27df000 r-xp 00042000 fe:40 161195                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+7bb2687000-7bb26ca000 r--p 00000000 fe:40 161195                         /data/adb/modules/devmask/zygisk/arm64-v8a.so
+7bb26cd000-7bb27df000 r-xp 00042000 fe:40 161195                         /data/adb/modules/devmask/zygisk/arm64-v8a.so
 companion 命中行数: 7
 --- 行为证据：hook 在 specialize 之后仍能执行、重放跑满窗口且进程未崩 ---
-11-24 22:15:02.274 13242 13242 I DeviceFaker: [egress] replay hook fired symbol=setpriority
-11-24 22:15:04.278 13242 13246 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
-11-24 22:15:37.948  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -aE "hook fired|replay done" | tail -3'
+11-24 22:15:02.274 13242 13242 I DevMask: [egress] replay hook fired symbol=setpriority
+11-24 22:15:04.278 13242 13246 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:15:37.948  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | grep -aE "hook fired|replay done" | tail -3'
 armed 进程存活: yes
 ===== E-4 重放窗口边界：窗口结束后改设备级代理，运行中的进程不会被纠正（已知限制）=====
 --- 窗口内已确定 http.proxyPort=18082（见 E-2）---
@@ -94,5 +94,5 @@ PUT default=null HTTP 200
 --- 旋转屏幕触发配置变更（同进程 Activity 重建）---
 --- 重建后 EGRESSPROBE 读数 ---
 探针 pid（应仍是 ��说明没重新 specialize）=13242
---- 同窗口内再看一眼 logcat DeviceFaker（不应出现新的 armed/fired：没有重新 specialize）---
-11-24 22:16:51.137  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -5'
+--- 同窗口内再看一眼 logcat DevMask（不应出现新的 armed/fired：没有重新 specialize）---
+11-24 22:16:51.137  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | tail -5'

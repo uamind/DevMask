@@ -4,8 +4,8 @@
 
 ## 配置文件路径
 
-- `/data/adb/device_faker/config/config.toml`
-- `/data/adb/device_faker/config/egress.toml`（**0600**，代理定义与探测策略；不进导出、不进 API 明文，见[网络出口](#网络出口egress)）
+- `/data/adb/devmask/config/config.toml`
+- `/data/adb/devmask/config/egress.toml`（**0600**，代理定义与探测策略；不进导出、不进 API 明文，见[网络出口](#网络出口egress)）
 
 配置为**热加载**：模块在每次应用启动时重新读取配置文件。修改配置后只需重启目标应用，**无需重启系统**。
 
@@ -19,7 +19,7 @@ debug = false                        # 调试日志（默认关闭）
 default_force_denylist_unmount = false
 ```
 
-- `debug`：启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/device_faker/logs/device_faker.log`；正常使用建议关闭以提高隐蔽性
+- `debug`：启用后输出 Info 级别日志（关闭时仅 Error），写入 `/data/adb/devmask/logs/devmask.log`；正常使用建议关闭以提高隐蔽性
 - `default_force_denylist_unmount`：为目标应用启用 Zygisk 的 `FORCE_DENYLIST_UNMOUNT`，可在模板/应用里用 `force_denylist_unmount` 覆盖
 
 ## 编辑配置
@@ -204,14 +204,14 @@ manufacturer = "Custom"
 
 ## 网络出口（egress）
 
-> 需要 `device_faker_server` v1.11.0 及以上（设备内中继与 relay 字段需 1.11.0；egress 端点自 v1.10.0 起）。只装模块不装服务时配置照样生效，只是没有探测、中继与读回校验。
+> 需要 `devmask_server` v0.0.1 及以上（设备内中继与 relay 字段需 0.0.1；egress 端点自 v1.10.0 起）。只装模块不装服务时配置照样生效，只是没有探测、中继与读回校验。
 
 出口代理决定「应用流量从哪个 IP 出去」，与机型伪装是两条独立链路。两种粒度：
 
 | 粒度 | 实现 | 覆盖范围 | 协议 |
 | --- | --- | --- | --- |
-| 设备级（方案 A） | 写 Android 全局代理 `settings global http_proxy` | 尊重系统代理的应用（OkHttp / HttpURLConnection / WebView / 多数 SDK） | 仅 HTTP/HTTPS CONNECT；带凭据时经**设备内中继**（v1.11.0） |
-| 应用级（方案 B） | Zygisk 在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector` | 只有被配置的那个应用，不动系统设置 | HTTP + SOCKS5；带凭据时经**设备内中继**（v1.11.0） |
+| 设备级（方案 A） | 写 Android 全局代理 `settings global http_proxy` | 尊重系统代理的应用（OkHttp / HttpURLConnection / WebView / 多数 SDK） | 仅 HTTP/HTTPS CONNECT；带凭据时经**设备内中继**（v0.0.1） |
+| 应用级（方案 B） | Zygisk 在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector` | 只有被配置的那个应用，不动系统设置 | HTTP + SOCKS5；带凭据时经**设备内中继**（v0.0.1） |
 
 ### config.toml：只写引用
 
@@ -245,7 +245,7 @@ egress  = "__DIRECT__"         # 强制直连，覆盖设备级代理
 
 ### egress.toml：代理定义与探测策略
 
-路径 `/data/adb/device_faker/config/egress.toml`，**权限 0600**（root only）。`config.toml` 仍是 0644、可分享可导出，所以**密码只放这里**。文件由服务维护，手工编辑后重启服务生效。
+路径 `/data/adb/devmask/config/egress.toml`，**权限 0600**（root only）。`config.toml` 仍是 0644、可分享可导出，所以**密码只放这里**。文件由服务维护，手工编辑后重启服务生效。
 
 ```toml
 version = 1
@@ -281,12 +281,12 @@ fail_open       = true                             # 代理不可用时放行直
 - ≤64 条定义；`host` ≤253 字符、`username` ≤128、`password` ≤256。
 - 权限被改宽时服务会自愈回 0600 并给 `egress_perm_fixed` 警告；写入配置前的备份 `backups/egress.toml.<stamp>-<rev8>.bak` 同为 0600（`backupId` 即 `<stamp>-<rev8>`）。
 - `egress.toml` **不进** `GET /config?format=toml` 导出、不进 WebUI 导出；`GET /api/v1/egress` 只回脱敏摘要（唯一凭据信号是 `hasCredentials`）。
-- `username` / `password` **安全存储**（0600；API 只回 `hasCredentials`），并**只在 root 中继进程内存里使用**：v1.11.0 起带凭据的代理经设备内中继生效（见下节与[已知限制](#已知限制)），v1.2 起不再写进应用进程。
-- `[relay]` 段（v1.11.0）：`enabled`（默认 `true`）/ `base_port`（17800–17899，默认 17800）/ `firewall`（默认 `true`）/ `max_connections`（默认 256）/ `max_connections_per_uid`（默认 64，`0` = 不限）。**整段缺失 = 全部默认值**。
+- `username` / `password` **安全存储**（0600；API 只回 `hasCredentials`），并**只在 root 中继进程内存里使用**：v0.0.1 起带凭据的代理经设备内中继生效（见下节与[已知限制](#已知限制)），v1.2 起不再写进应用进程。
+- `[relay]` 段（v0.0.1）：`enabled`（默认 `true`）/ `base_port`（17800–17899，默认 17800）/ `firewall`（默认 `true`）/ `max_connections`（默认 256）/ `max_connections_per_uid`（默认 64，`0` = 不限）。**整段缺失 = 全部默认值**。
 - `local_port` 是**只读**字段：由 server 分配并写回（设备级占 `base_port`，应用级用哈希池）。`PUT /api/v1/egress` 不接受它（传 `localPort` / `local_port` → `422 unknown_field`）；端口变化后引用该定义的应用**必须重启**。
 - 改 `[relay]` 或手工改 `local_port` 后执行 `POST /api/v1/egress/relay/restart`（或重启服务）。**关闭中继的唯一通道**：把 `[relay].enabled` 设为 `false` 再 restart（没有 API 开关）。
 
-### 带认证代理经设备内中继（v1.11.0）
+### 带认证代理经设备内中继（v0.0.1）
 
 带 `username` / `password` 的定义不再需要 IP 白名单：服务在设备内起一个**只监听 127.0.0.1** 的中继，把应用指向 `127.0.0.1:<local_port>`，再由中继补上 **HTTP Basic** / **SOCKS5 RFC1929**。应用侧零改造（它看到的仍是一个普通代理）。**安全口径**：应用级端口按 uid 白名单限制（归属失败时只有 `firewall.applied=true` 才放行，见[已知限制](#已知限制)）；**设备级中继只对 http 上游成立**——`settings global http_proxy` 无法表达 SOCKS 语义，`type="socks5"` 的定义**不会**成为设备级 listener（设成 `default` 会被 PUT 422 拒绝；旧配置仅在 `[relay].enabled=true` 时被黑洞化，见[已知限制](#已知限制)）；端口释放窗口存在被本机进程抢占的可能（检测与失败行为见已知限制）。
 
@@ -370,7 +370,7 @@ curl -s -X DELETE -H "Authorization: Bearer $TOKEN" -H "If-Match: \"$REV\"" \
 
 ```
 [egress] replay hook armed image=libandroid_runtime device=... inode=... symbols=setpriority,__system_property_get   # 模块日志（debug=true）
-[egress] replay hook armed package=com.example.a                                                                  # logcat（DeviceFaker 标签）
+[egress] replay hook armed package=com.example.a                                                                  # logcat（DevMask 标签）
 [egress] replay start package=com.example.a trigger=post_zygote_setpriority
 [egress] replay package=com.example.a t=28ms reason=framework_overwrite applied=6/6 changed=[http.proxyHost=-->127.0.0.1, http.proxyPort=-->18082]
 [egress] replay done package=com.example.a probes=118 replays=1 divergences=1 state=match elapsed=2003ms
@@ -399,21 +399,21 @@ curl -s -X DELETE -H "Authorization: Bearer $TOKEN" -H "If-Match: \"$REV\"" \
 
 
 - **`dry_run` / `diff` 里的凭据是掩码的**：`PUT /api/v1/egress?diff=true` 或 `?dry_run=true` 返回的 unified diff 会把 `username` / `password` 行的值替换成 `<redacted>`（键名保留），所以看不到密码原文、也看不到新旧密码。这是**有意的安全行为**，不是 diff 缺数据。
-- **带用户名 / 密码的代理自 v1.11.0 起可用（经设备内中继）**：命中带凭据的定义且 `[relay].enabled=true` 时，设备级 / 应用级都被指向 `127.0.0.1:<local_port>`，由 root 进程补 HTTP Basic / SOCKS5 RFC1929；应用不需要懂认证。边界与代价：
+- **带用户名 / 密码的代理自 v0.0.1 起可用（经设备内中继）**：命中带凭据的定义且 `[relay].enabled=true` 时，设备级 / 应用级都被指向 `127.0.0.1:<local_port>`，由 root 进程补 HTTP Basic / SOCKS5 RFC1929；应用不需要懂认证。边界与代价：
   1. **版本边界**：≤v1.1 会把 `java.net.socks.username/password` 写进应用进程（实测 libcore 不发送、认证仍失败）；**v1.2 起彻底不写**，凭据只在 root 进程内存里。
   2. **关闭 / 未迁移窗口**：`[relay].enabled=false` 或文件尚未迁移（无 `[relay]` 键且无任何 `local_port`）时回退**上游 `host:port`**——该状态下带认证的代理**不可用**，只能用代理侧 **IP 白名单**授权。
   3. **fail-closed**：relay 开启但端口未就绪 / 注入视图非法时，应用被指向 `127.0.0.1:9`（连接立刻被拒 = **断网**），**不会静默直连**；修好后执行 `POST /api/v1/egress/relay/restart` 并重启应用。
   4. **仅带凭据才启用**：无凭据代理继续直连上游，不经过中继（少一跳、少暴露）。
   5. **设备级依赖 relay 存活**：设备级 `settings` 指向 `127.0.0.1:base_port`，listener 挂掉期间整机代理链路不可用；`fail_open=true` 时下一次**上游探测**失败会切成直连，`false` 时宁可断网。
-  6. **可检出性上升**：中继端口（`127.0.0.1:178xx`）、固定链名 `DF_EGRESS_RLY`、以及应用侧代理地址变成 `127.0.0.1` 都是可检出项；中继端口在 `/proc/net/tcp` 可见（跨 uid 受限，root 与同 uid 可见）。
+  6. **可检出性上升**：中继端口（`127.0.0.1:178xx`）、固定链名 `DM_EGRESS_RLY`、以及应用侧代理地址变成 `127.0.0.1` 都是可检出项；中继端口在 `/proc/net/tcp` 可见（跨 uid 受限，root 与同 uid 可见）。
   7. **绕过按 uid 的第三方防火墙**：中继出网的是 root 进程，AFWall+ / NetGuard 等「禁止该应用联网」策略对它无效。
 
   观测：`GET /api/v1/egress` 的 `relay` 给出 `enabled/basePort/failOpen/listeners/firewall/portChanges/restartRequiredApps`；`GET /egress/proxies` 的 `localPort` / `relayActive` 表示某个定义是否正在经中继。`egress_auth_unsupported` 只在 relay 未生效且带凭据时出现。
-- **显式配置了 `egress` 的应用会保留模块代码页**：重放线程与 PLT hook 都在模块 `.so` 里，zygisk 不能在它们运行时 `dlclose`，所以这类进程会常驻这段代码（重放跑满 2001ms 后进程继续存活、hook 调用也不崩，说明映射确实保留）。但**按名字扫 `/proc/<pid>/maps` 看不到它**：Zygisk 把模块代码加载成无名/匿名映射（实测 armed 进程 3170 行 maps 里 `device_faker`/`arm64-v8a`/`libzygisk` 命中 0；只有 companion 进程的 maps 能看到 `/data/adb/modules/device_faker/zygisk/arm64-v8a.so`）。真正的可检出性判断是**匿名可执行映射**——对比同机未配置 egress 的进程与本进程的 `r-xp` 匿名段（数量 / 大小 / 偏移），而不是按文件名 grep。**没有**应用级出口的进程照旧立即卸载模块。
+- **显式配置了 `egress` 的应用会保留模块代码页**：重放线程与 PLT hook 都在模块 `.so` 里，zygisk 不能在它们运行时 `dlclose`，所以这类进程会常驻这段代码（重放跑满 2001ms 后进程继续存活、hook 调用也不崩，说明映射确实保留）。但**按名字扫 `/proc/<pid>/maps` 看不到它**：Zygisk 把模块代码加载成无名/匿名映射（实测 armed 进程 3170 行 maps 里 `devmask`/`arm64-v8a`/`libzygisk` 命中 0；只有 companion 进程的 maps 能看到 `/data/adb/modules/devmask/zygisk/arm64-v8a.so`）。真正的可检出性判断是**匿名可执行映射**——对比同机未配置 egress 的进程与本进程的 `r-xp` 匿名段（数量 / 大小 / 偏移），而不是按文件名 grep。**没有**应用级出口的进程照旧立即卸载模块。
 - **运行中修改设备级代理不会重放**：重放窗口只覆盖应用冷启动后的 0–2000ms。应用已经在跑时再改设备级 `default`（AMS 广播 `updateHttpProxy`）落在窗口之外，需要重启该应用才会按新值生效。
-- **`setpriority` hook 未命中时退化为一次性注入**：`libandroid_runtime.so` 找不到或 PLT hook 提交失败时只记一行 `[egress] replay hook unavailable reason=...`，本次进程没有重放——注入值仍会写入，但可能被框架随后的 `updateHttpProxy` 覆盖（表现为应用级 HTTP 出口不生效、`__DIRECT__` 拉不回直连）。用 `adb logcat -s DeviceFaker` 能直接看到这一行。
+- **`setpriority` hook 未命中时退化为一次性注入**：`libandroid_runtime.so` 找不到或 PLT hook 提交失败时只记一行 `[egress] replay hook unavailable reason=...`，本次进程没有重放——注入值仍会写入，但可能被框架随后的 `updateHttpProxy` 覆盖（表现为应用级 HTTP 出口不生效、`__DIRECT__` 拉不回直连）。用 `adb logcat -s DevMask` 能直接看到这一行。
 - `ProxySelector.of(...)` 在 Android 17（SDK 37）不存在：属性路径是权威载体，selector 只是加分项；缺失时记 `[egress] proxy_selector degraded reason=of_method_missing`（每进程一次），不影响属性注入与重放。
-- 设备级只覆盖 HTTP/HTTPS CONNECT（SOCKS5 需方案 B）；**认证由设备内中继承载**（v1.11.0）：带凭据时设备级写 `127.0.0.1:<base_port>`，`egress_credentials_ignored` 只在 relay 未生效（`[relay].enabled=false` / 文件未迁移）时出现。
+- 设备级只覆盖 HTTP/HTTPS CONNECT（SOCKS5 需方案 B）；**认证由设备内中继承载**（v0.0.1）：带凭据时设备级写 `127.0.0.1:<base_port>`，`egress_credentials_ignored` 只在 relay 未生效（`[relay].enabled=false` / 文件未迁移）时出现。
 - **设备级 `default` 只支持 http：指向 socks5 定义不会建 device listener**：`settings global http_proxy` 无法承载 SOCKS 语义，因此 `type="socks5"` 的定义不会在 `base_port` 上监听（`GET /egress.relay` 的 `listeners[]` 里没有 `scope="device"` 条目，`proxies[].relayActive=false`）。`PUT /egress` 按**合并后的有效 default** 校验：指向非 http → `422 validation_failed`（`details.errors[].code="invalid_egress_default"`、`path="default"`），与 `[relay].enabled` / 凭据无关。**已存在的旧配置**：`[relay].enabled=true` → `settings` 写黑洞 `127.0.0.1:9`（fail-closed，不把 HTTP 流量送到 SOCKS 端口、也不泄漏直连），`readback.settingsValue` 回显它；`[relay].enabled=false` → 按「未配置」处理（`settings :0` 直连），**不写黑洞**。两种都**不会**建 SOCKS5 listener，且都报 `egress_relay_device_socks5_unsupported`（`details={proxy, scope:"device", reason:"socks5_device_scope_unsupported"}`，配置提醒、与 enabled 无关）。**处置**：把 `default` 改成 http 定义（或删除），再把该 socks5 定义只用于 `[[apps]].egress`（应用级端口按 uid 白名单）。
 - **分层 uid 策略（可用性与安全的折中）**：应用级端口在 accept 后先判 uid——已归属且在白名单 → 放行；已归属但不在 → 立即关闭；**无法归属（`/proc` 解析失败 / 受限 ROM）时，只有在 `relay.firewall.applied=true`（同一次 `iptables -S` 采样确认三链生效）才放行**，并记限频日志 `uid_unresolved_firewall_enforced`（≤1 次/秒）；`applied=false` 或 `[relay].firewall=false` → fail-closed 关闭。放行前提是内核 `-m owner` 已在 ALLOW 链按 uid 过滤；服务会**限频复核**（≤1 次/秒，单次 1s 超时），规则被手工 `-F` 或第三方改动后 ≤1s 内回到 fail-closed。折中代价：root-trust——中继以 root 出网，本节只约束「谁能连本地端口」，不约束「连上后以谁的 uid 出网」（见上面第 7 条）。
 - **本地端口劫持风险**：listener 关闭（reconcile / restart / DELETE）后、重绑之前，`127.0.0.1:178xx` 可能被其它本机进程抢占，应用仍用旧端口时会连到抢占者。服务的检测方式是**下一次 bind 失败（`addr_in_use`）**：应用级会换端口并在 `relay.portChanges` 里给 `reason:"addr_in_use"`、用 `restartRequiredApps` 提示重启；设备级只有一个候选 `base_port`，失败即不监听并给 `egress_relay_bind_failed`（此时 `settings` 不指向中继）。`iptables -S` 复核**不能**判断端口属主。残留风险是毫秒级窗口 + 未重启的应用；排障用 `ss -ltnp | grep 178` 核对端口属主。

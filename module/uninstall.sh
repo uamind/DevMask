@@ -1,12 +1,12 @@
 #!/system/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
+# DevMask: https://github.com/uamind/DevMask
 #
-# 卸载：先停掉 device_faker_server（含守护循环），再删运行时目录，
+# 卸载：先停掉 devmask_server（含守护循环），再删运行时目录，
 # 否则守护循环会在 5 秒后把已经消失的二进制重新拉起（并不断刷日志）。
 
-RUNTIME_DIR=/data/adb/device_faker
+RUNTIME_DIR=/data/adb/devmask
 PID_FILE=$RUNTIME_DIR/server.pid
 SUPERVISOR_PID_FILE=$RUNTIME_DIR/server.supervisor.pid
 
@@ -26,14 +26,14 @@ log() {
 }
 
 # relay 的三条 iptables 链（与 server/src/relay/firewall.rs 的常量同名，改名要两边一起改）。
-RELAY_CHAIN=DF_EGRESS_RLY
-RELAY_ALLOW_CHAIN=DF_EGRESS_RLY_ALLOW
-RELAY_DENY_CHAIN=DF_EGRESS_RLY_DENY
+RELAY_CHAIN=DM_EGRESS_RLY
+RELAY_ALLOW_CHAIN=DM_EGRESS_RLY_ALLOW
+RELAY_DENY_CHAIN=DM_EGRESS_RLY_DENY
 
 # 为什么要清 relay 防火墙链：
-# 中继只放行 127.0.0.1:17800-17899 上的授权 uid，其余流量落到 DF_EGRESS_RLY_DENY 的
+# 中继只放行 127.0.0.1:17800-17899 上的授权 uid，其余流量落到 DM_EGRESS_RLY_DENY 的
 # REJECT。卸载/停服后若把规则留在设备上，这段端口会**永久不可用**（下一次装回来的中继
-# 自己也会被自己的旧规则挡住），而且 OUTPUT 仍有 -j DF_EGRESS_RLY 跳转时，任何连这些
+# 自己也会被自己的旧规则挡住），而且 OUTPUT 仍有 -j DM_EGRESS_RLY 跳转时，任何连这些
 # 端口的新连接都会被内核直接拒绝——看不到监听进程，现象是「端口莫名 rejection」。
 #
 # 顺序固定：先摘 OUTPUT 跳转（此后新连接不进链）→ 再 -F 叶子链/入口链 → 最后 -X 删链。

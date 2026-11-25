@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { exec, listPackages as listPackagesLegacy, getPackagesInfo, pm, io } from 'kernelsu-alt'
 import { normalizePackageName, parsePackageUser } from '../utils/package'
@@ -74,7 +74,7 @@ import {
  * - 深链启动（`am start -d ...`，FollowDialog / TranslatorsDialog）
  * - 在线模板库的 curl/wget/busybox 兜底抓取（shell 无 CORS 限制）
  * - 「读当前设备配置」的 `getprop`（ZIP/属性→模板的转换已在
- *   `utils/propsToTemplate.ts` 里纯前端完成，不再调用 device_faker_cli）
+ *   `utils/propsToTemplate.ts` 里纯前端完成，不再调用 devmask_cli）
  */
 
 /**
@@ -286,7 +286,7 @@ function hasHeredocDelimiter(content: string, delimiter: string): boolean {
 }
 
 function pickHeredocDelimiter(content: string): string {
-  const base = 'EOF_DEVICE_FAKER'
+  const base = 'EOF_DEVMASK'
   let delimiter = base
   let attempt = 0
   while (hasHeredocDelimiter(content, delimiter)) {

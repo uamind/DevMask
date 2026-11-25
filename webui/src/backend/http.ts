@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import { stringify as stringifyToml } from 'smol-toml'
 import { parsePackageUser } from '../utils/package'
@@ -188,7 +188,7 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
   let lastExists = false
 
   function updateRevisionFromResponse(response: Response): void {
-    const header = response.headers.get('X-DF-Revision') || response.headers.get('ETag')
+    const header = response.headers.get('X-DM-Revision') || response.headers.get('ETag')
     const revision = stripQuotes(header)
     if (revision) {
       lastRevision = revision
@@ -615,7 +615,7 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
 
   // ---- 出口代理 egress（契约 §1）----
   //
-  // revision 隔离：这里只读 X-DF-Egress-Revision / 响应体 revision，
+  // revision 隔离：这里只读 X-DM-Egress-Revision / 响应体 revision，
   // 绝不调用 updateRevisionFromResponse（那是 config revision 的缓存）。
   let egressRevision = ''
 
@@ -755,7 +755,7 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
       const info = await getConfigRevision()
       return info.exists
     },
-    // 目录由服务端维护（/data/adb/device_faker/config 由服务启动时创建）
+    // 目录由服务端维护（/data/adb/devmask/config 由服务启动时创建）
     mkdir: async () => undefined,
     listPackages,
     getPackagesInfo,

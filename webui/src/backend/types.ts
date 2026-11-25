@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 import type { InstalledApp } from '../types'
 import type {
@@ -24,16 +24,16 @@ import type {
  */
 
 /** 配置文件的固定位置（管理器模式直写；原生模式由服务端托管）。 */
-export const CONFIG_PATH = '/data/adb/device_faker/config/config.toml'
+export const CONFIG_PATH = '/data/adb/devmask/config/config.toml'
 
 /** 配置目录（首次启动时按需创建）。 */
-export const CONFIG_DIR = '/data/adb/device_faker/config'
+export const CONFIG_DIR = '/data/adb/devmask/config'
 
 /** 原生服务设置（bind / allow_lan / tokens 哈希）；管理器模式可直读直写。 */
-export const SERVER_CONFIG_PATH = '/data/adb/device_faker/config/server.toml'
+export const SERVER_CONFIG_PATH = '/data/adb/devmask/config/server.toml'
 
 /** 模块目录兜底（`ksu.moduleInfo().moduleDir` 不可用时使用）。 */
-export const MODULE_DIR_FALLBACK = '/data/adb/modules/device_faker'
+export const MODULE_DIR_FALLBACK = '/data/adb/modules/devmask'
 
 /** 包查询类型：user = 第三方应用，system = 系统应用，all = 两者。 */
 export type PackageQueryType = 'user' | 'system' | 'all'

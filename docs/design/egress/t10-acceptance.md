@@ -1,9 +1,9 @@
 # t10 管理端验收：代理池 → 绑定 → 批量下发 → 探测
 
 - 时间：2026-11-24 22:47–22:58（CST）
-- 本轮构建：cargo build -p device_faker_manager → target/debug/device_faker_manager（22:47，version 0.2.0）
+- 本轮构建：cargo build -p devmask_manager → target/debug/devmask_manager（22:47，version 0.2.0）
 - 启动方式（另起端口 + 临时 data-dir，未触碰 8765）：
-  ./target/debug/device_faker_manager --bind 127.0.0.1:18765 --data-dir /tmp/dfm-t10 --static-dir manager/webui/dist --token admin123
+  ./target/debug/devmask_manager --bind 127.0.0.1:18765 --data-dir /tmp/dm-t10 --static-dir manager/webui/dist --token admin123
 - /healthz：status=ok, version=0.2.0, **db.schemaVersion=2**（evidence-t10/healthz.json）
 - 8765 旧实例：验收前后 lsof 均为 device_fa PID 48145（未动）
 - 前端：manager/webui 构建产物（dist，build 22:47，含 ProxiesPage chunk），由 manager 静态托管；
@@ -21,7 +21,7 @@
 | 5 | UI 冒烟（真实后端）+ 截图 | PASS | docs/design/manager-egress/01..13 |
 | 6 | 全量响应与审计无密码明文（含 PATCH/apply） | PASS | t10-6-security.log（35 文件 + DB/WAL/key + 日志，命中 0） |
 | 7 | 报告 | PASS | 本文件 |
-| 8 | 回归 | PASS | cargo test -p device_faker_manager：142 passed / 0 failed |
+| 8 | 回归 | PASS | cargo test -p devmask_manager：142 passed / 0 failed |
 
 ## 1. 测试装置
 
@@ -139,7 +139,7 @@ GET /devices/mock-a-ok/egress 读回与写入完全一致，并带 **deviceState
 
 ## 6. 第 5 项：UI 冒烟（真实后端，PASS）
 
-前端由 manager 静态托管（http://127.0.0.1:18765/），所有请求命中 /relay/api/v1/*；Token 存 localStorage.dfm_token。
+前端由 manager 静态托管（http://127.0.0.1:18765/），所有请求命中 /relay/api/v1/*；Token 存 localStorage.dm_token。
 
 | 截图（docs/design/manager-egress/） | 内容 |
 | --- | --- |
@@ -164,7 +164,7 @@ POST /egress-proxies(201) → GET /egress-proxies(200) → POST /egress-proxies/
 ## 7. 第 6 项：无密码明文（PASS）
 
 - evidence-t10 下 35 个文件（响应 JSON + 命令日志）全文扫描密码：命中 **0**。
-- manager 数据目录：manager.db / manager.db-wal / manager.db-shm / manager.key 全部命中 **0**（凭据以 AES-GCM 存）。
+- manager 数据目录：devmask-manager.db / devmask-manager.db-wal / devmask-manager.db-shm / devmask-manager.key 全部命中 **0**（凭据以 AES-GCM 存）。
 - manager 进程日志（/tmp/t10-manager.out）：命中 **0**。
 - 所有响应里**没有 "password" 字段**（grep -l '"password"' → 无）；PATCH 响应只有 hasCredentials=true/false。
 - 审计（GET /audit?limit=200）：egress.proxy_create/update/delete/bind/apply/proxy_probe 共 14 条，
@@ -175,15 +175,15 @@ POST /egress-proxies(201) → GET /egress-proxies(200) → POST /egress-proxies/
 1. **仓库自带 mock 缺 egress 端点**：manager/docs/mock_device.py 没有 /api/v1/egress，用它跑 egress 下发只会得到
    skipped/egress_unsupported(404)。本轮补的 docs/design/egress/fixtures/mock_device_egress.py 已覆盖 egress 子集，
    建议把它并入 manager/docs（或 manager/tests 的 mock harness），否则后续 egress 冒烟容易被误判成「下发不了」。
-2. **UI Token 首登细节**：首次打开若 localStorage 无 dfm_token，会弹「Manager Token」对话框；本轮在该对话框里
-   填值后点「保存并重试」，localStorage 未写入（随后改用 localStorage.dfm_token 预置才进入已登录态）。
+2. **UI Token 首登细节**：首次打开若 localStorage 无 dm_token，会弹「Manager Token」对话框；本轮在该对话框里
+   填值后点「保存并重试」，localStorage 未写入（随后改用 localStorage.dm_token 预置才进入已登录态）。
    可能与自动化填值方式有关，建议 t6 侧复核该对话框的提交路径（真实用户手输不一定会复现）。
 3. **批量绑定弹窗默认勾选「只看未配代理的设备」**：当所有设备都已绑定时，弹窗显示「没有匹配的设备 / 已选 0 台」，
    需手动取消该勾选才能再选设备。属交互取舍，建议加一句空态提示。
 
 ## 9. 回归
 
-    $ cargo test -p device_faker_manager
+    $ cargo test -p devmask_manager
     64 + 14 + 14 + 4 + 6 + 17 + 8 + 15 = 142 passed; 0 failed；TEST_EXIT=0
     （evidence-t10/cargo-test-full.log）
 
@@ -194,7 +194,7 @@ POST /egress-proxies(201) → GET /egress-proxies(200) → POST /egress-proxies/
 | 文件 | 内容 |
 | --- | --- |
 | evidence-t10/build-and-tests.log | cargo build / cargo test / webui build |
-| evidence-t10/cargo-test-full.log | cargo test -p device_faker_manager 全量输出（142 passed） |
+| evidence-t10/cargo-test-full.log | cargo test -p devmask_manager 全量输出（142 passed） |
 | evidence-t10/healthz.json | /healthz（schemaVersion=2） |
 | evidence-t10/t10-1-crud.log | 第 1 项：代理池 CRUD + 409 |
 | evidence-t10/t10-2-bindings.log | 第 2 项：整机/应用级绑定与读回 |
@@ -213,7 +213,7 @@ POST /egress-proxies(201) → GET /egress-proxies(200) → POST /egress-proxies/
 ## 11. 复现步骤
 
     # 1) 构建
-    cargo build -p device_faker_manager
+    cargo build -p devmask_manager
     npm --prefix manager/webui run build
 
     # 2) mock 设备 + fixture 代理
@@ -223,10 +223,10 @@ POST /egress-proxies(201) → GET /egress-proxies(200) → POST /egress-proxies/
     python3 docs/design/egress/fixtures/local_proxy.py &     # 18080 HTTP / 18081 SOCKS
 
     # 3) Manager（新端口 + 临时 data-dir）
-    ./target/debug/device_faker_manager --bind 127.0.0.1:18765 --data-dir /tmp/dfm-t10 \
+    ./target/debug/devmask_manager --bind 127.0.0.1:18765 --data-dir /tmp/dm-t10 \
       --static-dir manager/webui/dist --token admin123
 
-    # 4) 依次执行第 2–5 节的 curl；UI 打开 http://127.0.0.1:18765/（localStorage.dfm_token=admin123）
+    # 4) 依次执行第 2–5 节的 curl；UI 打开 http://127.0.0.1:18765/（localStorage.dm_token=admin123）
 
     # 5) 收尾
-    kill <manager/mocks/fixture pid>; rm -rf /tmp/dfm-t10
+    kill <manager/mocks/fixture pid>; rm -rf /tmp/dm-t10

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 出口代理（egress）端点的集成测试。
 //!
 //! 覆盖验收口径：PUT/DELETE 的 settings 写入与读回、四行判定真值表、egress revision
-//! 与 If-Match、响应头（不得出现 X-DF-Revision / ETag）、0600 与权限自愈、幂等、
+//! 与 If-Match、响应头（不得出现 X-DM-Revision / ETag）、0600 与权限自愈、幂等、
 //! 探测成功/失败映射、启动自愈、以及「全局无密码明文」。
 
 mod common;
@@ -19,11 +19,11 @@ use common::{
     ADMIN_TOKEN, OPS_TOKEN, READ_TOKEN, body_json, body_text, fixture_with_arc_runner, header,
     if_match, json_call, read_config, send,
 };
-use device_faker_core::revision::FileLock;
-use device_faker_server::commands::FixtureRunner;
-use device_faker_server::commands::{CommandOutcome, CommandRunner, command_key};
-use device_faker_server::egress::reconcile_once;
-use device_faker_server::util;
+use devmask_core::revision::FileLock;
+use devmask_server::commands::FixtureRunner;
+use devmask_server::commands::{CommandOutcome, CommandRunner, command_key};
+use devmask_server::egress::reconcile_once;
+use devmask_server::util;
 use serde_json::{Value, json};
 
 /// 带设备级 default 的配置。
@@ -223,9 +223,9 @@ async fn put_applies_system_proxy_and_get_reports_applied() {
     // 初始：没有 egress 配置、settings 是 null → 期望直连 = 已生效
     let response = common::get_with_token(router, "/api/v1/egress", ADMIN_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(header(response.headers(), "x-df-revision").is_none());
+    assert!(header(response.headers(), "x-dm-revision").is_none());
     assert!(header(response.headers(), "etag").is_none());
-    assert!(header(response.headers(), "x-df-egress-revision").is_some());
+    assert!(header(response.headers(), "x-dm-egress-revision").is_some());
     let body = body_json(response).await;
     assert_eq!(body["mode"], "direct");
     assert_eq!(body["applied"], true);
@@ -251,9 +251,9 @@ async fn put_applies_system_proxy_and_get_reports_applied() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(header(response.headers(), "x-df-revision").is_none());
+    assert!(header(response.headers(), "x-dm-revision").is_none());
     assert!(header(response.headers(), "etag").is_none());
-    assert!(header(response.headers(), "x-df-egress-revision").is_some());
+    assert!(header(response.headers(), "x-dm-egress-revision").is_some());
     let text = body_text(response).await;
     assert!(!text.contains("s3cret"), "响应里不得出现密码: {text}");
     assert!(!text.contains("alice"), "响应里不得出现用户名: {text}");
@@ -361,7 +361,7 @@ async fn delete_clears_system_proxy_with_colon_zero() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(header(response.headers(), "x-df-revision").is_none());
+    assert!(header(response.headers(), "x-dm-revision").is_none());
     assert!(header(response.headers(), "etag").is_none());
     let body = body_json(response).await;
     assert_eq!(body["changed"], true);
@@ -721,8 +721,8 @@ async fn proxies_endpoint_is_masked_and_shows_references() {
 
     let response = common::get_with_token(router, "/api/v1/egress/proxies", ADMIN_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(header(response.headers(), "x-df-revision").is_none());
-    assert!(header(response.headers(), "x-df-egress-revision").is_some());
+    assert!(header(response.headers(), "x-dm-revision").is_none());
+    assert!(header(response.headers(), "x-dm-egress-revision").is_some());
     let text = body_text(response).await;
     assert!(!text.contains("s3cret"), "{text}");
     assert!(!text.contains("alice"), "{text}");
@@ -834,8 +834,8 @@ async fn probe_reports_exit_ip_and_requires_ops_scope() {
     )
     .await;
     assert_eq!(response.status(), StatusCode::OK, "探测必须成功");
-    assert!(header(response.headers(), "x-df-revision").is_none());
-    assert!(header(response.headers(), "x-df-egress-revision").is_some());
+    assert!(header(response.headers(), "x-dm-revision").is_none());
+    assert!(header(response.headers(), "x-dm-egress-revision").is_some());
     let body = body_json(response).await;
     assert_eq!(body["ok"], true);
     assert_eq!(body["exitIp"], "203.0.113.7");

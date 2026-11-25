@@ -5,7 +5,7 @@ Configure a fake device identity and system properties per app. The config file 
 ## Config File Path
 
 ```
-/data/adb/device_faker/config/config.toml
+/data/adb/devmask/config/config.toml
 ```
 
 The config is **hot-reloaded**: the module re-reads the file on every app launch. After editing, just restart the target app — **no system reboot required**.
@@ -20,7 +20,7 @@ debug = false                        # debug logging (off by default)
 default_force_denylist_unmount = false
 ```
 
-- `debug`: when enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/device_faker/logs/device_faker.log`; keep it disabled during normal use to avoid leaving unnecessary traces
+- `debug`: when enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/devmask/logs/devmask.log`; keep it disabled during normal use to avoid leaving unnecessary traces
 - `default_force_denylist_unmount`: enables Zygisk's `FORCE_DENYLIST_UNMOUNT` for target apps; can be overridden per template / per app with `force_denylist_unmount`
 
 ## Editing the Configuration

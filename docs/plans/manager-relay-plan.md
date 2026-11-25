@@ -7,7 +7,7 @@
 
 ## 1. 背景
 
-Device Faker 现在每台设备自带一个 device_faker_server。AI 或脚本要管理 N 台设备时，需要保存 N 个地址和 N 个 Token，逐台查询 overview，逐台处理 revision、412、模板不存在和离线；也无法一眼看出同一个应用在不同设备上是否统一。
+DevMask 现在每台设备自带一个 devmask_server。AI 或脚本要管理 N 台设备时，需要保存 N 个地址和 N 个 Token，逐台查询 overview，逐台处理 revision、412、模板不存在和离线；也无法一眼看出同一个应用在不同设备上是否统一。
 
 本项目新增一个管理端 / Relay，把多台设备聚合成一个控制面：
 
@@ -15,7 +15,7 @@ Device Faker 现在每台设备自带一个 device_faker_server。AI 或脚本�
 AI / Agent
    |  Authorization: Bearer dfm_...
    v
-Device Faker Manager / Relay  (:8765)
+DevMask Manager / Relay  (:8765)
    |-- 设备注册表（baseUrl + 设备 Token，加密存储）
    |-- 聚合层（/devices、/apps、/overview）
    |-- 下发编排（按设备 revision 逐台下发模板）
@@ -52,7 +52,7 @@ UI 原型已经完成，见 manager/webui 与 docs/design/manager-ui/01-dashboar
 | 组件 | 默认地址 | 说明 |
 | --- | --- | --- |
 | Manager / Relay | 127.0.0.1:8765 | Rust axum，同时托管 WebUI 静态资源 |
-| 设备端 server | <device>:8686 | 现有 device_faker_server |
+| 设备端 server | <device>:8686 | 现有 devmask_server |
 | WebUI dev | 127.0.0.1:5180 | Vite，/relay 代理到 8765 |
 
 ### 3.1 目录结构
@@ -213,11 +213,11 @@ CREATE TABLE audit (
 );
 ```
 
-设备 Token：首次启动生成 32 字节 key，写入 <data-dir>/manager.key（0600）；Token 用 AES-256-GCM 加密，nonce 随机，密文与 nonce 一起 base64 存入 token_cipher；解密密文只在调用设备时发生，不写日志、不返回响应。
+设备 Token：首次启动生成 32 字节 key，写入 <data-dir>/devmask-manager.key（0600）；Token 用 AES-256-GCM 加密，nonce 随机，密文与 nonce 一起 base64 存入 token_cipher；解密密文只在调用设备时发生，不写日志、不返回响应。
 
 ## 6. WebUI 接入
 
-新增 manager/webui/src/api/client.ts：base 为 /relay/api/v1 或 VITE_API_BASE；Token 存 localStorage dfm_token，默认 admin123；401 抛出 AuthError，由 App 弹出 Token 对话框；统一解析错误信封。
+新增 manager/webui/src/api/client.ts：base 为 /relay/api/v1 或 VITE_API_BASE；Token 存 localStorage dm_token，默认 admin123；401 抛出 AuthError，由 App 弹出 Token 对话框；统一解析错误信封。
 
 useManagerStore 改为 async：load（GET devices + apps）、addDevice（POST）、removeDevice（DELETE）、syncDevice（POST sync）、setAppConfig/removeAppConfig（apply assignments）、batchApply（POST apply 后轮询 job）。保留 VITE_MOCK=1 作为纯视觉预览。
 
@@ -242,7 +242,7 @@ useManagerStore 改为 async：load（GET devices + apps）、addDevice（POST�
 ## 8. 验收清单
 
 - [ ] cargo fmt --check 通过。
-- [ ] cargo test -p device_faker_manager 全绿。
+- [ ] cargo test -p devmask_manager 全绿。
 - [ ] npx vue-tsc --noEmit 通过。
 - [ ] npm run build 通过。
 - [ ] GET /healthz 返回 200。
@@ -284,5 +284,5 @@ useManagerStore 改为 async：load（GET devices + apps）、addDevice（POST�
 ```text
 SPDX-License-Identifier: GPL-3.0-or-later
 Copyright (c) 2025-2026 Seyud
-Device Faker: https://github.com/Seyud/device_faker
+DevMask: https://github.com/uamind/DevMask
 ```

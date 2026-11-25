@@ -37,13 +37,13 @@ http_proxy :0`），即「一个应用的代理挂了 → 整机所有应用切�
 
 ```sh
 # 1) 服务端全量测试（含 egress_api 26 条）
-cargo test -p device_faker_server
+cargo test -p devmask_server
 #    lib 114 + apps 9 + config 21 + contract 3 + egress_api 26 + overview 3
 #    + packages_device 9 + skeleton 15 + static_site 8 + templates 13 + write_semantics 9
 #    => 230 passed / 0 failed
 
 # 2) 模块侧宿主单测（t17 交付的降级分支就在这里）
-cargo test -p device_faker_module_tests
+cargo test -p devmask_module_tests
 #    => 30 passed / 0 failed
 
 # 3) 三份复现（#[path] 直接引用被评审的真实源码，不复制业务逻辑）
@@ -118,7 +118,7 @@ grep -rn 'password' server/src/egress/dto.rs                                    
 ### 3.4 §1.2 egress revision —— 符合
 
 - 公式：`egress_revision(config_revision, bytes)`（`mod.rs:81-87`）= sha256(configRevisionHex ‖ `\n` ‖ bytes)；`egress_api.rs:221-228` 用真实文件字节独立重算并断言相等，另断言换行/前缀任一变化都会改变 revision。
-- 只发 `X-DF-Egress-Revision`：`api/mod.rs:95-100`；测试断言 `x-df-revision` 与 `etag` 都不存在（`egress_api.rs:212-214`）。
+- 只发 `X-DM-Egress-Revision`：`api/mod.rs:95-100`；测试断言 `x-dm-revision` 与 `etag` 都不存在（`egress_api.rs:212-214`）。
 - `If-Match` 容错：`store.rs:103-132`（引号、`sha256:` 前缀、`*`）；缺失 → 428（`:775-776`），不匹配 → 412 + `details{expected, actual, resource:\"egress\"}`（`error.rs:315-330`）。
 - 损坏文件修复通道：`load_situation` fail-closed 500 + `details.op=egress_parse`（`api/egress.rs:74-81`），`If-Match: *` 以空文档为基线重写（`:593-598`）；`broken_egress_toml_fails_closed_and_is_repairable`（`:1203`）。
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 use std::{
     collections::{HashMap, HashSet},
@@ -418,7 +418,7 @@ pub(crate) fn sync_log_level(debug: bool) {
     // 版本信息，「用户装的是哪个构建」只能靠日志形态反推）。
     if debug {
         BUILD_BANNER_LOGGED.get_or_init(|| {
-            info!("device_faker {}", crate::build_ident());
+            info!("devmask {}", crate::build_ident());
         });
     }
 }
@@ -731,7 +731,7 @@ fn restore_props_batch(
     Ok(())
 }
 
-const LOG_PATH: &str = "/data/adb/device_faker/logs/device_faker.log";
+const LOG_PATH: &str = "/data/adb/devmask/logs/devmask.log";
 
 fn write_log_lines(request: WriteLogRequest) -> anyhow::Result<()> {
     if request.lines.is_empty() {

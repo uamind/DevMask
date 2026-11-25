@@ -19,7 +19,7 @@ Enable `companion_resetprop` only when `getprop` subprocesses or other apps must
 debug = true
 ```
 
-When enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/device_faker/logs/device_faker.log`. Keep it disabled during normal use to avoid leaving unnecessary traces.
+When enabled, Info-level logs are output (Error-only when disabled), written to `/data/adb/devmask/logs/devmask.log`. Keep it disabled during normal use to avoid leaving unnecessary traces.
 
 ## Complete Configuration Example
 

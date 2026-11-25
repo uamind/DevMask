@@ -1,6 +1,6 @@
-=== cargo test -p device_faker_manager (Tue Nov 24 22:58:36 CST 2026) ===
+=== cargo test -p devmask_manager (Tue Nov 24 22:58:36 CST 2026) ===
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.37s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_manager-664b3619f4a57fb6)
+     Running unittests src/lib.rs (target/debug/deps/devmask_manager-664b3619f4a57fb6)
 
 running 64 tests
 test api::apply::tests::validates_template_names ... ok
@@ -70,7 +70,7 @@ test db::tests::upgrades_v1_database_without_data_loss ... ok
 
 test result: ok. 64 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_manager-a4299b0a12291f01)
+     Running unittests src/main.rs (target/debug/deps/devmask_manager-a4299b0a12291f01)
 
 running 0 tests
 
@@ -196,7 +196,7 @@ test r6_oversized_device_reads_are_rejected ... ok
 
 test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
 
-   Doc-tests device_faker_manager
+   Doc-tests devmask_manager
 
 running 0 tests
 

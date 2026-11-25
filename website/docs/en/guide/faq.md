@@ -4,7 +4,7 @@
 
 ### The installer says "No Zygisk implementation found"
 
-Device Faker does **not** support Magisk's built-in Zygisk. You must install a third-party Zygisk implementation (**ZygiskNext** recommended) first, reboot, then install this module.
+DevMask does **not** support Magisk's built-in Zygisk. You must install a third-party Zygisk implementation (**ZygiskNext** recommended) first, reboot, then install this module.
 
 ### Does it support Magisk's built-in Zygisk?
 
@@ -14,7 +14,7 @@ No. The built-in implementation does not meet this module's requirements.
 
 1. Is a Zygisk implementation installed and enabled?
 2. Did you **reboot** after installing?
-3. Is the config path correct: `/data/adb/device_faker/config/config.toml`?
+3. Is the config path correct: `/data/adb/devmask/config/config.toml`?
 4. Is the target app's package name spelled correctly?
 
 ### Will updating the module delete my config?
@@ -22,7 +22,7 @@ No. The built-in implementation does not meet this module's requirements.
 Installing a new zip over the existing one preserves your config by default (unless you pressed Volume Up at the prompt to use the default config).
 
 ::: warning Uninstalling deletes your config
-Uninstalling the module runs `rm -rf /data/adb/device_faker`, which deletes the config directory. Back up your config first if you want to keep it.
+Uninstalling the module runs `rm -rf /data/adb/devmask`, which deletes the config directory. Back up your config first if you want to keep it.
 :::
 
 ## Configuration
@@ -33,7 +33,7 @@ Uninstalling the module runs `rm -rf /data/adb/device_faker`, which deletes the 
 - Check `config.toml` for syntax errors: TOML is sensitive to quotes and indentation; a single missing quote can cause the whole file to fail parsing
 - Check that the target app actually matches an `[[apps]]` entry or a template `packages` list
 
-### /data/adb/device_faker/config/config.toml is missing
+### /data/adb/devmask/config/config.toml is missing
 
 On first install, if you chose Volume Up to use the default config, the path above is correct. If the directory does not exist, the module may not have finished installing or you did not reboot.
 
@@ -79,6 +79,6 @@ Match order: `@999` is tried first, then falls back to the version without the s
 ### Online template library fails to load
 
 - Check the device's network connection
-- Template source: https://github.com/Seyud/device_faker_config
+- Template source: https://github.com/uamind/DevMask_config
 - Accessing GitHub may require a network tool in some regions
 

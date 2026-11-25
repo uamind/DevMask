@@ -1,14 +1,14 @@
 ---
 layout: home
-title: Device Faker
+title: DevMask
 
 hero:
-  name: Device Faker
+  name: DevMask
   text: Spoof a different device model per app
   tagline: Per-app device profiles · property spoofing · instant reload
   image:
     src: /logo.svg
-    alt: Device Faker
+    alt: DevMask
   actions:
     - theme: brand
       text: Get Started
@@ -18,10 +18,10 @@ hero:
       link: /en/guide/
     - theme: brand
       text: Downloads
-      link: https://github.com/Seyud/device_faker/releases/latest
+      link: https://github.com/uamind/DevMask/releases/latest
     - theme: alt
       text: 💬 Telegram Group
-      link: https://t.me/device_faker
+      link: https://t.me/devmask
 
 features:
   - title: 🎯 Per-app precision

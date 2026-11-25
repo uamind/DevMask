@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 端口分配（契约 §1.3 / §1.5）：FNV-1a 32 位哈希 + 线性探测，17800–17899。
 //!
@@ -10,7 +10,7 @@
 
 use std::collections::BTreeSet;
 
-use device_faker_core::config::{Config, DIRECT_MARKER};
+use devmask_core::config::{Config, DIRECT_MARKER};
 
 use crate::egress::file::{EgressFile, ProxyDefinition, RelaySettings};
 

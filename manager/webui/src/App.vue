@@ -1,7 +1,7 @@
 <!--
   SPDX-License-Identifier: GPL-3.0-or-later
   Copyright (c) 2025-2026 Seyud
-  Device Faker: https://github.com/Seyud/device_faker
+  DevMask: https://github.com/uamind/DevMask
 -->
 
 <template>
@@ -12,7 +12,7 @@
           <el-icon :size="21"><Cpu /></el-icon>
         </div>
         <div class="brand-text">
-          <strong>Device Faker</strong>
+          <strong>DevMask</strong>
           <span>Relay Console</span>
         </div>
       </div>
@@ -151,7 +151,7 @@
       <p class="hint" style="margin-top: 0">
         Relay 用 <code>Authorization: Bearer &lt;manager-token&gt;</code> 鉴权。Token 来自
         <code>--token</code> / <code>DFM_TOKEN</code> / <code>&lt;data-dir&gt;/manager.token</code>，
-        首次启动默认 <code>admin123</code>。保存后写入本浏览器 <code>localStorage.dfm_token</code>，
+        首次启动默认 <code>admin123</code>。保存后写入本浏览器 <code>localStorage.dm_token</code>，
         界面不会回显明文。
       </p>
       <el-input
@@ -238,7 +238,7 @@ const navItems = [
 
 const pageTitle = computed(() => (route.meta.title as string) || '设备总览')
 const pageSubtitle = computed(
-  () => (route.meta.subtitle as string) || '统一管理多台 Device Faker 设备'
+  () => (route.meta.subtitle as string) || '统一管理多台 DevMask 设备'
 )
 
 watch(

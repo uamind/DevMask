@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
-//! device_faker_cli —— 开发/排障用的命令行工具（`convert` / `convert-props` / `dump-device`）。
+//! devmask_cli —— 开发/排障用的命令行工具（`convert` / `convert-props` / `dump-device`）。
 //!
 //! TODO(remove-cli): 自 2026-10-31 起**不再随模块打包**（`xtask` 不再拷贝、`customize.sh`
 //! 不再 set_perm），因为 WebUI 的「ZIP / 属性文本 → 机型模板」转换已改成纯前端实现
@@ -15,7 +15,7 @@ use argh::FromArgs;
 
 mod converter;
 
-/// Device Faker configuration tool
+/// DevMask configuration tool
 #[derive(FromArgs)]
 struct Cli {
     #[argh(subcommand)]

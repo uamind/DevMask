@@ -4,13 +4,13 @@
 === cargo fmt --check ===
 FMT_EXIT=0
 
-=== cargo clippy -p device_faker_server --all-targets -- -D warnings ===
+=== cargo clippy -p devmask_server --all-targets -- -D warnings ===
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
 CLIPPY_EXIT=0
 
-=== cargo test -p device_faker_server ===
+=== cargo test -p devmask_server ===
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
-     Running unittests src/lib.rs (target/debug/deps/device_faker_server-ac3fe257c1af7c68)
+     Running unittests src/lib.rs (target/debug/deps/devmask_server-ac3fe257c1af7c68)
 
 running 114 tests
 test api::device::tests::whitelist_covers_contract_prefixes ... ok
@@ -130,7 +130,7 @@ test device::tests::fixture_overrides_getprop_and_keeps_other_fields ... ok
 
 test result: ok. 114 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
 
-     Running unittests src/main.rs (target/debug/deps/device_faker_server-adb9b6b3db22b974)
+     Running unittests src/main.rs (target/debug/deps/devmask_server-adb9b6b3db22b974)
 
 running 0 tests
 
@@ -308,7 +308,7 @@ test if_match_accepts_quoted_unquoted_prefixed_and_star ... ok
 
 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
 
-   Doc-tests device_faker_server
+   Doc-tests devmask_server
 
 running 0 tests
 

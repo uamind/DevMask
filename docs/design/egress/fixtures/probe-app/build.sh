@@ -40,7 +40,7 @@ echo "== keystore =="
 if [ ! -f "$HERE/debug.keystore" ]; then
     keytool -genkeypair -keystore "$HERE/debug.keystore" -storepass android -keypass android \
         -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 3650 \
-        -dname "CN=EgressProbe, OU=t9, O=device_faker, L=NA, S=NA, C=NA" >/dev/null 2>&1
+        -dname "CN=EgressProbe, OU=t9, O=devmask, L=NA, S=NA, C=NA" >/dev/null 2>&1
 fi
 
 echo "== apksigner =="

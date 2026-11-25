@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 /**
  * 原生模式的 Token 存储与「需要登录」事件（契约 §3.5）。
@@ -11,9 +11,9 @@
  *   `setAuthPromptHandler()` 注册自己的输入框，二者解耦。
  */
 
-const TOKEN_SESSION_KEY = 'device_faker_api_token'
-const TOKEN_LOCAL_KEY = 'device_faker_api_token:remembered'
-const REMEMBER_FLAG_KEY = 'device_faker_api_token:remember'
+const TOKEN_SESSION_KEY = 'devmask_api_token'
+const TOKEN_LOCAL_KEY = 'devmask_api_token:remembered'
+const REMEMBER_FLAG_KEY = 'devmask_api_token:remember'
 
 /** 用户提交的 Token。 */
 export interface TokenSubmission {
@@ -150,7 +150,7 @@ export function requestToken(
       }
 
       const entered = window.prompt(
-        reason === 'missing' ? '请输入 device_faker API Token' : 'Token 无效或已撤销，请重新输入'
+        reason === 'missing' ? '请输入 devmask API Token' : 'Token 无效或已撤销，请重新输入'
       )
       return entered && entered.trim() ? { token: entered.trim(), remember: false } : null
     })().finally(() => {

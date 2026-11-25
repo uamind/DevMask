@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Device Faker /api/v1 冒烟测试（契约见 docs/API.md）：
+# DevMask /api/v1 冒烟测试（契约见 docs/API.md）：
 # healthz → status → config → templates CRUD → apps（绑定 + 内联 + explain）→ packages → 清理。
 #
 # 用法（详见 tests/api/README.md）：
 #   TOKEN=df_xxx bash tests/api/smoke.sh
 #   MOCK=1 bash tests/api/smoke.sh                  # 无服务时用契约 mock 自测
-#   SERVER_BIN=target/debug/device_faker_server TOKEN=df_xxx bash tests/api/smoke.sh
+#   SERVER_BIN=target/debug/devmask_server TOKEN=df_xxx bash tests/api/smoke.sh
 #
 # 断言：所有请求的状态码、写响应 WriteResult.revision / previousRevision、
-#       X-Request-Id / X-DF-Revision / ETag 响应头、404 统一错误信封。
+#       X-Request-Id / X-DM-Revision / ETag 响应头、404 统一错误信封。
 
 set -euo pipefail
 
@@ -30,7 +30,7 @@ df_init
 df_ensure_server
 
 TPL="df_smoke_$$"
-PKG="com.devicefaker.smoke.p$$"
+PKG="com.devmask.smoke.p$$"
 DF_SMOKE_TPL=$TPL
 DF_SMOKE_PKG=$PKG
 
@@ -38,7 +38,7 @@ DF_SMOKE_PKG=$PKG
 df_test_cleanup() {
   [ -n "${DF_SMOKE_TPL:-}" ] || return 0
   local auth rev
-  auth=(-H 'X-DF-Test-Harness: 1' -H 'Accept: application/json')
+  auth=(-H 'X-DM-Test-Harness: 1' -H 'Accept: application/json')
   if [ -n "$TOKEN" ]; then
     auth+=(-H "Authorization: Bearer $TOKEN")
   fi
@@ -102,7 +102,7 @@ df_assert_json "status" "ok" "healthz.status"
 df_log "== 2/8 status =="
 df_api GET "/status" "${DF_AUTH[@]}"
 df_assert_status "200" "GET /status"
-df_assert_json "module.id" "device_faker" "status.module.id"
+df_assert_json "module.id" "devmask" "status.module.id"
 STATUS_REV=$(df_json_get "$DF_BODY" "config.revision" "" 2>/dev/null || true)
 if [ -z "$STATUS_REV" ] || [ "$STATUS_REV" = "null" ]; then
   df_fail "status.config.revision 缺失或为空"
@@ -110,7 +110,7 @@ fi
 df_note "PASS status.config.revision = $STATUS_REV"
 if [ "$ASSERT_HEADERS" = "1" ]; then
   df_assert_header "X-Request-Id" "" "status: X-Request-Id"
-  df_assert_header "X-DF-Revision" "$STATUS_REV" "status: X-DF-Revision"
+  df_assert_header "X-DM-Revision" "$STATUS_REV" "status: X-DM-Revision"
 fi
 
 # ---------------------------------------------------------------- 3. config
@@ -125,7 +125,7 @@ if [ -z "$CONFIG_BODY" ]; then
 fi
 df_note "PASS GET /config 返回 config 对象"
 if [ "$ASSERT_HEADERS" = "1" ]; then
-  df_assert_header "X-DF-Revision" "$RV" "config: X-DF-Revision"
+  df_assert_header "X-DM-Revision" "$RV" "config: X-DM-Revision"
   df_assert_header "ETag" "\"$RV\"" "config: ETag"
 fi
 if [ "$STATUS_REV" != "$RV" ]; then

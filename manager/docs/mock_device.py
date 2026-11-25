@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (c) 2025-2026 Seyud
-# Device Faker: https://github.com/Seyud/device_faker
-"""Device Faker 设备端最小 Mock：供 Manager / Relay 冒烟验收。
+# DevMask: https://github.com/uamind/DevMask
+"""DevMask 设备端最小 Mock：供 Manager / Relay 冒烟验收。
 
 用法：
     python3 manager/docs/mock_device.py 18686
@@ -21,7 +21,7 @@
 egress 相关的行为约定（与真实服务对齐，便于联调）：
 
 - egress revision = sha256(configRevisionHex ‖ "\n" ‖ egress 文档字节)，
-  egress 端点只回 X-DF-Egress-Revision，**不回** X-DF-Revision / ETag；
+  egress 端点只回 X-DM-Egress-Revision，**不回** X-DM-Revision / ETag；
 - 缺 If-Match → 428 precondition_required；不匹配 → 412 config_revision_mismatch
   （details 里带 resource="egress"）；
 - 密码/用户名永不出现在任何响应里，唯一信号是 hasCredentials；
@@ -85,7 +85,7 @@ def overview():
     rev = revision()
     return {
         "revision": rev,
-        "module": {"id": "device_faker", "version": "v1.11.0", "versionCode": 20261202},
+        "module": {"id": "devmask", "version": "v0.0.1", "versionCode": 20261125},
         "device": {
             "manufacturer": "Google",
             "brand": "google",
@@ -98,7 +98,7 @@ def overview():
         },
         "root": {"manager": "kernelsu", "version": "1.0.7"},
         "server": {
-            "version": "1.11.0",
+            "version": "0.0.1",
             "bind": "127.0.0.1:18686",
             "uptimeSec": 3600,
             "startedAt": "2026-11-24T08:00:00Z",
@@ -565,11 +565,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("X-Request-Id", "req_mock")
         if egress:
-            # 契约 §1.1：egress 端点只回 egress revision，绝不能回 X-DF-Revision / ETag，
+            # 契约 §1.1：egress 端点只回 egress revision，绝不能回 X-DM-Revision / ETag，
             # 否则会污染客户端缓存的 config revision。
-            self.send_header("X-DF-Egress-Revision", egress_revision())
+            self.send_header("X-DM-Egress-Revision", egress_revision())
         else:
-            self.send_header("X-DF-Revision", revision())
+            self.send_header("X-DM-Revision", revision())
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

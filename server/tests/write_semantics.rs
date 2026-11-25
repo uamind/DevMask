@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 写路径语义：If-Match、并发、审计、幂等、405、dry run（docs/API.md 2、9）。
 
 mod common;
 
 use axum::http::{Method, StatusCode};
-use device_faker_core::Config;
-use device_faker_core::config::DeviceTemplate;
-use device_faker_core::edit::upsert_template;
-use device_faker_server::store::{Precondition, TxError, transact};
+use devmask_core::Config;
+use devmask_core::config::DeviceTemplate;
+use devmask_core::edit::upsert_template;
+use devmask_server::store::{Precondition, TxError, transact};
 use serde_json::json;
 
 use common::{
@@ -351,8 +351,8 @@ async fn write_response_revision_header_matches_file() {
         &json!({ "packages": [] }),
     )
     .await;
-    let header_revision = header(response.headers(), "x-df-revision")
-        .expect("x-df-revision")
+    let header_revision = header(response.headers(), "x-dm-revision")
+        .expect("x-dm-revision")
         .to_owned();
     assert_eq!(current_revision(&fixture), header_revision);
     let body = body_json(response).await;

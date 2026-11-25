@@ -1,6 +1,6 @@
 === 2026-11-24T18:08:26+0800 API acceptance (clean data dir) ===
 ## 1) healthz (no auth)
-{"status":"ok","version":"0.1.0","apiVersion":"v1","db":{"status":"ok","schemaVersion":1,"path":"manager.db"},"devices":{"total":0,"online":0,"offline":0}}
+{"status":"ok","version":"0.1.0","apiVersion":"v1","db":{"status":"ok","schemaVersion":1,"path":"devmask-manager.db"},"devices":{"total":0,"online":0,"offline":0}}
 ## 2) 401 without token
 HTTP 401
 {"code":"unauthorized","retryable":false}

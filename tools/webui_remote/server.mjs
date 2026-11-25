@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 //
 // 外部 WebUI 桥接服务（开发工具，不属于模块运行时产物）。
 //
@@ -386,7 +386,7 @@ async function moduleInfo() {
   }
 
   const found = await shell(
-    "grep -l '^id=device_faker' /data/adb/modules/*/module.prop /data/adb/modules_update/*/module.prop 2>/dev/null | head -1",
+    "grep -l '^id=devmask' /data/adb/modules/*/module.prop /data/adb/modules_update/*/module.prop 2>/dev/null | head -1",
     15000,
   )
   const propPath = found.stdout.trim().split('\n')[0]
@@ -401,8 +401,8 @@ async function moduleInfo() {
 
   const info = {
     moduleDir: dir,
-    id: prop.id || 'device_faker',
-    name: prop.name || 'Device Faker',
+    id: prop.id || 'devmask',
+    name: prop.name || 'DevMask',
     version: prop.version || '',
     versionCode: Number.parseInt(prop.versionCode || '0', 10) || 0,
     author: prop.author || '',
@@ -700,7 +700,7 @@ server.listen(opts.port, opts.host, async () => {
   const webrootReady = fs.existsSync(path.join(opts.root, 'index.html'))
   const shownHost = opts.host === '0.0.0.0' || opts.host === '::' ? '127.0.0.1' : opts.host
 
-  console.log('Device Faker WebUI 外部访问服务')
+  console.log('DevMask WebUI 外部访问服务')
   console.log(`  静态目录: ${opts.root}${webrootReady ? '' : '（缺少 index.html，请先构建 webui）'}`)
   console.log(`  本机访问: http://${shownHost}:${opts.port}`)
   for (const address of lanAddresses()) {

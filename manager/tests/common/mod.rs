@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 集成测试公共设施：临时数据目录 + 进程内 Router + 请求助手 + Mock 设备。
 
@@ -15,7 +15,7 @@ use axum::{
     body::Body,
     http::{HeaderMap, Method, Request, StatusCode},
 };
-use device_faker_manager::{
+use devmask_manager::{
     AppState, build_router,
     config::Config,
     state::{TokenSource, TokenState},
@@ -76,7 +76,7 @@ async fn start_app_with_token_source(
         static_dir_candidates: candidates,
         token,
         token_file: data_dir.join("manager.token"),
-        key_file: data_dir.join("manager.key"),
+        key_file: data_dir.join("devmask-manager.key"),
         config_file: data_dir.join("manager.toml"),
         apply_concurrency: 4,
         sync_concurrency: 4,
@@ -84,7 +84,7 @@ async fn start_app_with_token_source(
         write_timeout_ms: 15_000,
     };
 
-    let state = device_faker_manager::initialize(config)
+    let state = devmask_manager::initialize(config)
         .await
         .expect("初始化 Manager");
     let router = build_router(state.clone());

@@ -32,7 +32,7 @@ test egress::tests::replay_loop_without_overwrite_stays_clean ... ok
 
 test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-   Doc-tests device_faker_module_tests
+   Doc-tests devmask_module_tests
 
 running 0 tests
 

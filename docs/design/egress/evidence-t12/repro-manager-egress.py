@@ -6,7 +6,7 @@
 #      而设备端 GET /egress 本来就只回 hasCredentials —— 新密码永远推不下去。
 #
 # 用法（仓库根目录）：python3 docs/design/egress/evidence-t12/repro-manager-egress.py
-# 依赖：target/debug/device_faker_manager 已构建；docs/design/egress/fixtures/mock_device_egress.py。
+# 依赖：target/debug/devmask_manager 已构建；docs/design/egress/fixtures/mock_device_egress.py。
 
 import json
 import os
@@ -20,7 +20,7 @@ import urllib.request
 
 MGR_PORT = 18766
 MOCK_PORT = 18696
-DATA = "/tmp/dfm-t12"
+DATA = "/tmp/dm-t12"
 BASE = f"http://127.0.0.1:{MGR_PORT}/relay/api/v1"
 TOKEN = "admin123"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
@@ -78,7 +78,7 @@ def main():
         )
         procs.append(mock)
         manager = subprocess.Popen(
-            [os.path.join(ROOT, "target/debug/device_faker_manager"),
+            [os.path.join(ROOT, "target/debug/devmask_manager"),
              "--bind", f"127.0.0.1:{MGR_PORT}", "--data-dir", DATA, "--token", TOKEN],
             cwd=ROOT, stdout=subprocess.DEVNULL, stderr=manager_log,
         )

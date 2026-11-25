@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # 真机冒烟：adb forward tcp:8686 → curl healthz/status/config（可选取 /data/local/tmp 运行 server）。
 #
-# 前提：设备已连接、模块已安装、service.sh 已启动 device_faker_server。
+# 前提：设备已连接、模块已安装、service.sh 已启动 devmask_server。
 #
 # 用法：
 #   bash tests/device/smoke.sh
 #   DEVICE=xxxx TOKEN=df_xxx bash tests/device/smoke.sh
-#   STAGE_BIN=target/aarch64-linux-android/release/device_faker_server bash tests/device/smoke.sh
+#   STAGE_BIN=target/aarch64-linux-android/release/devmask_server bash tests/device/smoke.sh
 #   STAGE_BIN=... STATIC_DIR=module/webroot bash tests/device/smoke.sh
 #
 # 环境变量：
@@ -18,8 +18,8 @@
 #   TOKEN          Bearer Token（服务启用鉴权时必填）
 #   STAGE_BIN      可选：推送该二进制到 /data/local/tmp 并临时启动
 #   STATIC_DIR     可选：随 STAGE_BIN 一起推送的 webroot 目录
-#   REMOTE_DIR     默认 /data/local/tmp/device_faker
-#   LAUNCH_CMD     默认 "./device_faker_server --bind 127.0.0.1:<PORT> --config ./config.toml"
+#   REMOTE_DIR     默认 /data/local/tmp/devmask
+#   LAUNCH_CMD     默认 "./devmask_server --bind 127.0.0.1:<PORT> --config ./config.toml"
 #                  —— 必须与 server 实际 CLI 一致；不一致时显式覆盖本变量。
 #   STATIC_CHECK   默认 1：额外检查静态首页 200
 #   KEEP_FORWARD   默认 0：结束时移除 adb forward
@@ -38,7 +38,7 @@ BASE="http://127.0.0.1:${PORT}/api/v1"
 TOKEN="${TOKEN:-}"
 STAGE_BIN="${STAGE_BIN:-}"
 STATIC_DIR="${STATIC_DIR:-}"
-REMOTE_DIR="${REMOTE_DIR:-/data/local/tmp/device_faker}"
+REMOTE_DIR="${REMOTE_DIR:-/data/local/tmp/devmask}"
 LAUNCH_CMD="${LAUNCH_CMD:-}"
 STATIC_CHECK="${STATIC_CHECK:-1}"
 KEEP_FORWARD="${KEEP_FORWARD:-0}"
@@ -105,14 +105,14 @@ elif [ -n "$STAGE_BIN" ]; then
   [ -f "$STAGE_BIN" ] || df_fail "STAGE_BIN 不存在：$STAGE_BIN"
   df_log "推送 server 到 $REMOTE_DIR 并临时启动"
   device_shell "mkdir -p $REMOTE_DIR" || df_fail "无法创建 $REMOTE_DIR"
-  adb_cmd push "$STAGE_BIN" "$REMOTE_DIR/device_faker_server" >/dev/null || df_fail "push server 失败"
-  device_shell "chmod 755 $REMOTE_DIR/device_faker_server"
+  adb_cmd push "$STAGE_BIN" "$REMOTE_DIR/devmask_server" >/dev/null || df_fail "push server 失败"
+  device_shell "chmod 755 $REMOTE_DIR/devmask_server"
   adb_cmd push "$TESTS_ROOT/fixtures/config/minimal.toml" "$REMOTE_DIR/config.toml" >/dev/null || df_fail "push config 失败"
   if [ -n "$STATIC_DIR" ]; then
     adb_cmd push "$STATIC_DIR" "$REMOTE_DIR/webroot" >/dev/null || df_fail "push STATIC_DIR 失败"
   fi
   if [ -z "$LAUNCH_CMD" ]; then
-    LAUNCH_CMD="./device_faker_server --bind 127.0.0.1:$PORT --config ./config.toml"
+    LAUNCH_CMD="./devmask_server --bind 127.0.0.1:$PORT --config ./config.toml"
   fi
   {
     printf '#!/system/bin/sh\n'
@@ -134,9 +134,9 @@ elif [ -n "$STAGE_BIN" ]; then
 else
   df_fail "http://127.0.0.1:${PORT}/api/v1/healthz 不可达，且未提供 STAGE_BIN。
   请确认：
-    1) 模块已安装且 service.sh 已启动 device_faker_server；
+    1) 模块已安装且 service.sh 已启动 devmask_server；
     2) adb forward tcp:$PORT tcp:$REMOTE_PORT 已建立；
-    3) 或设置 STAGE_BIN=<aarch64 device_faker_server> 让本脚本临时启动。"
+    3) 或设置 STAGE_BIN=<aarch64 devmask_server> 让本脚本临时启动。"
 fi
 
 # ---------------------------------------------------------------- API 检查
@@ -149,7 +149,7 @@ df_assert_json "status" "ok" "healthz.status"
 df_log "== GET /api/v1/status =="
 df_api GET "/status" "${DF_AUTH[@]}"
 df_assert_status "200" "GET /status"
-df_assert_json "module.id" "device_faker" "status.module.id"
+df_assert_json "module.id" "devmask" "status.module.id"
 STATUS_REV=$(df_json_get "$DF_BODY" "config.revision" "" 2>/dev/null || true)
 if [ -z "$STATUS_REV" ] || [ "$STATUS_REV" = "null" ]; then
   df_fail "status.config.revision 缺失"
@@ -179,10 +179,10 @@ if [ "$STATIC_CHECK" = "1" ]; then
   if [ "$STATIC_STATUS" != "200" ]; then
     df_fail "GET $STATIC_URL 期望 200，实际 $STATIC_STATUS"
   fi
-  if ! grep -q "Device Faker" "$DF_TMP/index.html"; then
-    df_fail "静态首页未包含 'Device Faker'，webroot 可能未部署"
+  if ! grep -q "DevMask" "$DF_TMP/index.html"; then
+    df_fail "静态首页未包含 'DevMask'，webroot 可能未部署"
   fi
-  df_note "PASS 静态首页 200 且包含 Device Faker"
+  df_note "PASS 静态首页 200 且包含 DevMask"
 fi
 
 df_log "DEVICE SMOKE PASS：healthz → status → config → revision 全部通过（端口 ${PORT}）"

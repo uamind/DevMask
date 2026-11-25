@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 use std::{
     fs::{File, OpenOptions},
@@ -10,8 +10,8 @@ use std::{
 
 use log::{LevelFilter, Log, Metadata, Record};
 
-const LOG_DIR: &str = "/data/adb/device_faker/logs";
-const LOG_PATH: &str = "/data/adb/device_faker/logs/device_faker.log";
+const LOG_DIR: &str = "/data/adb/devmask/logs";
+const LOG_PATH: &str = "/data/adb/devmask/logs/devmask.log";
 
 enum LoggerInner {
     /// 能直接写文件（如 companion 进程），直接追加。

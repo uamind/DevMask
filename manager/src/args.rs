@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! 极简参数解析：只有 6 个开关，手写即可，避免引入 clap。
 
@@ -98,18 +98,20 @@ where
 /// 帮助文本。
 pub fn help_text() -> String {
     let mut text = String::new();
-    text.push_str("device_faker_manager ");
+    text.push_str("devmask_manager ");
     text.push_str(env!("CARGO_PKG_VERSION"));
     text.push('\n');
-    text.push_str("Device Faker 多设备管理端 / Relay\n\n");
-    text.push_str("用法：device_faker_manager [选项]\n\n");
+    text.push_str("DevMask 多设备管理端 / Relay\n\n");
+    text.push_str("用法：devmask_manager [选项]\n\n");
     text.push_str("选项：\n");
     text.push_str("  --bind <ADDR>        监听地址（默认 127.0.0.1:8765）\n");
     text.push_str("  --data-dir <PATH>    数据目录（默认按平台推导）\n");
     text.push_str("  --static-dir <PATH>  WebUI dist 目录（默认自动查找）\n");
     text.push_str("  --token <TOKEN>      Manager Token（默认 admin123，仅限 loopback）\n");
     text.push_str("  --token-file <PATH>  Token 文件（默认 <data-dir>/manager.token）\n");
-    text.push_str("  --key-file <PATH>    设备 Token 密钥文件（默认 <data-dir>/manager.key）\n");
+    text.push_str(
+        "  --key-file <PATH>    设备 Token 密钥文件（默认 <data-dir>/devmask-manager.key）\n",
+    );
     text.push_str("  --config <PATH>      配置文件（默认 <data-dir>/manager.toml）\n");
     text.push_str("  --log-level <LEVEL>  日志级别（默认 info；也可用 DFM_LOG / RUST_LOG）\n");
     text.push_str("  -h, --help           显示帮助\n");

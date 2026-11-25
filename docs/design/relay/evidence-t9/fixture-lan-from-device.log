@@ -2,7 +2,7 @@
 date: 2026-11-25T03:06:10Z
 ## 不带凭据（期望 407）
 HTTP/1.1 407 Proxy Authentication Required
-Proxy-Authenticate: Basic realm="device-faker-t9"
+Proxy-Authenticate: Basic realm="devmask-t9"
 Content-Type: text/plain; charset=utf-8
 Content-Length: 30
 Connection: close

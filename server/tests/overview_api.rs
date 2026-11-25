@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2025-2026 Seyud
-// Device Faker: https://github.com/Seyud/device_faker
+// DevMask: https://github.com/uamind/DevMask
 
 //! GET /api/v1/overview 的集成测试：设备指纹、模板与每个包的最终生效值。
 
@@ -18,7 +18,7 @@ async fn overview_returns_device_templates_and_apps() {
     let response = get_with_token(&fixture.router, "/api/v1/overview", READ_TOKEN).await;
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(
-        header(response.headers(), "x-df-revision"),
+        header(response.headers(), "x-dm-revision"),
         Some(current_revision(&fixture).as_str())
     );
 

@@ -6,17 +6,17 @@
 72:- 🔒 Property areas now use process-private copies, eliminating rw-p fingerprint in maps
 
 armed pid=11689
-按名命中 device_faker|arm64-v8a|libzygisk = 0
+按名命中 devmask|arm64-v8a|libzygisk = 0
 maps 总行数 = 3198
 含 [anon 的行数 = 478
 --- companion 进程 maps（应能按路径看到模块）---
 companion pid=2004
-7c2ae8e000-7c2aed1000 r--p 00000000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
-7c2aed4000-7c2afe7000 r-xp 00042000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
-7c2afea000-7c2aff4000 r--p 00154000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+7c2ae8e000-7c2aed1000 r--p 00000000 fe:40 170938                         /data/adb/modules/devmask/zygisk/arm64-v8a.so
+7c2aed4000-7c2afe7000 r-xp 00042000 fe:40 170938                         /data/adb/modules/devmask/zygisk/arm64-v8a.so
+7c2afea000-7c2aff4000 r--p 00154000 fe:40 170938                         /data/adb/modules/devmask/zygisk/arm64-v8a.so
 
 --- 保留映射的判定方式（行为证据）---
-11-24 22:40:35.622 11689 11689 I DeviceFaker: [egress] replay hook fired symbol=setpriority
-11-24 22:40:37.624 11689 11694 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
-11-24 22:40:59.862  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -aE "replay hook fired|replay done" | tail -3'
+11-24 22:40:35.622 11689 11689 I DevMask: [egress] replay hook fired symbol=setpriority
+11-24 22:40:37.624 11689 11694 I DevMask: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:40:59.862  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DevMask | grep -aE "replay hook fired|replay done" | tail -3'
 armed 进程存活（重放结束后仍在，且后续 setpriority 调用未崩）= yes
