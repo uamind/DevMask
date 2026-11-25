@@ -124,6 +124,20 @@ pub fn rfc3339_from_unix(seconds: u64) -> String {
     )
 }
 
+/// 配置解析错误的安全文本：**只保留首行**。
+///
+/// toml_edit / toml 的 Display 会把出错行原文渲染在后续行里（含该行的键值），而配置/响应
+/// 里可能有敏感值，因此对外错误与日志只用首行（形如「TOML parse error at line 3, column 5」）。
+pub fn parse_error_message(error: &anyhow::Error) -> String {
+    let text = error.to_string();
+    let first = text.lines().next().unwrap_or_default().trim();
+    if first.is_empty() {
+        "解析失败（细节已隐藏）".to_owned()
+    } else {
+        first.to_owned()
+    }
+}
+
 /// SystemTime -> RFC 3339（UTC）。早于 1970 时返回 1970-01-01T00:00:00Z。
 pub fn rfc3339(time: SystemTime) -> String {
     let seconds = time

@@ -1,0 +1,66 @@
+=== git log -1 ===
+822bbc7 feat(manager): add multi-device relay service and console
+
+=== cargo check -p device_faker --target aarch64-linux-android ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.24s
+CHECK_EXIT=0
+
+=== cargo fmt -p device_faker --check ===
+FMT_EXIT=0
+
+=== cargo clippy -p device_faker --target aarch64-linux-android --all-targets -- -D warnings ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+CLIPPY_EXIT=0
+
+=== 宿主机单测（src/egress.rs 的 arm plan 用例）===
+     |
+  46 -             libc::lsetxattr(
+  46 +             libc::fsetxattr(
+     |
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `prop-rs-android` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...
+HOST_TEST_EXIT=101
+
+=== build zygisk aarch64 release ===
+error: Could not find any NDK.
+note: Set the environment ANDROID_NDK_HOME to your NDK installation's root directory,
+or install the NDK using Android Studio.
+BUILD_EXIT=1
+-rwxr-xr-x 1 crymang staff 1438304 Nov 24 22:33 target/aarch64-linux-android/release/libzygisk.so
+
+=== build zygisk aarch64 release (retry with NDK env) ===
+    Building arm64-v8a (aarch64-linux-android)
+    Finished `release` profile [optimized] target(s) in 0.35s
+BUILD_EXIT=0
+-rwxr-xr-x 1 crymang staff 1438304 Nov 24 22:33 target/aarch64-linux-android/release/libzygisk.so
+
+=== 宿主机单测在 macOS 上不可运行的原因（记录真实错误头部）===
+   Compiling tera v1.20.1
+   Compiling zygisk-api v0.0.2 (https://github.com/Seyud/zygisk-api-rs.git#7fc690a3)
+   Compiling prop-rs-android v0.2.0 (https://github.com/KernelSU2/ksu_props?rev=ddb6ee7294467f7f25bad2118e9e24eee104144b#ddb6ee72)
+error[E0425]: cannot find value `SYS_futex` in crate `libc`
+    --> /Users/crymang/.cargo/git/checkouts/ksu_props-1458bfa3d0f6464c/ddb6ee7/crates/prop-rs-android/src/mmap_prop_area.rs:1245:15
+     |
+1245 |         libc::SYS_futex,
+     |               ^^^^^^^^^ not found in `libc`
+
+error[E0425]: cannot find value `FUTEX_WAKE` in crate `libc`
+    --> /Users/crymang/.cargo/git/checkouts/ksu_props-1458bfa3d0f6464c/ddb6ee7/crates/prop-rs-android/src/mmap_prop_area.rs:1247:15
+     |
+
+=== 改为：编译 ANDROID 目标的单测二进制（--no-run），准备推到真机执行 ===
+   Compiling tokio v1.53.2
+   Compiling toml v1.1.8+spec-1.1.0
+   Compiling memmap2 v0.9.11
+   Compiling itoa v1.0.18
+   Compiling rsproperties v0.6.0
+   Compiling prop-rs-android v0.2.0 (https://github.com/KernelSU2/ksu_props?rev=ddb6ee7294467f7f25bad2118e9e24eee104144b#ddb6ee72)
+   Compiling serde_json v1.0.151
+   Compiling device_faker_core v1.7.0 (/Users/crymang/Works/device_faker/core)
+   Compiling zygisk-api v0.0.2 (https://github.com/Seyud/zygisk-api-rs.git#7fc690a3)
+   Compiling rsbinder v0.11.0
+   Compiling device_faker v1.10.0 (/Users/crymang/Works/device_faker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 33.61s
+ANDROID_TEST_BUILD_EXIT=0

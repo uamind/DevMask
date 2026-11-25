@@ -1,0 +1,1 @@
+{"error":{"code":"validation_failed","details":{"errors":[{"code":"unknown_field","message":"Failed to deserialize the JSON body into the target type: bindings[0].mode: unknown field `mode`, expected `app` or `proxyId` at line 1 column 29","path":"body"}]},"message":"请求参数不合法","requestId":"req_458a17237e7447f898d6f33c092b0595","retryable":false}}

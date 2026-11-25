@@ -26,6 +26,30 @@ pub const KEY_LEN: usize = 32;
 /// GCM nonce 长度。
 pub const NONCE_LEN: usize = 12;
 
+/// egress 凭据 AAD 前缀：在「绑定 proxy id」之上再绑字段名，防止两列密文互换。
+pub const EGRESS_AAD_PREFIX: &str = "egress_proxy:";
+
+/// egress 凭据字段。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EgressField {
+    Username,
+    Password,
+}
+
+impl EgressField {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Username => "username",
+            Self::Password => "password",
+        }
+    }
+}
+
+/// AAD = "egress_proxy:" ‖ proxy_id ‖ ":" ‖ field。
+fn egress_aad(proxy_id: &str, field: EgressField) -> Vec<u8> {
+    format!("{EGRESS_AAD_PREFIX}{proxy_id}:{}", field.as_str()).into_bytes()
+}
+
 /// 密钥文件与加解密错误。
 #[derive(Debug, thiserror::Error)]
 pub enum KeyError {
@@ -41,9 +65,9 @@ pub enum KeyError {
         expected: usize,
         actual: usize,
     },
-    #[error("设备 Token 加密失败")]
+    #[error("Token / 代理凭据加密失败")]
     Encrypt,
-    #[error("设备 Token 解密失败（密钥不匹配或密文损坏）")]
+    #[error("Token / 代理凭据解密失败（密钥不匹配或密文损坏）")]
     Decrypt,
 }
 
@@ -149,14 +173,43 @@ impl DeviceKey {
 
     /// 加密设备 Token；AAD 为设备 id。
     pub fn encrypt(&self, device_id: &str, token: &str) -> Result<String, KeyError> {
+        self.encrypt_with_aad(device_id.as_bytes(), token)
+    }
+
+    /// 解密设备 Token；返回 Zeroizing<String>，drop 时清零。
+    pub fn decrypt(&self, device_id: &str, stored: &str) -> Result<Zeroizing<String>, KeyError> {
+        self.decrypt_with_aad(device_id.as_bytes(), stored)
+    }
+
+    /// 加密出口代理凭据；AAD = egress_proxy:<proxy_id>:<field>。
+    pub fn encrypt_egress(
+        &self,
+        proxy_id: &str,
+        field: EgressField,
+        value: &str,
+    ) -> Result<String, KeyError> {
+        self.encrypt_with_aad(&egress_aad(proxy_id, field), value)
+    }
+
+    /// 解密出口代理凭据；AAD 与写入时一致（同 id 换字段也解不开）。
+    pub fn decrypt_egress(
+        &self,
+        proxy_id: &str,
+        field: EgressField,
+        stored: &str,
+    ) -> Result<Zeroizing<String>, KeyError> {
+        self.decrypt_with_aad(&egress_aad(proxy_id, field), stored)
+    }
+
+    fn encrypt_with_aad(&self, aad: &[u8], value: &str) -> Result<String, KeyError> {
         let cipher = self.cipher();
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
         let ciphertext = cipher
             .encrypt(
                 &nonce,
                 Payload {
-                    msg: token.as_bytes(),
-                    aad: device_id.as_bytes(),
+                    msg: value.as_bytes(),
+                    aad,
                 },
             )
             .map_err(|_| KeyError::Encrypt)?;
@@ -167,8 +220,7 @@ impl DeviceKey {
         Ok(format!("{VERSION_PREFIX}{}", BASE64.encode(blob)))
     }
 
-    /// 解密设备 Token；返回 Zeroizing<String>，drop 时清零。
-    pub fn decrypt(&self, device_id: &str, stored: &str) -> Result<Zeroizing<String>, KeyError> {
+    fn decrypt_with_aad(&self, aad: &[u8], stored: &str) -> Result<Zeroizing<String>, KeyError> {
         let encoded = stored
             .strip_prefix(VERSION_PREFIX)
             .ok_or(KeyError::Decrypt)?;
@@ -183,13 +235,13 @@ impl DeviceKey {
                 Nonce::from_slice(nonce),
                 Payload {
                     msg: ciphertext,
-                    aad: device_id.as_bytes(),
+                    aad,
                 },
             )
             .map_err(|_| KeyError::Decrypt)?;
 
-        let token = String::from_utf8(plaintext).map_err(|_| KeyError::Decrypt)?;
-        Ok(Zeroizing::new(token))
+        let value = String::from_utf8(plaintext).map_err(|_| KeyError::Decrypt)?;
+        Ok(Zeroizing::new(value))
     }
 }
 
@@ -274,6 +326,39 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn egress_credentials_roundtrip_and_bind_identity() {
+        let dir = tempdir().unwrap();
+        let key = DeviceKey::load_or_create(&dir.path().join("manager.key")).unwrap();
+        let stored = key
+            .encrypt_egress("egp_abc", EgressField::Password, "hunter2")
+            .unwrap();
+        assert!(stored.starts_with(VERSION_PREFIX), "{stored}");
+        assert_eq!(
+            key.decrypt_egress("egp_abc", EgressField::Password, &stored)
+                .unwrap()
+                .as_str(),
+            "hunter2"
+        );
+
+        // 换 id / 换字段都解不开。
+        assert!(
+            key.decrypt_egress("egp_other", EgressField::Password, &stored)
+                .is_err()
+        );
+        assert!(
+            key.decrypt_egress("egp_abc", EgressField::Username, &stored)
+                .is_err()
+        );
+
+        // AAD 与设备 Token 的 AAD 空间互不重叠。
+        let token = key.encrypt("egp_abc", "hunter2").unwrap();
+        assert!(
+            key.decrypt_egress("egp_abc", EgressField::Username, &token)
+                .is_err()
+        );
     }
 
     #[test]

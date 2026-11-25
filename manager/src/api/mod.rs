@@ -10,6 +10,8 @@ pub mod apps;
 pub mod audit;
 pub mod devices;
 pub mod dto;
+pub mod egress;
+pub mod egress_dto;
 pub mod health;
 pub mod job_dto;
 pub mod jobs;
@@ -54,6 +56,22 @@ pub fn build_router(state: AppState) -> Router {
         .route("/audit", get(audit::list))
         .route("/token/rotate", post(token::rotate))
         .route("/apply", post(apply::apply))
+        .route(
+            "/egress-proxies",
+            get(egress::list_proxies).post(egress::create_proxy),
+        )
+        .route(
+            "/egress-proxies/{id}",
+            get(egress::get_proxy)
+                .patch(egress::update_proxy)
+                .delete(egress::delete_proxy),
+        )
+        .route("/egress-proxies/{id}/probe", post(egress::probe_proxy))
+        .route("/devices/egress/apply", post(egress::apply_egress))
+        .route(
+            "/devices/{id}/egress",
+            get(egress::get_device_egress).put(egress::put_device_egress),
+        )
         .route("/jobs", get(jobs::list))
         .route("/jobs/{id}", get(jobs::get))
         .route("/devices/{id}/proxy/api/v1/{*path}", any(proxy::proxy))

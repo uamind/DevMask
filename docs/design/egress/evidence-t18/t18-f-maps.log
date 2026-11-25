@@ -1,0 +1,22 @@
+===== F maps 可检出性（按新文档口径核对）=====
+--- 文档现状（t17 说已由文档任务改好）---
+20:- ⚠️ 明确记录重放机制的三条代价：① 显式配置 egress 的进程会保留**常驻模块代码页**（重放线程与 PLT hook 都在 `.so` 里）——但**按名字扫 `/proc/<pid>/maps` 看不到**（Zygisk 用无名/匿名映射，实测 armed 进程 3170 行命中 0），真判断要比匿名可执行段；② 应用运行中修改设备级代理不落在 0–2000ms 重放窗口内，需重启应用；③ `setpriority` hook 未命中时退化为一次性注入（`replay hook unavailable`），注入值可能被框架覆盖
+72:- 🔒 属性区改用进程私有副本，消除 maps 中的 rw-p 指纹
+20:- ⚠️ The three costs of the replay mechanism are documented: (1) a process with explicit egress keeps the **module code pages resident** (the replay thread and the PLT hook live in the `.so`) — but they are **not visible by name in `/proc/<pid>/maps`** (Zygisk uses unnamed/anonymous mappings; an armed process showed 0 hits across 3170 lines), so detection must compare anonymous executable segments; (2) changing the device-wide proxy while an app is running falls outside the 0–2000ms replay window, so the app must restart; (3) when the `setpriority` hook cannot be installed the injection degrades to one-shot (`replay hook unavailable`) and may be overwritten by the framework
+72:- 🔒 Property areas now use process-private copies, eliminating rw-p fingerprint in maps
+
+armed pid=11689
+按名命中 device_faker|arm64-v8a|libzygisk = 0
+maps 总行数 = 3198
+含 [anon 的行数 = 478
+--- companion 进程 maps（应能按路径看到模块）---
+companion pid=2004
+7c2ae8e000-7c2aed1000 r--p 00000000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+7c2aed4000-7c2afe7000 r-xp 00042000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+7c2afea000-7c2aff4000 r--p 00154000 fe:40 170938                         /data/adb/modules/device_faker/zygisk/arm64-v8a.so
+
+--- 保留映射的判定方式（行为证据）---
+11-24 22:40:35.622 11689 11689 I DeviceFaker: [egress] replay hook fired symbol=setpriority
+11-24 22:40:37.624 11689 11694 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2001ms
+11-24 22:40:59.862  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -aE "replay hook fired|replay done" | tail -3'
+armed 进程存活（重放结束后仍在，且后续 setpriority 调用未崩）= yes

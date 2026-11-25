@@ -6,6 +6,17 @@ import { stringify as stringifyToml } from 'smol-toml'
 import { parsePackageUser } from '../utils/package'
 import type { InstalledApp } from '../types'
 import { clearToken, getToken, requestToken, setToken } from './auth'
+import {
+  EGRESS_REVISION_HEADER,
+  normalizeEgressProbeResult,
+  normalizeEgressSnapshot,
+  normalizeEgressWriteResult,
+  type EgressProbeRequest,
+  type EgressProbeResult,
+  type EgressSnapshot,
+  type EgressUpdateInput,
+  type EgressWriteResult,
+} from './egress'
 import { ApiError, UnsupportedError, isApiError, toApiError } from './errors'
 import {
   CONFIG_PATH,
@@ -600,6 +611,110 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
     }
   }
 
+  // ---- 出口代理 egress（契约 §1）----
+  //
+  // revision 隔离：这里只读 X-DF-Egress-Revision / 响应体 revision，
+  // 绝不调用 updateRevisionFromResponse（那是 config revision 的缓存）。
+  let egressRevision = ''
+
+  function rememberEgressRevision(response: Response, payload: unknown): void {
+    const body =
+      payload &&
+      typeof payload === 'object' &&
+      typeof (payload as { revision?: unknown }).revision === 'string'
+        ? (payload as { revision: string }).revision
+        : ''
+    const header = stripQuotes(response.headers.get(EGRESS_REVISION_HEADER))
+    const next = body || header
+    if (next) {
+      egressRevision = next
+    }
+  }
+
+  /** egress 专用请求：只认 egress revision，把响应体原样交给 normalize。 */
+  async function sendEgress<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await send(path, init)
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new ApiError(response.status, {
+        code: 'internal_error',
+        message: '服务端响应不是合法 JSON',
+        retryable: true,
+      })
+    }
+    rememberEgressRevision(response, payload)
+    return payload as T
+  }
+
+  async function readEgress(): Promise<EgressSnapshot> {
+    return normalizeEgressSnapshot(await sendEgress('/egress'))
+  }
+
+  /**
+   * 写 egress：带 If-Match（egress revision）。
+   *
+   * 412（config_revision_mismatch + details.resource=egress）时重新 GET 一次再重试一次；
+   * 其余错误原样抛给界面（界面展示 code + message，不吞）。
+   */
+  async function sendEgressWrite(
+    path: string,
+    init: { method: 'PUT' | 'DELETE'; body?: string }
+  ): Promise<EgressWriteResult> {
+    const attempt = async (): Promise<EgressWriteResult> => {
+      const headers: Record<string, string> = { 'If-Match': buildIfMatch(egressRevision) }
+      if (init.body !== undefined) {
+        headers['Content-Type'] = 'application/json'
+      }
+      const payload = await sendEgress(path, {
+        method: init.method,
+        headers,
+        body: init.body,
+      })
+      return normalizeEgressWriteResult(payload)
+    }
+
+    try {
+      return await attempt()
+    } catch (error) {
+      if (!isApiError(error) || error.code !== 'config_revision_mismatch') {
+        throw error
+      }
+      egressRevision = ''
+      try {
+        await readEgress()
+      } catch {
+        // 读失败就按无条件写重试，由服务端语义决定结果
+      }
+      return await attempt()
+    }
+  }
+
+  async function writeEgress(input: EgressUpdateInput): Promise<EgressWriteResult> {
+    return await sendEgressWrite('/egress', {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    })
+  }
+
+  async function clearEgress(): Promise<EgressWriteResult> {
+    return await sendEgressWrite('/egress?confirm=true', { method: 'DELETE' })
+  }
+
+  async function probeEgress(request: EgressProbeRequest = {}): Promise<EgressProbeResult> {
+    const body: Record<string, unknown> = {}
+    if (request.package) body.package = request.package
+    if (request.url) body.url = request.url
+
+    const payload = await sendEgress('/egress/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return normalizeEgressProbeResult(payload)
+  }
+
   return {
     runtime: 'http',
     serverRuntime,
@@ -661,5 +776,9 @@ export function createHttpBackend(options: HttpBackendOptions = {}): Backend {
       throw new UnsupportedError('原生模式不支持深链启动，请改用浏览器打开')
     },
     fetchOnlineTemplates,
+    readEgress,
+    writeEgress,
+    clearEgress,
+    probeEgress,
   }
 }

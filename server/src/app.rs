@@ -34,6 +34,7 @@ use crate::{
     auth::{self, Scope, ScopeGuard},
     commands::{CommandRunner, SystemRunner},
     device::DeviceSummary,
+    egress::{EgressService, spawn_startup_reconcile},
     idempotency::{self, IdempotencyStore},
     packages::PackageService,
     requests,
@@ -55,6 +56,7 @@ struct Inner {
     packages: Arc<PackageService>,
     audit: AuditLog,
     idempotency: IdempotencyStore,
+    egress: EgressService,
 }
 
 /// 共享应用状态（内部 Arc，clone 很便宜）。
@@ -66,7 +68,7 @@ pub struct AppState {
 impl AppState {
     /// 生产构造：系统命令执行器。
     pub fn new(settings: Settings, bind: String, device: DeviceSummary) -> Self {
-        Self::with_runner(settings, bind, device, Arc::new(SystemRunner))
+        Self::with_runner(settings, bind, device, Arc::new(SystemRunner::default()))
     }
 
     /// 指定命令执行器（host 测试注入 fixture）。
@@ -84,6 +86,8 @@ impl AppState {
         let site = StaticSite::new(settings.static_dir.clone());
         let audit = AuditLog::new(settings.audit_path());
         let packages = Arc::new(PackageService::new(commands.clone()));
+        // egress.toml 与 config.toml 同目录（0600）；备份目录沿用 server.toml 的配置。
+        let egress = EgressService::new(&settings.config_path, settings.backup_dir.clone());
         Self {
             inner: Arc::new(Inner {
                 settings,
@@ -98,6 +102,7 @@ impl AppState {
                 packages,
                 audit,
                 idempotency: IdempotencyStore::default(),
+                egress,
             }),
         }
     }
@@ -161,6 +166,11 @@ impl AppState {
     pub fn idempotency(&self) -> &IdempotencyStore {
         &self.inner.idempotency
     }
+
+    /// 出口代理（egress.toml 存储 + 运行时健康状态）。
+    pub fn egress(&self) -> &EgressService {
+        &self.inner.egress
+    }
 }
 
 /// 组装路由。
@@ -180,7 +190,9 @@ pub fn router(state: AppState) -> Router {
             .route("/packages", get(api::packages::list))
             .route("/device", get(api::device::get_device))
             .route("/device/props", get(api::device::get_props))
-            .route("/device/users", get(api::device::get_users)),
+            .route("/device/users", get(api::device::get_users))
+            .route("/egress", get(api::egress::get_egress))
+            .route("/egress/proxies", get(api::egress::list_proxies)),
         state.clone(),
         Scope::Read,
     );
@@ -203,6 +215,10 @@ pub fn router(state: AppState) -> Router {
                 delete(api::templates::unbind_package_handler),
             )
             .route("/apps/{pkg}", put(api::apps::put).delete(api::apps::delete))
+            .route(
+                "/egress",
+                put(api::egress::put_egress).delete(api::egress::delete_egress),
+            )
             .route_layer(middleware::from_fn_with_state(
                 state.clone(),
                 audit::middleware,
@@ -230,11 +246,25 @@ pub fn router(state: AppState) -> Router {
         Scope::Ops,
     );
 
+    // POST /egress/probe 是 ops 作用域，但**不挂** Idempotency-Key：
+    // 探测每次都要真发请求（而且可能触发 fail-open），本身不是幂等操作（契约 §1.6）。
+    let egress_ops_routes = guarded(
+        Router::new()
+            .route("/egress/probe", post(api::egress::probe_egress))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                audit::middleware,
+            )),
+        state.clone(),
+        Scope::Ops,
+    );
+
     let api = Router::new()
         .route("/healthz", get(api::healthz))
         .merge(read_routes)
         .merge(write_routes)
         .merge(ops_routes)
+        .merge(egress_ops_routes)
         .method_not_allowed_fallback(api::method_not_allowed)
         .fallback(api::not_found);
 
@@ -292,7 +322,11 @@ fn compressible(
 }
 
 /// 启动 HTTP 服务（SIGTERM / Ctrl-C 优雅退出）。
+///
+/// 端口已经绑定（调用方 bind 过），这里先起一次**异步** egress 自愈再开始服务：
+/// 自愈跑在 blocking 线程池里，不阻塞 healthz，也不阻塞监听（契约 §3.4）。
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> std::io::Result<()> {
+    spawn_startup_reconcile(state.clone());
     axum::serve(listener, router(state))
         .with_graceful_shutdown(shutdown_signal())
         .await

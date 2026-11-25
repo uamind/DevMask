@@ -444,6 +444,64 @@ impl DeviceHttp {
         .await
     }
 
+    /// GET /api/v1/egress（设备端出口现状）。
+    pub async fn get_egress(
+        &self,
+        base_url: &str,
+        token: &str,
+        timeout: Duration,
+        request_id: Option<&str>,
+    ) -> Result<Value, DeviceCallError> {
+        self.get_json(base_url, token, "egress", timeout, request_id)
+            .await
+    }
+
+    /// PUT /api/v1/egress；If-Match 为设备端 egress revision（"*" 表示无条件写）。
+    #[allow(clippy::too_many_arguments)]
+    pub async fn put_egress(
+        &self,
+        base_url: &str,
+        token: &str,
+        body: &Value,
+        if_match: &str,
+        timeout: Duration,
+        request_id: Option<&str>,
+    ) -> Result<(u16, Value), DeviceCallError> {
+        self.request_json_with_status(
+            Method::PUT,
+            base_url,
+            token,
+            "egress",
+            timeout,
+            request_id,
+            &[("If-Match", if_match.to_string())],
+            Some(body),
+        )
+        .await
+    }
+
+    /// POST /api/v1/egress/probe（经设备当前链路探测出口 IP）。
+    pub async fn probe_egress(
+        &self,
+        base_url: &str,
+        token: &str,
+        body: Option<&Value>,
+        timeout: Duration,
+        request_id: Option<&str>,
+    ) -> Result<Value, DeviceCallError> {
+        self.request_json(
+            Method::POST,
+            base_url,
+            token,
+            "egress/probe",
+            timeout,
+            request_id,
+            &[],
+            body,
+        )
+        .await
+    }
+
     /// 透传一次设备 /api/v1 请求；保留设备状态码与响应体。
     #[allow(clippy::too_many_arguments)]
     pub async fn proxy(

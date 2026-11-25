@@ -118,7 +118,7 @@ async fn full_lifecycle_covers_all_relay_endpoints() {
     let health = health.json();
     assert_eq!(health["status"], "ok");
     assert_eq!(health["apiVersion"], "v1");
-    assert_eq!(health["db"]["schemaVersion"], 1);
+    assert_eq!(health["db"]["schemaVersion"], 2);
     assert_eq!(health["devices"]["total"], 0);
     let root_health = send(&app, Method::GET, "/healthz", None, None).await;
     assert_eq!(root_health.status, StatusCode::OK);

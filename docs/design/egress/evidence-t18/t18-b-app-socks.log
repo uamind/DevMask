@@ -1,0 +1,19 @@
+===== B 应用级 SOCKS5（设备级仍开着，验证 §5.3 互斥）=====
+PUT HTTP 200
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: http.proxyHost=<null>
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: http.proxyPort=<null>
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: socksProxyHost=127.0.0.1
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: socksProxyPort=18081
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: java.net.socks.username=dfsocks
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: java.net.socks.password=<set:true>
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: selector.app.fixture=SOCKS @ 127.0.0.1/<unresolved>:18081
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: fetch.app=status=200 body=198.51.100.8
+11-24 22:39:25.032 10733 10733 I EGRESSPROBE: fetch.ip=status=200 body=198.51.100.7
+--- fixture（socks5 隧道）---
+2026-11-24T22:39:20+0800 proto=socks5 listener=18081 method=noauth methods=? CONNECT app.fixture:80
+2026-11-24T22:39:20+0800 proto=socks5 listener=18081 tunnel-request app.fixture 164 bytes
+2026-11-24T22:39:20+0800 proto=socks5 listener=18081 method=noauth methods=? CONNECT 198.51.100.7:80
+2026-11-24T22:39:20+0800 proto=socks5 listener=18081 tunnel-request 198.51.100.7 165 bytes
+2026-11-24T22:39:23+0800 proto=http listener=18080 CONNECT securitydomain-pa.googleapis.com:443 auth=0
+2026-11-24T22:39:24+0800 proto=http listener=18080 CONNECT www.gstatic.com:443 auth=0
+2026-11-24T22:39:24+0800 proto=http listener=18080 CONNECT notifications-pa.googleapis.com:443 auth=0

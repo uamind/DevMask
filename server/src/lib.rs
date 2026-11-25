@@ -34,6 +34,7 @@ pub mod commands;
 pub mod device;
 pub mod diff;
 pub mod dto;
+pub mod egress;
 pub mod error;
 pub mod idempotency;
 pub mod module;

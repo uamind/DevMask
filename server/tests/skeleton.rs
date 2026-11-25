@@ -148,7 +148,8 @@ async fn status_with_read_token_returns_snapshot() {
             "packages",
             "device",
             "validate",
-            "overview"
+            "overview",
+            "egress"
         ])
     );
 }

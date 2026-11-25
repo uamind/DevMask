@@ -1,0 +1,68 @@
+===== D 未配置应用零注入 =====
+--- 候选：挑一个既不在 [[apps]] 也不在模板 packages 里的应用 ---
+0
+0
+启动前 [egress] 日志行数：96
+11327
+unconfigured app pid=11327
+0
+0
+0
+0
+启动后 [egress] 日志行数：��应与启动前相同）
+--- 该包的模块日志（应为空）---
+--- 对照：已配置探针应用启动 0.6s 内 maps 命中数 ---
+pid=11454
+0
+0
+0
+0
+===== D 未配置应用零注入（干净重测）=====
+target package: com.reqable.android (config.toml 命中数: 0)
+BEFORE egress-log-lines=100
+11515
+AFTER  egress-log-lines=100
+delta=0  (期望 0)
+--- 该包是否出现任何 [egress] 行（期望 0 行）---
+0
+--- 启动窗口内模块日志尾部（应只有 spec 渲染，无 injected/replay hook）---
+[2026-11-24 22:08:53.265] [INFO] zygisk - Build fields faked successfully
+[2026-11-24 22:08:53.265] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:08:53.265] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=direct host=- port=- creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:08:53.266] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:08:53.267] [INFO] zygisk - Property map: 0 entries (0 explicit custom_props)
+[2026-11-24 22:08:53.267] [INFO] zygisk - [egress] module kept mapped for the replay window
+--- 对照：已配置探针应用启动后同样统计（应 +4：degraded/injected/hook armed/kept mapped）---
+configured app: before=100 after=104 delta=4
+[2026-11-24 22:09:12.719] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:09:12.719] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=direct host=- port=- creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:09:12.720] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:09:12.720] [INFO] zygisk - [egress] module kept mapped for the replay window
+===== D-2 未配置应用：逐行对比本次启动新增的模块日志 =====
+log lines: before=2573 after=2573 delta=0
+--- 本次启动新增的全部日志行 ---
+
+===== CASE C：设备级直连(:0) + 未配置应用 =====
+:0
+device_faker.log 行数 before=2603 after=2603 delta=0
+该包 [egress] 行数=0
+logcat DeviceFaker 与该进程相关行数=1
+pid=13532
+maps 命中 device_faker/arm64-v8a/zygisk = 0
+===== CASE D：设备级 default=mac_http 开启 + 未配置应用（继承，不注入）=====
+PUT default=mac_http HTTP 200
+127.0.0.1:18080
+device_faker.log 行数 before=2604 after=2604 delta=0
+该包 [egress] 行数=0
+logcat DeviceFaker 与该进程相关行数=1
+pid=13743
+maps 命中 device_faker/arm64-v8a/zygisk = 0
+--- 该应用仍通过框架继承设备级代理（fixture 侧应有它的流量，见下）---
+2026-11-24T22:15:02+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
+2026-11-24T22:15:02+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
+2026-11-24T22:15:02+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
+2026-11-24T22:15:02+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
+2026-11-24T22:15:03+0800 proto=http listener=18080 CONNECT play.googleapis.com:443 auth=0
+===== CASE C/D 中那条含 reqable 的 DeviceFaker 行到底是什么 =====
+11-24 22:16:15.139  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -c reqable || true'
+11-24 22:16:24.931  1387  1387 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | grep -a reqable'

@@ -3,6 +3,7 @@
 // Device Faker: https://github.com/Seyud/device_faker
 
 import type { InstalledApp } from '../types'
+import type { EgressProbeRequest, EgressUpdateInput } from './egress'
 import { UnsupportedError } from './errors'
 import { createHttpBackend, probeHealthz, readInjectedServer } from './http'
 import { createKsuBackend } from './ksu'
@@ -122,6 +123,18 @@ export function createReadOnlyBackend(): Backend {
     fetchOnlineTemplates: async (_url: string, _options?: FetchOnlineTemplatesOptions) => {
       throw readOnlyError('拉取在线模板')
     },
+    readEgress: async () => {
+      throw readOnlyError('读取出口代理')
+    },
+    writeEgress: async () => {
+      throw readOnlyError('保存出口代理')
+    },
+    clearEgress: async () => {
+      throw readOnlyError('恢复直连')
+    },
+    probeEgress: async () => {
+      throw readOnlyError('探测出口 IP')
+    },
   }
 }
 
@@ -202,6 +215,10 @@ function createLazyBackend(): Backend {
       (await resolve()).openDeepLink(url, options),
     fetchOnlineTemplates: async (url: string, options?: FetchOnlineTemplatesOptions) =>
       (await resolve()).fetchOnlineTemplates(url, options),
+    readEgress: async () => (await resolve()).readEgress(),
+    writeEgress: async (input: EgressUpdateInput) => (await resolve()).writeEgress(input),
+    clearEgress: async () => (await resolve()).clearEgress(),
+    probeEgress: async (request?: EgressProbeRequest) => (await resolve()).probeEgress(request),
   }
 }
 
@@ -241,3 +258,4 @@ export {
   setToken,
 } from './auth'
 export * from './types'
+export * from './egress'

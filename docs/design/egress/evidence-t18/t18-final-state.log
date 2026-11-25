@@ -1,0 +1,70 @@
+
+===== 收尾 =====
+--- 恢复 config.toml 的 debug 行（t14 状态 = true，本任务已恢复）---
+1:debug = true
+--- 移除测试残留（app 记录 / egress.toml / 临时 token）---
+0
+0
+0
+t18 token removed
+(tmp cleaned)
+Success
+(probe app removed)
+[2m2026-11-24T14:41:28.192328Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:41:28.712278Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+--- 残留检查 ---
+0
+0
+0
+0
+ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+--- 最终状态 ---
+List of devices attached
+4A190DLAQ002QR	device
+
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+---
+:0
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+
+(reverse list end)
+
+===== 收尾（第二段）=====
+DELETE HTTP 200
+{"changed": true, "mode": "direct", "default": null, "readback": {"settingsValue": ":0", "dumpsysGlobalProxy": "Global proxy: none", "matches": true, "at": "2026-11-24T14:43:59Z"}}
+0
+t18b token removed
+Success
+[2m2026-11-24T14:44:03.702133Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:44:04.217262Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+--- 残留检查 ---
+0
+0
+0
+0
+ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+prop=[]
+--- 最终状态 ---
+List of devices attached
+4A190DLAQ002QR	device
+
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+---
+:0
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+
+(reverse list end)

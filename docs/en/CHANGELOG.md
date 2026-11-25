@@ -1,5 +1,34 @@
 # 📝 Changelog
 
+## ⬆️[v1.9.0 → v1.10.0] - 2026-12-01
+
+### 🆕 New Features
+- 🌐 **Egress proxy**: device-wide HTTP/HTTPS proxy written to Android global settings (`settings global http_proxy`), so app traffic leaves through a chosen exit
+- 🧩 Per-app egress: Zygisk injects `http/https/socksProxy` plus `ProxySelector` inside the target process — **SOCKS5** supported with one exit per app; `__DIRECT__` forces direct (actively overrides the system proxy)
+- 📡 Exit-IP probe: `POST /api/v1/egress/probe` requests a configurable probe URL over the effective path and returns exit IP / latency / timestamp, with structured error codes on failure
+- 🗄️ Manager proxy pool: `/relay/api/v1/egress-proxies` CRUD, bindings (device-wide / per-app), batch apply (job `kind=egress`) and manager-side probing
+- 🖥️ Both WebUIs: a "Network egress" card on the device settings page (configure + probe + roll back to direct), plus a "Proxy pool" page in the Manager with exit IP / proxy name on device cards
+- 🔐 Credential hygiene: proxy definitions live in a separate `egress.toml` (`0600`) and every API / log / audit / UI surface only exposes `hasCredentials`; the Manager encrypts credentials with `manager.key` (AES-256-GCM)
+
+### ⚡ Improvements
+- 🧯 Clearing the system proxy uses `settings put global http_proxy :0` only (`settings delete` does not clear it on Android 17 — measured and documented)
+- 🛟 fail-open is on by default: a failed probe or read-back mismatch falls back to direct, so one bad config cannot brick connectivity
+- 🔁 Idempotent writes: when the desired state equals the current one nothing is written or backed up and the revision stays put (`changed:false`); replaying the same apply on the Manager reports `egress_unchanged` instead of turning the job partial
+- 🧹 Cleanup on uninstall / disable: `uninstall.sh` clears the system proxy after stopping the service, then removes the runtime directory
+- 📚 Docs: five egress endpoints in [API.md](../API.md), a "Network egress" chapter in [CONFIG.md](CONFIG.md), five operations in [openapi.yaml](../openapi.yaml), plus Manager contract/architecture updates
+- ⚖️ Per-app injection is now **explicit-only**: only processes whose `[[apps]].egress` names a proxy (or `__DIRECT__`) get the PLT hook and the replay thread (the device-wide default no longer adds cost to every app)
+- ⚠️ The three costs of the replay mechanism are documented: (1) a process with explicit egress keeps the **module code pages resident** (the replay thread and the PLT hook live in the `.so`) — but they are **not visible by name in `/proc/<pid>/maps`** (Zygisk uses unnamed/anonymous mappings; an armed process showed 0 hits across 3170 lines), so detection must compare anonymous executable segments; (2) changing the device-wide proxy while an app is running falls outside the 0–2000ms replay window, so the app must restart; (3) when the `setpriority` hook cannot be installed the injection degrades to one-shot (`replay hook unavailable`) and may be overwritten by the framework
+- ⚠️ **Proxies with a username/password do not work in this release**: the injected `java.net.socks.username/password` properties are readable inside the process, but libcore never sends them (measured on Android 17: `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`); HTTP Basic is not implemented (only host/port are injected, logged as `unsupported-auth`). Use an IP allow-list on the proxy, or wait for the P2 "in-device authenticated relay" (not implemented yet)
+
+### 🐛 Bug Fixes
+- 🔁 Fixed per-app HTTP egress not taking effect inside the target process: the framework (`ActivityThread.handleBindApplication` → `Proxy.setHttpProxyConfiguration`) rewrites the http/https properties from the **device-wide** proxy roughly 28–95ms after injection; a replay thread is now started from a PLT hook (`setpriority`) once the process transition is done, reading back and rewriting on a 0–2000ms schedule (118 probes, no early exit)
+- 🚫 Fixed `__DIRECT__` being ineffective while a device-wide proxy is set (same root cause: the clear was overwritten by the framework; the replay restores the direct state)
+- 🧩 Fixed the per-process warning caused by `ProxySelector.of(...)` not existing on Android 17 (SDK 37): the capability is probed first and a single `proxy_selector degraded` line is logged when missing (the selector is a bonus; the property path is authoritative)
+- 🔒 Fixed a self-deadlock when reading the config snapshot inside a cross-file transaction (shared lock requested while the exclusive flock was already held)
+- 🔐 Fixed `dry_run` / `diff` responses leaking proxy passwords: `username` / `password` values in the diff are now redacted per line to `<redacted>` (key names kept; neither the old value nor the new password appears)
+- 🎯 Fixed a failed **per-app** probe wiping the device-wide proxy: `scope="app"` failures now only update `health.lastProbe`, the `502` carries `scope` plus an `egress_probe_scope_app` warning, and **no** `settings put global http_proxy :0` is executed — only device-scope failures trigger fail-open
+- 📦 Fixed `PUT /egress`'s `apps` semantics: both `apps: []` and `apps: null` clear every `[[apps]].egress` (whole-array replacement); apps not listed lose the `egress` key
+
 ## ⬆️[v1.6.0 → v1.7.0] - 2026-11-09
 
 ### 🆕 New Features

@@ -18,6 +18,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '设备', subtitle: '添加、删除和同步 Device Faker 设备' },
   },
   {
+    path: '/proxies',
+    name: 'proxies',
+    component: () => import('./pages/ProxiesPage.vue'),
+    meta: { title: '代理池', subtitle: '出口代理定义、绑定关系与出口 IP 探测' },
+  },
+  {
     path: '/apps',
     name: 'apps',
     component: () => import('./pages/AppsPage.vue'),

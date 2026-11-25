@@ -2,9 +2,10 @@
 // Copyright (c) 2025-2026 Seyud
 // Device Faker: https://github.com/Seyud/device_faker
 
-//! SQLite：单写连接 + WAL；schema v1（见 manager/docs/ARCH.md 第 5 节）。
+//! SQLite：单写连接 + WAL；schema v2（v1 见 manager/docs/ARCH.md 第 5 节，v2 追加出口代理三表）。
 
 use std::{
+    collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
@@ -15,8 +16,8 @@ use serde_json::Value;
 
 use crate::ids;
 
-/// 当前 schema 版本。
-pub const SCHEMA_VERSION: i64 = 1;
+/// 当前 schema 版本（v2 追加出口代理三表并扩容 jobs.kind）。
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// schema v1 全量 DDL；迁移只追加、不修改历史。
 pub const DDL: &str = r#"
@@ -113,6 +114,95 @@ CREATE INDEX IF NOT EXISTS idx_audit_action ON audit(action);
 CREATE INDEX IF NOT EXISTS idx_audit_ts     ON audit(id DESC);
 "#;
 
+/// schema v2 增量 DDL：出口代理池 / 绑定 / 探测结果（只追加，不改 v1）。
+pub const DDL_V2: &str = r#"
+CREATE TABLE IF NOT EXISTS egress_proxies (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL UNIQUE,
+  kind             TEXT NOT NULL CHECK (kind IN ('http','socks5')),
+  host             TEXT NOT NULL,
+  port             INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+  username_cipher  TEXT,
+  password_cipher  TEXT,
+  region           TEXT,
+  tags             TEXT NOT NULL DEFAULT '[]',
+  enabled          INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  CHECK (username_cipher IS NULL OR username_cipher LIKE 'v1:%'),
+  CHECK (password_cipher IS NULL OR password_cipher LIKE 'v1:%')
+);
+CREATE INDEX IF NOT EXISTS idx_egress_proxies_name    ON egress_proxies(name);
+CREATE INDEX IF NOT EXISTS idx_egress_proxies_enabled ON egress_proxies(enabled);
+
+CREATE TABLE IF NOT EXISTS device_egress (
+  device_id  TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  app        TEXT NOT NULL DEFAULT '',
+  mode       TEXT NOT NULL CHECK (mode IN ('proxy','direct')),
+  proxy_id   TEXT REFERENCES egress_proxies(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (device_id, app),
+  CHECK ((mode = 'proxy'  AND proxy_id IS NOT NULL)
+      OR (mode = 'direct' AND proxy_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_device_egress_proxy  ON device_egress(proxy_id);
+CREATE INDEX IF NOT EXISTS idx_device_egress_device ON device_egress(device_id);
+
+CREATE TABLE IF NOT EXISTS egress_checks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  source     TEXT NOT NULL CHECK (source IN ('device','manager')),
+  device_id  TEXT REFERENCES devices(id) ON DELETE CASCADE,
+  app        TEXT NOT NULL DEFAULT '',
+  scope      TEXT NOT NULL DEFAULT 'device' CHECK (scope IN ('device','app')),
+  proxy_id   TEXT REFERENCES egress_proxies(id) ON DELETE SET NULL,
+  exit_ip    TEXT,
+  latency_ms INTEGER,
+  ok         INTEGER NOT NULL CHECK (ok IN (0,1)),
+  error_code TEXT,
+  checked_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_egress_checks_device  ON egress_checks(device_id, checked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_egress_checks_proxy   ON egress_checks(proxy_id, checked_at DESC);
+CREATE INDEX IF NOT EXISTS idx_egress_checks_checked ON egress_checks(checked_at DESC);
+"#;
+
+/// jobs 表重建配方：扩容 kind 的 CHECK（SQLite 不能 ALTER CHECK）。
+/// 调用前必须 PRAGMA foreign_keys = OFF，否则 DROP TABLE 会级联删除 job_results。
+const JOBS_REBUILD_SQL: &str = r#"
+DROP TABLE IF EXISTS jobs_v2;
+CREATE TABLE jobs_v2 (
+  id              TEXT PRIMARY KEY,
+  kind            TEXT NOT NULL CHECK (kind IN ('bulk','assignments','egress')),
+  status          TEXT NOT NULL CHECK (status IN ('queued','running','succeeded','partial','failed')),
+  app             TEXT,
+  template        TEXT,
+  restart         INTEGER NOT NULL DEFAULT 0,
+  total           INTEGER NOT NULL,
+  succeeded       INTEGER NOT NULL DEFAULT 0,
+  skipped         INTEGER NOT NULL DEFAULT 0,
+  failed          INTEGER NOT NULL DEFAULT 0,
+  request_id      TEXT NOT NULL,
+  idempotency_key TEXT UNIQUE,
+  actor           TEXT NOT NULL DEFAULT 'manager-token',
+  error           TEXT,
+  created_at      TEXT NOT NULL,
+  started_at      TEXT,
+  finished_at     TEXT
+);
+INSERT INTO jobs_v2 (
+  id, kind, status, app, template, restart, total, succeeded, skipped, failed,
+  request_id, idempotency_key, actor, error, created_at, started_at, finished_at
+)
+SELECT
+  id, kind, status, app, template, restart, total, succeeded, skipped, failed,
+  request_id, idempotency_key, actor, error, created_at, started_at, finished_at
+  FROM jobs;
+DROP TABLE jobs;
+ALTER TABLE jobs_v2 RENAME TO jobs;
+CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
+"#;
+
 /// 数据库错误。
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
@@ -126,8 +216,29 @@ pub enum DbError {
     },
     #[error("数据库连接锁已损坏")]
     Poisoned,
+    #[error("迁移失败（op=migrate, current={from}, target={to}）：{message}")]
+    Migration { from: i64, to: i64, message: String },
+    #[error("迁移后外键校验失败：{violations} 条违规")]
+    ForeignKeyViolation { violations: i64 },
     #[error("数据库任务执行失败：{0}")]
     Join(#[from] tokio::task::JoinError),
+}
+
+impl DbError {
+    /// 是否是 SQLite 外键约束失败（用于把删除竞态映射成 409 而不是 500）。
+    pub fn is_foreign_key_violation(&self) -> bool {
+        let Self::Sqlite(error) = self else {
+            return false;
+        };
+        let Some(code) = error.sqlite_error_code() else {
+            return false;
+        };
+        matches!(code, rusqlite::ErrorCode::ConstraintViolation)
+            && error
+                .to_string()
+                .to_ascii_lowercase()
+                .contains("foreign key")
+    }
 }
 
 /// 健康检查快照。
@@ -307,6 +418,98 @@ pub struct JobProgress {
     pub pending: i64,
 }
 
+/// 出口代理池行（密码/用户名只以密文存在）。
+#[derive(Debug, Clone)]
+pub struct EgressProxyRecord {
+    pub id: String,
+    pub name: String,
+    /// 线上字段叫 type；列名沿用契约的 kind。
+    pub kind: String,
+    pub host: String,
+    pub port: i64,
+    pub username_cipher: Option<String>,
+    pub password_cipher: Option<String>,
+    pub region: Option<String>,
+    pub tags: Vec<String>,
+    pub enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+impl EgressProxyRecord {
+    /// 唯一的凭据信号：任一密文列存在即为 true。
+    pub fn has_credentials(&self) -> bool {
+        self.username_cipher.is_some() || self.password_cipher.is_some()
+    }
+}
+
+/// device_egress 行（读接口直接带出设备名与代理名）。
+#[derive(Debug, Clone)]
+pub struct DeviceEgressRow {
+    pub device_id: String,
+    pub device_name: Option<String>,
+    /// "" = 整机（方案 A）。
+    pub app: String,
+    /// proxy | direct。
+    pub mode: String,
+    pub proxy_id: Option<String>,
+    pub proxy_name: Option<String>,
+    pub updated_at: String,
+}
+
+/// 一次绑定写入（PUT /devices/{id}/egress 全量替换用）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceEgressWrite {
+    pub app: String,
+    /// proxy | direct。
+    pub mode: String,
+    pub proxy_id: Option<String>,
+}
+
+/// egress_checks 行。
+#[derive(Debug, Clone)]
+pub struct EgressCheckRow {
+    pub id: i64,
+    pub source: String,
+    pub device_id: Option<String>,
+    pub app: String,
+    pub scope: String,
+    pub proxy_id: Option<String>,
+    pub exit_ip: Option<String>,
+    pub latency_ms: Option<i64>,
+    pub ok: bool,
+    pub error_code: Option<String>,
+    pub checked_at: String,
+}
+
+/// 待写入的探测结果（成功与失败都要落库）。
+#[derive(Debug, Clone)]
+pub struct NewEgressCheck {
+    pub source: String,
+    pub device_id: Option<String>,
+    pub app: String,
+    pub scope: String,
+    pub proxy_id: Option<String>,
+    pub exit_ip: Option<String>,
+    pub latency_ms: Option<i64>,
+    pub ok: bool,
+    pub error_code: Option<String>,
+    pub checked_at: String,
+}
+
+/// 设备级出口摘要（设备列表 / 总览展示最近一次 exitIp 与 proxyName）。
+#[derive(Debug, Clone)]
+pub struct DeviceEgressSummary {
+    pub device_id: String,
+    pub mode: String,
+    pub proxy_id: Option<String>,
+    pub proxy_name: Option<String>,
+    pub exit_ip: Option<String>,
+    pub checked_at: Option<String>,
+    pub ok: Option<bool>,
+    pub error_code: Option<String>,
+}
+
 /// 插入设备行。
 const INSERT_DEVICE_SQL: &str = "INSERT INTO devices (
     id, name, base_url, token_cipher, tags, online,
@@ -394,25 +597,33 @@ impl Db {
         Ok(())
     }
 
+    /// 迁移：只前进、只追加；失败一律带 op="migrate" 与 current/target 版本。
     fn migrate(&self) -> Result<(), DbError> {
         let mut connection = self.conn.lock().map_err(|_| DbError::Poisoned)?;
         connection.execute_batch(DDL)?;
 
-        let current: i64 = connection.query_row(
+        let mut current: i64 = connection.query_row(
             "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
             [],
             |row| row.get(0),
         )?;
 
-        if current < SCHEMA_VERSION {
-            let transaction = connection.transaction()?;
-            transaction.execute(
-                "INSERT OR REPLACE INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
-                params![SCHEMA_VERSION, ids::now_rfc3339()],
-            )?;
-            transaction.commit()?;
-            connection.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
+        if current < 1 {
+            record_migration(&connection, 1).map_err(|error| migration_error(current, 1, error))?;
+            current = 1;
         }
+        if current < 2 {
+            apply_schema_v2(&mut connection, current)?;
+            current = 2;
+        }
+        if current < SCHEMA_VERSION {
+            record_migration(&connection, SCHEMA_VERSION)
+                .map_err(|error| migration_error(current, SCHEMA_VERSION, error))?;
+        }
+
+        connection
+            .execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
+            .map_err(|error| migration_error(current, SCHEMA_VERSION, error))?;
         Ok(())
     }
 
@@ -1183,7 +1394,9 @@ impl Db {
         .await
     }
 
-    /// 清理过期 job（7 天 / 200 条）与审计（5000 条）。
+    /// 清理过期 job（7 天 / 200 条）、审计（5000 条）与 egress_checks（每个 (device_id, app) 保留 500 条）。
+    ///
+    /// 返回值保持 (jobs, audit) 二元组（调用方与日志格式不变）；egress_checks 的清理量只写日志。
     pub async fn prune(&self) -> Result<(usize, usize), DbError> {
         let cutoff = (chrono::Utc::now() - chrono::Duration::days(7))
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
@@ -1202,6 +1415,22 @@ impl Db {
                  )",
                 [],
             )?;
+            // 探测历史：每个 (device_id, app) 只保留最近 500 条（契约 §6.11 允许的清理策略）。
+            let egress_deleted = connection.execute(
+                "DELETE FROM egress_checks WHERE id NOT IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(device_id, ''), app
+                            ORDER BY checked_at DESC, id DESC
+                        ) AS rn
+                          FROM egress_checks
+                    ) WHERE rn <= 500
+                 )",
+                [],
+            )?;
+            if egress_deleted > 0 {
+                tracing::info!(egress_deleted, "已清理历史 egress_checks");
+            }
             Ok((jobs_deleted, audits_deleted))
         })
         .await
@@ -1236,6 +1465,518 @@ impl Db {
         })
         .await
     }
+
+    // ── 出口代理池（schema v2） ───────────────────────────────────────────
+
+    /// 插入代理定义。
+    pub async fn insert_egress_proxy(&self, proxy: EgressProxyRecord) -> Result<(), DbError> {
+        self.call(move |connection| {
+            connection.execute(
+                "INSERT INTO egress_proxies (
+                    id, name, kind, host, port, username_cipher, password_cipher,
+                    region, tags, enabled, created_at, updated_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                params![
+                    proxy.id,
+                    proxy.name,
+                    proxy.kind,
+                    proxy.host,
+                    proxy.port,
+                    proxy.username_cipher,
+                    proxy.password_cipher,
+                    proxy.region,
+                    serde_json::to_string(&proxy.tags).unwrap_or_else(|_| "[]".to_string()),
+                    proxy.enabled as i64,
+                    proxy.created_at,
+                    proxy.updated_at,
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 全部代理定义，按 name 升序。
+    pub async fn list_egress_proxies(&self) -> Result<Vec<EgressProxyRecord>, DbError> {
+        self.call(|connection| {
+            let mut statement =
+                connection.prepare("SELECT * FROM egress_proxies ORDER BY name ASC")?;
+            let rows = statement
+                .query_map([], row_to_egress_proxy)?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 按 id 查代理定义。
+    pub async fn get_egress_proxy(
+        &self,
+        proxy_id: &str,
+    ) -> Result<Option<EgressProxyRecord>, DbError> {
+        let proxy_id = proxy_id.to_string();
+        self.call(move |connection| {
+            connection
+                .query_row(
+                    "SELECT * FROM egress_proxies WHERE id = ?1",
+                    params![proxy_id],
+                    row_to_egress_proxy,
+                )
+                .optional()
+        })
+        .await
+    }
+
+    /// 按 name 查代理定义（查重与下发解析用）。
+    pub async fn get_egress_proxy_by_name(
+        &self,
+        name: &str,
+    ) -> Result<Option<EgressProxyRecord>, DbError> {
+        let name = name.to_string();
+        self.call(move |connection| {
+            connection
+                .query_row(
+                    "SELECT * FROM egress_proxies WHERE name = ?1",
+                    params![name],
+                    row_to_egress_proxy,
+                )
+                .optional()
+        })
+        .await
+    }
+
+    /// 整体更新代理定义（密文列由调用方决定保留或覆盖）。
+    pub async fn update_egress_proxy(&self, proxy: EgressProxyRecord) -> Result<usize, DbError> {
+        self.call(move |connection| {
+            connection.execute(
+                "UPDATE egress_proxies SET
+                    name = ?2, kind = ?3, host = ?4, port = ?5,
+                    username_cipher = ?6, password_cipher = ?7, region = ?8,
+                    tags = ?9, enabled = ?10, updated_at = ?11
+                  WHERE id = ?1",
+                params![
+                    proxy.id,
+                    proxy.name,
+                    proxy.kind,
+                    proxy.host,
+                    proxy.port,
+                    proxy.username_cipher,
+                    proxy.password_cipher,
+                    proxy.region,
+                    serde_json::to_string(&proxy.tags).unwrap_or_else(|_| "[]".to_string()),
+                    proxy.enabled as i64,
+                    proxy.updated_at,
+                ],
+            )
+        })
+        .await
+    }
+
+    /// 删除代理定义；返回是否删到行（被绑定引用时由 FK RESTRICT 回滚）。
+    pub async fn delete_egress_proxy(&self, proxy_id: &str) -> Result<bool, DbError> {
+        let proxy_id = proxy_id.to_string();
+        self.call(move |connection| {
+            let affected = connection.execute(
+                "DELETE FROM egress_proxies WHERE id = ?1",
+                params![proxy_id],
+            )?;
+            Ok(affected > 0)
+        })
+        .await
+    }
+
+    /// 每个代理的绑定计数：(devices 去重, apps 行数)。
+    pub async fn egress_proxy_usage(&self) -> Result<HashMap<String, (i64, i64)>, DbError> {
+        self.call(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT proxy_id, COUNT(DISTINCT device_id), COUNT(*)
+                   FROM device_egress WHERE proxy_id IS NOT NULL GROUP BY proxy_id",
+            )?;
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, (row.get(1)?, row.get(2)?)))
+                })?
+                .collect::<Result<HashMap<String, (i64, i64)>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 引用某个代理的全部绑定（详情页用），按 deviceId、app 升序。
+    pub async fn egress_proxy_bindings(
+        &self,
+        proxy_id: &str,
+    ) -> Result<Vec<DeviceEgressRow>, DbError> {
+        let proxy_id = proxy_id.to_string();
+        self.call(move |connection| {
+            let mut statement =
+                connection.prepare(&device_egress_select_sql("WHERE b.proxy_id = ?1"))?;
+            let rows = statement
+                .query_map(params![proxy_id], row_to_device_egress)?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 某台设备的全部绑定，按 app 升序（"" 在最前）。
+    pub async fn list_device_egress(
+        &self,
+        device_id: &str,
+    ) -> Result<Vec<DeviceEgressRow>, DbError> {
+        let device_id = device_id.to_string();
+        self.call(move |connection| {
+            let mut statement =
+                connection.prepare(&device_egress_select_sql("WHERE b.device_id = ?1"))?;
+            let rows = statement
+                .query_map(params![device_id], row_to_device_egress)?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 全量绑定行（overview / 设备列表聚合用）。
+    pub async fn list_all_device_egress(&self) -> Result<Vec<DeviceEgressRow>, DbError> {
+        self.call(|connection| {
+            let mut statement = connection.prepare(&device_egress_select_sql(""))?;
+            let rows = statement
+                .query_map([], row_to_device_egress)?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 某台设备某条绑定（app 为空字符串时是整机行）。
+    pub async fn get_device_egress(
+        &self,
+        device_id: &str,
+        app: &str,
+    ) -> Result<Option<DeviceEgressRow>, DbError> {
+        let device_id = device_id.to_string();
+        let app = app.to_string();
+        self.call(move |connection| {
+            let mut statement = connection.prepare(&device_egress_select_sql(
+                "WHERE b.device_id = ?1 AND b.app = ?2",
+            ))?;
+            statement
+                .query_row(params![device_id, app], row_to_device_egress)
+                .optional()
+        })
+        .await
+    }
+
+    /// 全量替换某设备的绑定表；返回是否真的发生了变化（幂等重放返回 false）。
+    pub async fn replace_device_egress(
+        &self,
+        device_id: &str,
+        rows: Vec<DeviceEgressWrite>,
+        updated_at: &str,
+    ) -> Result<bool, DbError> {
+        let device_id = device_id.to_string();
+        let updated_at = updated_at.to_string();
+        self.call(move |connection| {
+            let desired = normalize_egress_rows(rows);
+            let transaction = connection.transaction()?;
+            let mut current: Vec<DeviceEgressWrite> = Vec::new();
+            {
+                let mut statement = transaction.prepare(
+                    "SELECT app, mode, proxy_id FROM device_egress WHERE device_id = ?1",
+                )?;
+                let mapped = statement.query_map(params![device_id], |row| {
+                    Ok(DeviceEgressWrite {
+                        app: row.get(0)?,
+                        mode: row.get(1)?,
+                        proxy_id: row.get(2)?,
+                    })
+                })?;
+                for row in mapped {
+                    current.push(row?);
+                }
+            }
+            let current = normalize_egress_rows(current);
+            if current == desired {
+                return Ok(false);
+            }
+            transaction.execute(
+                "DELETE FROM device_egress WHERE device_id = ?1",
+                params![device_id],
+            )?;
+            for row in &desired {
+                transaction.execute(
+                    "INSERT INTO device_egress (device_id, app, mode, proxy_id, updated_at)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![device_id, row.app, row.mode, row.proxy_id, updated_at],
+                )?;
+            }
+            transaction.commit()?;
+            Ok(true)
+        })
+        .await
+    }
+
+    /// 写入一条探测结果（成功与失败都写）。
+    pub async fn insert_egress_check(&self, check: NewEgressCheck) -> Result<(), DbError> {
+        self.call(move |connection| {
+            connection.execute(
+                "INSERT INTO egress_checks (
+                    source, device_id, app, scope, proxy_id, exit_ip, latency_ms,
+                    ok, error_code, checked_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    check.source,
+                    check.device_id,
+                    check.app,
+                    check.scope,
+                    check.proxy_id,
+                    check.exit_ip,
+                    check.latency_ms,
+                    check.ok as i64,
+                    check.error_code,
+                    check.checked_at,
+                ],
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// 某个代理最近的探测结果（checked_at 降序）。
+    pub async fn recent_egress_checks(
+        &self,
+        proxy_id: &str,
+        limit: usize,
+    ) -> Result<Vec<EgressCheckRow>, DbError> {
+        let proxy_id = proxy_id.to_string();
+        self.call(move |connection| {
+            let mut statement = connection.prepare(
+                "SELECT * FROM egress_checks WHERE proxy_id = ?1
+                  ORDER BY checked_at DESC, id DESC LIMIT ?2",
+            )?;
+            let rows = statement
+                .query_map(params![proxy_id, limit.max(1) as i64], row_to_egress_check)?
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// 每个代理最近一条探测结果（列表页 lastCheck）。
+    pub async fn latest_egress_checks(&self) -> Result<HashMap<String, EgressCheckRow>, DbError> {
+        self.call(|connection| {
+            let mut statement =
+                connection.prepare(&egress_latest_sql("proxy_id", "proxy_id IS NOT NULL"))?;
+            let rows = statement.query_map([], row_to_egress_check)?;
+            let mut map = HashMap::new();
+            for row in rows {
+                let row = row?;
+                if let Some(proxy_id) = row.proxy_id.clone() {
+                    map.insert(proxy_id, row);
+                }
+            }
+            Ok(map)
+        })
+        .await
+    }
+
+    /// 每台设备最近一条整机探测结果（设备列表 exitIp）。
+    pub async fn latest_device_egress_checks(
+        &self,
+    ) -> Result<HashMap<String, EgressCheckRow>, DbError> {
+        self.call(|connection| {
+            let mut statement = connection.prepare(&egress_latest_sql(
+                "device_id",
+                "device_id IS NOT NULL AND app = ''",
+            ))?;
+            let rows = statement.query_map([], row_to_egress_check)?;
+            let mut map = HashMap::new();
+            for row in rows {
+                let row = row?;
+                if let Some(device_id) = row.device_id.clone() {
+                    map.insert(device_id, row);
+                }
+            }
+            Ok(map)
+        })
+        .await
+    }
+}
+
+/// 把任意迁移错误包装成带 op="migrate" 与版本号的错误。
+fn migration_error(from: i64, to: i64, error: impl std::fmt::Display) -> DbError {
+    DbError::Migration {
+        from,
+        to,
+        message: error.to_string(),
+    }
+}
+
+/// v1 → v2：三张新表 + jobs 重建 + 版本行必须在**同一事务**内完成。
+///
+/// PRAGMA foreign_keys 是连接级且不能在事务内切换，因此先关 FK，再开事务，
+/// 提交后立刻恢复 ON，并做一次 foreign_key_check。
+fn apply_schema_v2(connection: &mut Connection, from: i64) -> Result<(), DbError> {
+    connection
+        .execute_batch("PRAGMA foreign_keys = OFF; PRAGMA legacy_alter_table = ON;")
+        .map_err(|error| migration_error(from, 2, error))?;
+
+    let result = (|| -> Result<(), DbError> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| migration_error(from, 2, error))?;
+        transaction
+            .execute_batch(DDL_V2)
+            .map_err(|error| migration_error(from, 2, error))?;
+        rebuild_jobs_table(&transaction).map_err(|error| migration_error(from, 2, error))?;
+        transaction
+            .execute(
+                "INSERT OR REPLACE INTO schema_migrations (version, applied_at) VALUES (2, ?1)",
+                params![ids::now_rfc3339()],
+            )
+            .map_err(|error| migration_error(from, 2, error))?;
+        transaction
+            .commit()
+            .map_err(|error| migration_error(from, 2, error))?;
+        Ok(())
+    })();
+
+    // 无论成败都必须恢复连接级 PRAGMA，否则后续写入会绕过外键。
+    connection
+        .execute_batch("PRAGMA legacy_alter_table = OFF; PRAGMA foreign_keys = ON;")
+        .map_err(|error| migration_error(from, 2, error))?;
+    result?;
+
+    let violations: i64 = connection
+        .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| migration_error(from, 2, error))?;
+    if violations > 0 {
+        return Err(DbError::Migration {
+            from,
+            to: 2,
+            message: format!("迁移后外键校验失败：{violations} 条违规"),
+        });
+    }
+    Ok(())
+}
+
+/// 单步迁移提交后写入版本行（重复执行安全）。
+fn record_migration(connection: &Connection, version: i64) -> Result<(), DbError> {
+    connection.execute(
+        "INSERT OR REPLACE INTO schema_migrations (version, applied_at) VALUES (?1, ?2)",
+        params![version, ids::now_rfc3339()],
+    )?;
+    Ok(())
+}
+
+/// 把 jobs.kind 的 CHECK 扩容到包含 egress；已经含 egress 时是空操作。
+///
+/// 依据 sqlite_master 里存的建表语句判断，因此重复调用幂等。
+/// 调用方（apply_schema_v2）必须已经 PRAGMA foreign_keys = OFF：否则 DROP TABLE jobs
+/// 会级联删除 job_results。本函数不自开事务，由调用方决定事务边界。
+fn rebuild_jobs_table(connection: &Connection) -> rusqlite::Result<()> {
+    let existing: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'jobs'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(existing) = existing else {
+        return Ok(());
+    };
+    if existing.contains("'egress'") {
+        return Ok(());
+    }
+    connection.execute_batch(JOBS_REBUILD_SQL)?;
+    tracing::info!("schema v2：jobs.kind 已扩容为 bulk/assignments/egress");
+    Ok(())
+}
+
+/// device_egress 联表查询语句（filter 为空串时是全量）。
+fn device_egress_select_sql(filter: &str) -> String {
+    let filter = filter.trim();
+    let where_sql = if filter.is_empty() {
+        String::new()
+    } else {
+        format!(" {filter}")
+    };
+    format!(
+        "SELECT b.device_id, d.name AS device_name, b.app, b.mode, b.proxy_id,
+                p.name AS proxy_name, b.updated_at
+           FROM device_egress b
+           LEFT JOIN devices d ON d.id = b.device_id
+           LEFT JOIN egress_proxies p ON p.id = b.proxy_id{where_sql}
+          ORDER BY b.device_id ASC, b.app ASC"
+    )
+}
+
+/// 每个分组最近一条探测结果的查询（窗口函数，SQLite 3.25+）。
+fn egress_latest_sql(partition: &str, filter: &str) -> String {
+    format!(
+        "SELECT * FROM (
+            SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY {partition} ORDER BY checked_at DESC, id DESC
+            ) AS rn
+              FROM egress_checks WHERE {filter}
+         ) WHERE rn = 1"
+    )
+}
+
+/// 绑定行排序：按 app 升序，便于幂等比较。
+fn normalize_egress_rows(mut rows: Vec<DeviceEgressWrite>) -> Vec<DeviceEgressWrite> {
+    rows.sort_by(|left, right| left.app.cmp(&right.app));
+    rows
+}
+
+fn row_to_egress_proxy(row: &Row<'_>) -> rusqlite::Result<EgressProxyRecord> {
+    let tags_json: String = row.get("tags")?;
+    let enabled: i64 = row.get("enabled")?;
+    Ok(EgressProxyRecord {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        kind: row.get("kind")?,
+        host: row.get("host")?,
+        port: row.get("port")?,
+        username_cipher: row.get("username_cipher")?,
+        password_cipher: row.get("password_cipher")?,
+        region: row.get("region")?,
+        tags: serde_json::from_str(&tags_json).unwrap_or_default(),
+        enabled: enabled != 0,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn row_to_device_egress(row: &Row<'_>) -> rusqlite::Result<DeviceEgressRow> {
+    Ok(DeviceEgressRow {
+        device_id: row.get("device_id")?,
+        device_name: row.get("device_name")?,
+        app: row.get("app")?,
+        mode: row.get("mode")?,
+        proxy_id: row.get("proxy_id")?,
+        proxy_name: row.get("proxy_name")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn row_to_egress_check(row: &Row<'_>) -> rusqlite::Result<EgressCheckRow> {
+    let ok: i64 = row.get("ok")?;
+    Ok(EgressCheckRow {
+        id: row.get("id")?,
+        source: row.get("source")?,
+        device_id: row.get("device_id")?,
+        app: row.get("app")?,
+        scope: row.get("scope")?,
+        proxy_id: row.get("proxy_id")?,
+        exit_ip: row.get("exit_ip")?,
+        latency_ms: row.get("latency_ms")?,
+        ok: ok != 0,
+        error_code: row.get("error_code")?,
+        checked_at: row.get("checked_at")?,
+    })
 }
 
 fn row_to_audit(row: &Row<'_>) -> rusqlite::Result<AuditRow> {
@@ -1458,6 +2199,364 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(status, "failed");
+    }
+
+    fn sample_proxy(name: &str) -> EgressProxyRecord {
+        EgressProxyRecord {
+            id: format!("egp_{}", "a".repeat(32)),
+            name: name.to_string(),
+            kind: "http".to_string(),
+            host: "203.0.113.10".to_string(),
+            port: 1080,
+            username_cipher: None,
+            password_cipher: Some("v1:Zm9v".to_string()),
+            region: Some("US-LA".to_string()),
+            tags: vec!["us".to_string(), "mobile".to_string()],
+            enabled: true,
+            created_at: ids::now_rfc3339(),
+            updated_at: ids::now_rfc3339(),
+        }
+    }
+
+    #[test]
+    fn upgrades_v1_database_without_data_loss() {
+        use rusqlite::Connection;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("manager.db");
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection.execute_batch(DDL).unwrap();
+            connection
+                .execute(
+                    "INSERT INTO schema_migrations (version, applied_at)
+                     VALUES (1, '2026-11-23T00:00:00Z')",
+                    [],
+                )
+                .unwrap();
+            connection
+                .execute_batch(
+                    "INSERT INTO devices (id, name, base_url, token_cipher, created_at, updated_at)
+                     VALUES ('pixel-9', 'Pixel 9', 'http://127.0.0.1:8686', 'v1:abc',
+                             '2026-11-23T00:00:00Z', '2026-11-23T00:00:00Z');
+                     INSERT INTO jobs (id, kind, status, total, request_id, created_at)
+                     VALUES ('job_v1', 'bulk', 'succeeded', 1, 'req_v1', '2026-11-23T00:00:00Z');
+                     INSERT INTO job_results (job_id, ordinal, device_id, app, status)
+                     VALUES ('job_v1', 0, 'pixel-9', 'com.xingin.xhs', 'ok');
+                     INSERT INTO audit (ts, action, status)
+                     VALUES ('2026-11-23T00:00:00Z', 'device.add', 'ok');",
+                )
+                .unwrap();
+            assert_eq!(
+                connection
+                    .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let db = Db::open(&path).unwrap();
+
+            let health = db.health().await.unwrap();
+            assert_eq!(health.schema_version, SCHEMA_VERSION);
+            assert_eq!(health.devices_total, 1, "设备行必须保留");
+
+            let device = db.get_device("pixel-9").await.unwrap().expect("设备");
+            assert_eq!(device.base_url, "http://127.0.0.1:8686");
+            assert_eq!(device.token_cipher, "v1:abc");
+
+            let job = db.get_job("job_v1").await.unwrap().expect("队列行");
+            assert_eq!(job.kind, "bulk");
+            assert_eq!(job.status, "succeeded");
+            let results = db.job_results("job_v1").await.unwrap();
+            assert_eq!(results.len(), 1, "job_results 不能被级联删除");
+            assert_eq!(results[0].device_id, "pixel-9");
+
+            let (audits, total) = db
+                .query_audit(AuditFilter {
+                    limit: 10,
+                    ..AuditFilter::default()
+                })
+                .await
+                .unwrap();
+            assert_eq!(total, 1);
+            assert_eq!(audits[0].action, "device.add");
+
+            let violations: i64 = db
+                .call(|connection| {
+                    connection.query_row(
+                        "SELECT COUNT(*) FROM pragma_foreign_key_check",
+                        [],
+                        |row| row.get(0),
+                    )
+                })
+                .await
+                .unwrap();
+            assert_eq!(violations, 0, "迁移后外键必须干净");
+
+            // 迁移结束必须把 PRAGMA foreign_keys 恢复为 ON，否则后续删除不会级联。
+            let foreign_keys: i64 = db
+                .call(|connection| {
+                    connection.query_row("PRAGMA foreign_keys", [], |row| row.get(0))
+                })
+                .await
+                .unwrap();
+            assert_eq!(foreign_keys, 1, "迁移结束后 foreign_keys 必须为 ON");
+
+            let versions: Vec<i64> = db
+                .call(|connection| {
+                    let mut statement = connection
+                        .prepare("SELECT version FROM schema_migrations ORDER BY version")?;
+                    let rows = statement.query_map([], |row| row.get(0))?;
+                    rows.collect::<Result<Vec<i64>, _>>()
+                })
+                .await
+                .unwrap();
+            assert_eq!(versions, vec![1, 2], "迁移版本必须只追加两行");
+
+            // 迁移后 kind=egress 立即可用（CHECK 已扩容）。
+            db.insert_job(NewJob {
+                id: "job_egress".to_string(),
+                kind: "egress".to_string(),
+                status: "queued".to_string(),
+                app: None,
+                template: None,
+                restart: false,
+                total: 1,
+                request_id: "req_egress".to_string(),
+                idempotency_key: None,
+                created_at: ids::now_rfc3339(),
+            })
+            .await
+            .unwrap();
+
+            // 重复打开同一库：迁移幂等，数据不动。
+            drop(db);
+            let again = Db::open(&path).unwrap();
+            assert_eq!(again.health().await.unwrap().devices_total, 1);
+            assert!(again.get_job("job_v1").await.unwrap().is_some());
+            assert!(again.get_job("job_egress").await.unwrap().is_some());
+            let versions_again: i64 = again
+                .call(|connection| {
+                    connection.query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| {
+                        row.get(0)
+                    })
+                })
+                .await
+                .unwrap();
+            assert_eq!(versions_again, 2, "重复迁移不能追加版本行");
+        });
+    }
+
+    #[tokio::test]
+    async fn egress_proxy_and_binding_roundtrip() {
+        let db = Db::open_in_memory().unwrap();
+        db.insert_device(sample_device("pixel-9")).await.unwrap();
+        db.insert_egress_proxy(sample_proxy("us_la_01"))
+            .await
+            .unwrap();
+
+        let proxies = db.list_egress_proxies().await.unwrap();
+        assert_eq!(proxies.len(), 1);
+        assert!(proxies[0].has_credentials());
+        assert_eq!(
+            proxies[0].tags,
+            vec!["us".to_string(), "mobile".to_string()]
+        );
+
+        let bound = db
+            .replace_device_egress(
+                "pixel-9",
+                vec![DeviceEgressWrite {
+                    app: String::new(),
+                    mode: "proxy".to_string(),
+                    proxy_id: Some(proxies[0].id.clone()),
+                }],
+                &ids::now_rfc3339(),
+            )
+            .await
+            .unwrap();
+        assert!(bound);
+
+        // 幂等重放不改库。
+        let bound_again = db
+            .replace_device_egress(
+                "pixel-9",
+                vec![DeviceEgressWrite {
+                    app: String::new(),
+                    mode: "proxy".to_string(),
+                    proxy_id: Some(proxies[0].id.clone()),
+                }],
+                &ids::now_rfc3339(),
+            )
+            .await
+            .unwrap();
+        assert!(!bound_again);
+
+        let bindings = db.list_device_egress("pixel-9").await.unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(bindings[0].proxy_name.as_deref(), Some("us_la_01"));
+        assert_eq!(bindings[0].device_name.as_deref(), Some("设备 pixel-9"));
+
+        // 被绑定引用时 FK RESTRICT 拒绝删除。
+        assert!(
+            db.delete_egress_proxy(&proxies[0].id).await.is_err(),
+            "被绑定的代理不能被删除"
+        );
+
+        db.replace_device_egress("pixel-9", Vec::new(), &ids::now_rfc3339())
+            .await
+            .unwrap();
+        assert!(db.delete_egress_proxy(&proxies[0].id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn prune_keeps_latest_500_checks_per_device_and_app() {
+        let db = Db::open_in_memory().unwrap();
+        db.insert_device(sample_device("pixel-9")).await.unwrap();
+
+        for index in 0..505 {
+            db.insert_egress_check(NewEgressCheck {
+                source: "device".to_string(),
+                device_id: Some("pixel-9".to_string()),
+                app: String::new(),
+                scope: "device".to_string(),
+                proxy_id: None,
+                exit_ip: Some("203.0.113.7".to_string()),
+                latency_ms: Some(index),
+                ok: true,
+                error_code: None,
+                checked_at: format!("2026-11-24T10:{:02}:{:02}Z", index / 60 % 60, index % 60),
+            })
+            .await
+            .unwrap();
+        }
+        for _ in 0..5 {
+            db.insert_egress_check(NewEgressCheck {
+                source: "device".to_string(),
+                device_id: Some("pixel-9".to_string()),
+                app: "com.xingin.xhs".to_string(),
+                scope: "app".to_string(),
+                proxy_id: None,
+                exit_ip: None,
+                latency_ms: None,
+                ok: false,
+                error_code: Some("timeout".to_string()),
+                checked_at: "2026-11-24T10:00:00Z".to_string(),
+            })
+            .await
+            .unwrap();
+        }
+
+        db.prune().await.unwrap();
+
+        let (device_rows, app_rows) = db
+            .call(|connection| {
+                let device: i64 = connection.query_row(
+                    "SELECT COUNT(*) FROM egress_checks WHERE app = ''",
+                    [],
+                    |row| row.get(0),
+                )?;
+                let app: i64 = connection.query_row(
+                    "SELECT COUNT(*) FROM egress_checks WHERE app = 'com.xingin.xhs'",
+                    [],
+                    |row| row.get(0),
+                )?;
+                Ok((device, app))
+            })
+            .await
+            .unwrap();
+        assert_eq!(device_rows, 500, "整机组只保留最近 500 条");
+        assert_eq!(app_rows, 5, "另一分组不受影响");
+    }
+
+    #[tokio::test]
+    async fn foreign_key_violation_is_detected_on_restrict_delete() {
+        let db = Db::open_in_memory().unwrap();
+        db.insert_device(sample_device("pixel-9")).await.unwrap();
+        db.insert_egress_proxy(sample_proxy("us_la_01"))
+            .await
+            .unwrap();
+        let proxy_id = db.list_egress_proxies().await.unwrap()[0].id.clone();
+        db.replace_device_egress(
+            "pixel-9",
+            vec![DeviceEgressWrite {
+                app: String::new(),
+                mode: "proxy".to_string(),
+                proxy_id: Some(proxy_id.clone()),
+            }],
+            &ids::now_rfc3339(),
+        )
+        .await
+        .unwrap();
+
+        // 绕过端点里的预检查，直接删：FK RESTRICT 必须报约束错误，且能被识别出来。
+        let error = db.delete_egress_proxy(&proxy_id).await.unwrap_err();
+        assert!(
+            error.is_foreign_key_violation(),
+            "应识别为外键约束失败：{error}"
+        );
+
+        // 普通错误不能被误判。
+        let poisoned = DbError::Poisoned;
+        assert!(!poisoned.is_foreign_key_violation());
+    }
+
+    #[test]
+    fn migration_errors_carry_op_and_versions() {
+        let error = DbError::Migration {
+            from: 1,
+            to: 2,
+            message: "boom".to_string(),
+        };
+        let rendered = error.to_string();
+        assert!(rendered.contains("op=migrate"), "{rendered}");
+        assert!(rendered.contains("current=1"), "{rendered}");
+        assert!(rendered.contains("target=2"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn egress_checks_latest_per_proxy_and_device() {
+        let db = Db::open_in_memory().unwrap();
+        db.insert_device(sample_device("pixel-9")).await.unwrap();
+        db.insert_egress_proxy(sample_proxy("us_la_01"))
+            .await
+            .unwrap();
+        let proxy_id = db.list_egress_proxies().await.unwrap()[0].id.clone();
+
+        for (ok, exit_ip, checked_at) in [
+            (false, None, "2026-11-24T10:00:00Z"),
+            (true, Some("203.0.113.7"), "2026-11-24T11:00:00Z"),
+        ] {
+            db.insert_egress_check(NewEgressCheck {
+                source: "device".to_string(),
+                device_id: Some("pixel-9".to_string()),
+                app: String::new(),
+                scope: "device".to_string(),
+                proxy_id: Some(proxy_id.clone()),
+                exit_ip: exit_ip.map(str::to_string),
+                latency_ms: Some(120),
+                ok,
+                error_code: None,
+                checked_at: checked_at.to_string(),
+            })
+            .await
+            .unwrap();
+        }
+
+        let latest = db.latest_egress_checks().await.unwrap();
+        let check = latest.get(&proxy_id).expect("最近一条");
+        assert!(check.ok);
+        assert_eq!(check.exit_ip.as_deref(), Some("203.0.113.7"));
+
+        let by_device = db.latest_device_egress_checks().await.unwrap();
+        assert_eq!(by_device["pixel-9"].exit_ip.as_deref(), Some("203.0.113.7"));
+
+        let recent = db.recent_egress_checks(&proxy_id, 20).await.unwrap();
+        assert_eq!(recent.len(), 2);
+        assert_eq!(recent[0].checked_at, "2026-11-24T11:00:00Z");
     }
 
     #[tokio::test]

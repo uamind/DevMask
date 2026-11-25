@@ -65,7 +65,10 @@ pub async fn get_config(
         ""
     };
     let config = Config::from_toml(config_text).map_err(|error| {
-        ApiError::internal_error(request_id.as_str(), format!("配置解析失败: {error:#}"))
+        ApiError::internal_error(
+            request_id.as_str(),
+            format!("配置解析失败: {}", crate::util::parse_error_message(&error)),
+        )
     })?;
 
     let mut warnings = Vec::new();

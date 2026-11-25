@@ -1,0 +1,62 @@
+===== 1) 代理池 CRUD（正确字段名 type）=====
+POST t10-http -> HTTP 201
+{
+    "id": "egp_016516d6449d44d8bb4a5cd979acd512",
+    "name": "t10-http",
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 18080,
+    "hasCredentials": false,
+    "region": "local",
+    "tags": [
+        "t10"
+    ],
+    "enabled": true,
+    "boundDevices": 0,
+    "boundApps": 0,
+    "lastCheck": null,
+    "createdAt": "2026-11-24T14:48:11Z",
+    "updatedAt": "2026-11-24T14:48:11Z"
+}
+POST t10-socks -> HTTP 201
+  id=egp_72c062155fd44860930fdf59c8170aec type=socks5 hasCredentials=True fields=['boundApps', 'boundDevices', 'createdAt', 'enabled', 'hasCredentials', 'host', 'id', 'lastCheck', 'name', 'port', 'region', 'tags', 'type', 'updatedAt']
+POST t10-tmp -> HTTP 201
+  id= egp_0653c3a2c8174b90a1e590b4f8dd70ae
+--- GET 列表 ---
+HTTP 200
+  total= 3
+    t10-http http 127.0.0.1 18080 cred= False bindings= None
+    t10-socks socks5 127.0.0.1 18081 cred= True bindings= None
+    t10-tmp http 127.0.0.1 18082 cred= False bindings= None
+--- GET 详情 ---
+GET detail HTTP 200
+--- PATCH：改名 + 写凭据 + tags ---
+PATCH HTTP 200
+  name=t10-tmp2 hasCredentials=True tags=['t10', 'patched']
+--- PATCH：null 清空凭据（双态）---
+PATCH HTTP 200
+  hasCredentials after clear=False
+--- DELETE 未绑定代理 ---
+DELETE tmp HTTP 204
+--- DELETE 被绑定代理（先绑再删，应 409 egress_proxy_in_use）---
+http proxy id=egp_016516d6449d44d8bb4a5cd979acd512
+PUT /devices/mock-a-ok/egress HTTP 422
+{
+    "error": {
+        "code": "validation_failed",
+        "details": {
+            "errors": [
+                {
+                    "code": "unknown_field",
+                    "message": "Failed to deserialize the JSON body into the target type: bindings[0].mode: unknown field `mode`, expected `app` or `proxyId` at line 1 column 29",
+                    "path": "body"
+                }
+            ]
+        },
+        "message": "\u8bf7\u6c42\u53c2\u6570\u4e0d\u5408\u6cd5",
+        "requestId": "req_458a17237e7447f898d6f33c092b0595",
+        "retryable": false
+    }
+}
+DELETE bound HTTP 204
+Expecting value: line 1 column 1 (char 0)

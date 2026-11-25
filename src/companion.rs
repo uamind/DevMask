@@ -883,14 +883,33 @@ pub enum CompanionRequest {
     WriteLog(WriteLogRequest),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize)]
 pub struct CompanionResponse {
     pub status: i32,
     pub message: Option<String>,
     pub backups: Option<HashMap<String, String>>,
-    /// `GetSpec` 的响应：命中包的 TOML 文本。
+    /// `GetSpec` 的响应：命中包的 TOML 文本（可能带出口代理的 password）。
     #[serde(default)]
     pub spec: Option<String>,
+}
+
+impl std::fmt::Debug for CompanionResponse {
+    /// 手写 Debug：`spec` 里可能带出口代理的 password（契约 §7.1「密码不出现在日志」），
+    /// 因此只报字节数、不报内容——避免一次误用的 `{response:?}` 把凭据写进日志。
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompanionResponse")
+            .field("status", &self.status)
+            .field("message", &self.message)
+            .field("backups", &self.backups)
+            .field(
+                "spec",
+                &self
+                    .spec
+                    .as_ref()
+                    .map(|spec| format!("<{} bytes>", spec.len())),
+            )
+            .finish()
+    }
 }
 
 impl CompanionResponse {

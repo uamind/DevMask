@@ -1,0 +1,4 @@
+2026-11-24T22:47:36+0800 proto=start http_ports=18080,18082 socks=18081 virtual=198.51.100.7 app=198.51.100.8 raw=198.51.100.9 socks_auth=1
+2026-11-24T22:48:49+0800 proto=http listener=18080 GET http://probe.fixture/ host=probe.fixture auth=0
+2026-11-24T22:52:26+0800 proto=http listener=18080 GET http://checkip.amazonaws.com/ host=checkip.amazonaws.com auth=0
+2026-11-24T22:52:39+0800 proto=http listener=18080 GET http://checkip.amazonaws.com/ host=checkip.amazonaws.com auth=0

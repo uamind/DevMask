@@ -2,7 +2,7 @@
 // Copyright (c) 2025-2026 Seyud
 // Device Faker: https://github.com/Seyud/device_faker
 //
-// Manager Relay API 类型草案（API v1 / manager 0.1.0）。
+// Manager Relay API 类型草案（API v1 / manager 0.2.0；含 egress 增量）。
 // 契约来源：manager/docs/API.md；字段命名规则见该文档 §2.2。
 // 用法：复制为 manager/webui/src/api/types.ts（frontend-dev 作用域），不要改动字段名。
 //
@@ -60,6 +60,9 @@ export type ManagerErrorCode =
   | 'device_offline'
   | 'device_error'
   | 'upstream_timeout'
+  | 'egress_proxy_exists'
+  | 'egress_proxy_in_use'
+  | 'egress_probe_failed'
   | 'internal_error'
   | 'rate_limited'
 
@@ -77,6 +80,10 @@ export type ValidationErrorCode =
   | 'out_of_range'
   | 'too_many_items'
   | 'duplicate_assignment'
+  | 'invalid_egress_name'
+  | 'invalid_egress_proxy'
+  | 'invalid_probe_url'
+  | 'unsupported_proxy_type'
 
 /** 单个字段校验错误。 */
 export interface ValidationError {
@@ -312,6 +319,17 @@ export interface DeviceLastError {
   message: string
 }
 
+export interface DeviceEgressSummary {
+  /** proxy / direct；设备级没有任何绑定时为 null。 */
+  mode: 'proxy' | 'direct' | null
+  proxyId: EgressProxyId | null
+  proxyName: string | null
+  exitIp: string | null
+  checkedAt: Iso8601 | null
+  ok: boolean | null
+  errorCode: string | null
+}
+
 export interface DeviceSummary {
   id: DeviceId
   name: string
@@ -331,6 +349,8 @@ export interface DeviceSummary {
   latencyMs: number | null
   createdAt: Iso8601
   lastError: DeviceLastError | null
+  /** 设备级出口摘要（旧版本设备为 null / 省略）。 */
+  egress?: DeviceEgressSummary | null
 }
 
 /** 设备详情里的应用摘要。 */
@@ -561,7 +581,7 @@ export interface ApplyAssignmentsRequest {
 
 export type ApplyRequest = ApplyBulkRequest | ApplyAssignmentsRequest
 
-export type JobKind = 'bulk' | 'assignments'
+export type JobKind = 'bulk' | 'assignments' | 'egress'
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed'
 
@@ -582,7 +602,15 @@ export interface ApplyAcceptedResponse {
 
 export type JobResultStatus = 'ok' | 'skipped' | 'failed'
 
-export type JobStepName = 'revision' | 'template_get' | 'template_put' | 'bind' | 'restart'
+export type JobStepName =
+  | 'revision'
+  | 'template_get'
+  | 'template_put'
+  | 'bind'
+  | 'restart'
+  | 'egress_get'
+  | 'egress_put'
+  | 'egress_probe'
 
 export type JobStepStatus = 'ok' | 'skipped' | 'failed'
 
@@ -675,10 +703,16 @@ export type AuditAction =
   | 'apply.assignments'
   | 'job.finished'
   | 'token.rotate'
+  | 'egress.proxy_create'
+  | 'egress.proxy_update'
+  | 'egress.proxy_delete'
+  | 'egress.proxy_probe'
+  | 'egress.bind'
+  | 'egress.apply'
 
 export type AuditStatus = 'ok' | 'failed'
 
-export type AuditTargetType = 'device' | 'job' | 'template' | 'token'
+export type AuditTargetType = 'device' | 'job' | 'template' | 'token' | 'egress_proxy'
 
 export interface AuditTarget {
   type: AuditTargetType
@@ -728,6 +762,186 @@ export interface RotateTokenResponse {
 }
 
 // ---------------------------------------------------------------------------
+// 出口代理（egress）：代理池 / 绑定 / 批量下发（API.md §4.19-§4.27、§5.11-§5.14）
+//
+// 硬约束：本块所有类型都**没有** username / password 字段；
+// 凭据的唯一信号是 hasCredentials（服务端 AES-256-GCM 落库，永不回显）。
+// ---------------------------------------------------------------------------
+
+/** 代理 id：^egp_[0-9a-f]{32}$ */
+export type EgressProxyId = string
+
+/** 代理协议（DB 列名是 kind，线上字段叫 type）。 */
+export type EgressProxyType = 'http' | 'socks5'
+
+/** 绑定模式：proxy = 走代理，direct = 强制直连（__DIRECT__）。 */
+export type EgressBindingMode = 'proxy' | 'direct'
+
+/** 一次探测结果（lastCheck / recentChecks）。 */
+export interface EgressCheck {
+  source: 'device' | 'manager'
+  deviceId: DeviceId | null
+  app: PackageName | ''
+  ok: boolean
+  exitIp: string | null
+  latencyMs: number | null
+  errorCode: string | null
+  checkedAt: Iso8601
+}
+
+/** 代理池条目（所有代理端点共用；无凭据字段）。 */
+export interface EgressProxy {
+  id: EgressProxyId
+  /** ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$；下发时作为设备端 egress.toml 表名。 */
+  name: string
+  type: EgressProxyType
+  host: string
+  port: number
+  hasCredentials: boolean
+  region: string | null
+  tags: string[]
+  enabled: boolean
+  boundDevices: number
+  boundApps: number
+  lastCheck: EgressCheck | null
+  createdAt: Iso8601
+  updatedAt: Iso8601
+}
+
+export interface EgressProxyListResponse {
+  total: number
+  nextCursor: string | null
+  items: EgressProxy[]
+}
+
+export interface EgressProxyBinding {
+  deviceId: DeviceId
+  deviceName: string
+  /** '' = 整机。 */
+  app: PackageName | ''
+  updatedAt: Iso8601
+}
+
+/** GET /egress-proxies/{id}：EgressProxy + 引用关系 + 最近探测。 */
+export interface EgressProxyDetailResponse extends EgressProxy {
+  bindings: EgressProxyBinding[]
+  recentChecks: EgressCheck[]
+}
+
+/** POST /egress-proxies（用户名 / 密码只写不读）。 */
+export interface CreateEgressProxyRequest {
+  name: string
+  type: EgressProxyType
+  host: string
+  port: number
+  username?: string
+  password?: string
+  region?: string
+  tags?: string[]
+  enabled?: boolean
+}
+
+/** PATCH /egress-proxies/{id}：省略 = 不改；null = 清除（仅可空字段）。 */
+export interface UpdateEgressProxyRequest {
+  name?: string
+  type?: EgressProxyType
+  host?: string
+  port?: number
+  username?: string | null
+  password?: string | null
+  region?: string | null
+  tags?: string[] | null
+  enabled?: boolean
+}
+
+export interface EgressProbeRequest {
+  url?: string
+}
+
+export interface EgressProbeResponse {
+  proxyId: EgressProxyId
+  ok: true
+  exitIp: string
+  latencyMs: number
+  checkedAt: Iso8601
+  url: string
+  upstreamStatus: number | null
+}
+
+/** GET /devices/{id}/egress 的绑定行。 */
+export interface DeviceEgressBinding {
+  app: PackageName | ''
+  mode: EgressBindingMode
+  proxyId: EgressProxyId | null
+  proxyName: string | null
+  updatedAt: Iso8601
+}
+
+export interface DeviceEgressResponse {
+  deviceId: DeviceId
+  bindings: DeviceEgressBinding[]
+  /** 设备端 GET /api/v1/egress 的透传子集；离线 / 旧版本为 null。 */
+  deviceState: JsonObject | null
+  warnings: Warning[]
+}
+
+/** PUT /devices/{id}/egress 的单行：proxyId 允许 id / "__DIRECT__" / null（该行不保留）。 */
+export interface DeviceEgressBindingInput {
+  app: PackageName | ''
+  proxyId: EgressProxyId | '__DIRECT__' | null
+}
+
+export interface DeviceEgressPutRequest {
+  bindings: DeviceEgressBindingInput[]
+}
+
+export interface DeviceEgressPutResponse {
+  deviceId: DeviceId
+  changed: boolean
+  bindings: DeviceEgressBinding[]
+  /** 只落库、未下发时为 true。 */
+  pendingApply: boolean
+  warnings: Warning[]
+}
+
+export interface EgressAssignmentInput {
+  deviceId: DeviceId
+  app: PackageName | ''
+  proxyId?: EgressProxyId | '__DIRECT__' | null
+}
+
+/** POST /devices/egress/apply：devices 与 assignments 二选一。 */
+export interface EgressApplyRequest {
+  devices?: 'all' | DeviceId[]
+  assignments?: EgressAssignmentInput[]
+  probe?: boolean
+  dryRun?: boolean
+}
+
+export interface EgressApplyAcceptedResponse {
+  jobId: JobId
+  status: 'queued'
+  kind: 'egress'
+  total: number
+  createdAt: Iso8601
+  requestId: RequestId
+}
+
+export interface EgressApplyPlanItem {
+  deviceId: DeviceId
+  app: PackageName | ''
+  mode: EgressBindingMode
+  proxyName: string | null
+}
+
+export interface EgressApplyDryRunResponse {
+  dryRun: true
+  total: number
+  plan: EgressApplyPlanItem[]
+  warnings: Warning[]
+}
+
+// ---------------------------------------------------------------------------
 // 客户端接口草案（frontend-dev 在 manager/webui/src/api/client.ts 实现）
 // ---------------------------------------------------------------------------
 
@@ -771,4 +985,21 @@ export interface ManagerApi {
   listJobs(query?: JobsQuery): Promise<JobsResponse>
   listAudit(query?: AuditQuery): Promise<AuditResponse>
   rotateToken(body?: RotateTokenRequest): Promise<RotateTokenResponse>
+
+  // egress（API.md §4.19-§4.27）
+  listEgressProxies(query?: {
+    q?: string
+    enabled?: boolean
+    tag?: string[]
+    limit?: number
+    cursor?: string
+  }): Promise<EgressProxyListResponse>
+  createEgressProxy(body: CreateEgressProxyRequest): Promise<EgressProxy>
+  getEgressProxy(id: EgressProxyId): Promise<EgressProxyDetailResponse>
+  updateEgressProxy(id: EgressProxyId, body: UpdateEgressProxyRequest): Promise<EgressProxy>
+  deleteEgressProxy(id: EgressProxyId): Promise<void>
+  probeEgressProxy(id: EgressProxyId, body?: EgressProbeRequest): Promise<EgressProbeResponse>
+  getDeviceEgress(id: DeviceId): Promise<DeviceEgressResponse>
+  putDeviceEgress(id: DeviceId, body: DeviceEgressPutRequest): Promise<DeviceEgressPutResponse>
+  applyEgress(body: EgressApplyRequest, idempotencyKey?: string): Promise<EgressApplyAcceptedResponse | EgressApplyDryRunResponse>
 }

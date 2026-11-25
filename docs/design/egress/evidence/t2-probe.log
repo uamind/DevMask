@@ -1,0 +1,65 @@
+===== T2-a POST /egress/probe (device scope) =====
+HTTP 200 total=0.025278s
+{
+  "ok": true,
+  "exitIp": "198.51.100.7",
+  "latencyMs": 6,
+  "checkedAt": "2026-11-24T13:16:45Z",
+  "scope": "device",
+  "via": "proxy",
+  "proxy": "mac_http",
+  "url": "http://probe.fixture/",
+  "upstreamStatus": 200,
+  "approximate": false,
+  "warnings": []
+}
+===== fixture proxy log (证明请求真的到了代理) =====
+
+===== T2-b 断开代理（kill fixture）后立即探测 =====
+fixture alive: no
+HTTP 502 total=0.020945s
+{
+  "error": {
+    "code": "egress.probe_failed",
+    "details": {
+      "reason": "invalid_response",
+      "timeoutMs": 5000,
+      "upstreamStatus": null,
+      "url": "http://probe.fixture/"
+    },
+    "message": "出口探测失败（invalid_response）",
+    "requestId": "req_VKYOqMBg20HbkyV2nZPu8ZTA",
+    "retryable": true
+  }
+}
+fixture pid=19516 log=/Users/crymang/Works/device_faker/docs/design/egress/evidence/fixture-proxy.log
+===== T2-a2 probe again (fixture up) + fixture log 证明走了代理 =====
+HTTP 200 total=0.037876s
+{"ok": true, "exitIp": "198.51.100.7", "latencyMs": 5, "checkedAt": "2026-11-24T13:16:58Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}
+2026-11-24T21:16:45+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:16:46+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:16:46+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:16:58+0800 proto=start http=18080 socks=18081 virtual_ip=198.51.100.7 http_auth=0 socks_auth=1
+2026-11-24T21:16:59+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+
+===== T2-c 定义指向「没人监听」的端口，验证 reason=connect =====
+If-Match=4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
+PUT HTTP 200
+probe HTTP 502 total=0.642905s
+{"error": {"code": "egress.probe_failed", "details": {"reason": "connect", "timeoutMs": 5000, "upstreamStatus": null, "url": "http://probe.fixture/", "warnings": [{"code": "egress_degraded_to_direct", "details": {"reason": "connect"}, "message": "已按 fail-open 切为直连（配置保持不变）"}]}, "message": "出口探测失败（connect）", "requestId": "req_b9401IGP6EogePK1jIs1OoSj", "retryable": true}}
+===== restore default=mac_http =====
+PUT HTTP 200
+{
+  "changed": true,
+  "default": "mac_http",
+  "mode": "proxy",
+  "applied": true,
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T13:17:02Z"
+  }
+}
+probe HTTP 200
+{"ok": true, "exitIp": "198.51.100.7", "latencyMs": 4, "checkedAt": "2026-11-24T13:17:03Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}

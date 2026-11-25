@@ -21,6 +21,7 @@ A device model spoofing module based on Zygisk that can configure different devi
 - 🎭 **Unified Execution Flow**: No mode selection needed, automatically schedules JNI field spoofing, COW property spoofing and companion services
 - 🔒 **COW Property Engine**: process-private property-area copies for spoofing, per-process isolation, zero residency and no write-mapping fingerprint
 - 🌐 **WebUI Management**: Provides graphical interface for convenient configuration management
+- 🛰️ **Egress Proxy**: device-wide HTTP proxy plus per-app SOCKS5 injection, a configurable exit IP per app (per-app exits settle on the app's next cold start via post-start replay; authenticated proxies are not supported in this release — use an IP allow-list), with exit-IP probing and one-tap rollback to direct
 
 ## WebUI Features 🖥️
 
@@ -30,10 +31,13 @@ Device Faker provides a modern web management interface.
 - 📱 **Application Management**: Intuitive view of installed applications and their configuration status, supports multi-user apps display
 - 🖋️ **Configuration Editing**: Graphical interface for editing application configuration, supporting template application and custom configuration
 - 🌍 **Multilingual**: 简体中文, English, Türkçe
+- 🛰️ **Network Egress**: configure device-wide / per-app exits, probe the exit IP live and see the degradation state
 
 ## Configuration Guide ⚙️
 
 For detailed configuration instructions, please refer to the [Configuration Documentation](CONFIG.md).
+
+Server-side operator notes (egress proxy diagnostics, replay log lines, uninstall cleanup): [SERVER.md](SERVER.md).
 
 The configuration file is located at `/data/adb/device_faker/config/config.toml` and uses TOML format. After modifying the configuration, just restart the corresponding application to take effect, no need to restart the system.
 

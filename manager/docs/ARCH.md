@@ -1,7 +1,7 @@
 # Manager / Relay 架构与数据模型
 
 > 状态：**已冻结（contract 里程碑）**
-> 版本：manager 0.1.0
+> 版本：manager 0.2.0（egress 增量：schema v2 + 代理池）
 > 日期：2026-11-24
 > 接口契约：[API.md](API.md)；类型定义：[api-types.ts](api-types.ts)；计划书：[../docs/plans/manager-relay-plan.md](../../docs/plans/manager-relay-plan.md)
 > 上游设备端：`../../docs/API.md`（device_faker_server 1.9.0）
@@ -66,7 +66,7 @@
     │   ├── args.rs                # --bind/--data-dir/--static-dir/--token/--config/--help/--version
     │   ├── config.rs              # manager.toml 解析、优先级合并、默认值与校验
     │   ├── state.rs               # AppState、TokenState、并发信号量、设备级串行锁
-    │   ├── db.rs                  # 连接、迁移、DAO（devices/device_overviews/jobs/job_results/audit）
+    │   ├── db.rs                  # 连接、迁移、DAO（devices/device_overviews/jobs/job_results/audit + egress_proxies/device_egress/egress_checks）
     │   ├── crypto.rs              # AES-256-GCM 加解密、manager.key 读写与权限
     │   ├── auth.rs                # Bearer 校验、Token 来源解析、POST /token/rotate
     │   ├── error.rs               # ApiError、IntoResponse、错误信封、ValidationError
@@ -88,12 +88,16 @@
     │       ├── audit.rs           # 审计查询
     │       ├── token.rs           # Manager Token 轮换
     │       ├── aggregate.rs       # 设备×应用聚合快照（apps/overview/templates 共用）
-    │       └── proxy.rs           # 单设备 /api/v1 透传
+    │       ├── proxy.rs           # 单设备 /api/v1 透传
+    │       ├── egress.rs          # 代理池 CRUD、Manager 侧探测、绑定与批量下发入队
+    │       └── egress_dto.rs      # egress 请求 / 响应 DTO（无 username / password 字段）
     ├── tests/
     │   ├── common/mod.rs          # 临时 Manager + Mock 设备启动器
     │   ├── mock_device.rs         # axum Mock 设备（带 412 / 404 / 离线开关）
     │   ├── manager_api.rs         # 设备 CRUD、sync、apps、overview、auth、静态托管
-    │   └── apply_jobs.rs          # bulk/assignments、412 重试、404、离线、restart 警告、幂等
+    │   ├── apply_jobs.rs          # bulk/assignments、412 重试、404、离线、restart 警告、幂等
+    │   └── egress_flow.rs         # 代理池 CRUD、绑定、批量下发、探测、凭据加密
+    │                              # （schema v1→v2 迁移测试在 src/db.rs 的单元测试里）
     └── webui/                     # Vue 3 管理端（frontend-dev 作用域）
         ├── src/api/client.ts      # 由 frontend-dev 新增
         ├── src/stores/manager.ts  # 改为 async
@@ -249,7 +253,7 @@ Token 的**完整**优先级（高 → 低）：`--token` → `DFM_TOKEN` → `m
   若未来做多用户，再引入 `r2d2_sqlite` 连接池（非目标）。
 - 每次启动执行迁移（§5.3）；迁移与崩溃恢复在监听端口之前完成。
 
-### 5.2 DDL（schema version 1，冻结）
+### 5.2 DDL（schema version 1 冻结 + v2 增量）
 
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
@@ -357,12 +361,89 @@ Token 的**完整**优先级（高 → 低）：`--token` → `DFM_TOKEN` → `m
 | `audit.target TEXT` | `target_type + target_id` | 前端要按类型渲染，拆列避免每次解析 |
 | 无 overview 缓存 | `device_overviews` | 矩阵 / 总览必须离线可用，不能每次遍历设备 |
 
+### 5.2.1 v2 增量 DDL（egress）
+
+v1 的 DDL 一行不改；v2 只追加三张表，并扩容 `jobs.kind` 的 CHECK：
+
+    -- v2-1 代理池（凭据只存密文；AAD 见 §6.2）
+    CREATE TABLE IF NOT EXISTS egress_proxies (
+      id               TEXT PRIMARY KEY,                    -- egp_<32 hex>
+      name             TEXT NOT NULL UNIQUE,                 -- ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$
+      kind             TEXT NOT NULL CHECK (kind IN ('http','socks5')),  -- 线上字段叫 type
+      host             TEXT NOT NULL,
+      port             INTEGER NOT NULL CHECK (port BETWEEN 1 AND 65535),
+      username_cipher  TEXT,
+      password_cipher  TEXT,
+      region           TEXT,
+      tags             TEXT NOT NULL DEFAULT '[]',            -- JSON string[]
+      enabled          INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+      created_at       TEXT NOT NULL,
+      updated_at       TEXT NOT NULL,
+      CHECK (username_cipher IS NULL OR username_cipher LIKE 'v1:%'),
+      CHECK (password_cipher IS NULL OR password_cipher LIKE 'v1:%')
+    );
+    CREATE INDEX IF NOT EXISTS idx_egress_proxies_name    ON egress_proxies(name);
+    CREATE INDEX IF NOT EXISTS idx_egress_proxies_enabled ON egress_proxies(enabled);
+
+    -- v2-2 绑定（app='' 即整机；mode=direct 时 proxy_id 必须为 NULL）
+    CREATE TABLE IF NOT EXISTS device_egress (
+      device_id  TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+      app        TEXT NOT NULL DEFAULT '',
+      mode       TEXT NOT NULL CHECK (mode IN ('proxy','direct')),
+      proxy_id   TEXT REFERENCES egress_proxies(id) ON DELETE RESTRICT,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (device_id, app),
+      CHECK ((mode = 'proxy'  AND proxy_id IS NOT NULL)
+          OR (mode = 'direct' AND proxy_id IS NULL))
+    );
+    CREATE INDEX IF NOT EXISTS idx_device_egress_proxy  ON device_egress(proxy_id);
+    CREATE INDEX IF NOT EXISTS idx_device_egress_device ON device_egress(device_id);
+
+    -- v2-3 探测结果（设备来源 + Manager 直连来源）
+    CREATE TABLE IF NOT EXISTS egress_checks (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      source     TEXT NOT NULL CHECK (source IN ('device','manager')),
+      device_id  TEXT REFERENCES devices(id) ON DELETE CASCADE,   -- manager 直连探测为 NULL
+      app        TEXT NOT NULL DEFAULT '',
+      scope      TEXT NOT NULL DEFAULT 'device' CHECK (scope IN ('device','app')),
+      proxy_id   TEXT REFERENCES egress_proxies(id) ON DELETE SET NULL,
+      exit_ip    TEXT,
+      latency_ms INTEGER,
+      ok         INTEGER NOT NULL CHECK (ok IN (0,1)),
+      error_code TEXT,
+      checked_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_egress_checks_device  ON egress_checks(device_id, checked_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_egress_checks_proxy   ON egress_checks(proxy_id, checked_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_egress_checks_checked ON egress_checks(checked_at DESC);
+
+`jobs.kind` 扩容必须**重建表**（SQLite 不能 `ALTER CHECK`），见 §5.3 的步骤顺序。列集合与 v1 完全一致，只把 CHECK 放宽为 `IN ('bulk','assignments','egress')`。
+
+与 [API.md §5.15](API.md#515-egress-三张表schema-v2) 一致；与计划书 §8 的差异只有两处：追加 `user_id 空值 + source/scope` 两列（Manager 直连探测没有设备，两条来源必须可区分）与 `ON DELETE` 语义（proxy 被引用时 RESTRICT、历史 check 用 SET NULL 保留）。
+
 ### 5.3 迁移
 
 - 迁移在启动时串行执行：读 `schema_migrations` 最大 `version`，逐版本在事务内执行并写入一行。
 - v1 即 §5.2 全量 DDL；后续版本只追加 `CREATE/ALTER`，不修改历史迁移。
-- 迁移失败 → 启动失败、日志给出 `op="migrate"` 与版本号，不接受请求。
+- 迁移失败 → 启动失败、不接受请求；错误是 `DbError::Migration`，message 里带
+  `op=migrate, current=<from>, target=<to>` 与底层原因（v2 的 DDL + jobs 重建 + 版本行在同一事务内）。
 - 不提供降级迁移；回滚 = 用备份的 `manager.db` + `manager.key` 覆盖。
+- **v2 的作业顺序（冻结）**：
+
+      1) PRAGMA foreign_keys = OFF;         -- 连接级；必须先关
+      2) BEGIN;
+      3) 执行 §5.2.1 三张表 + jobs 重建配方（建 jobs_v2 → 搬行 → DROP jobs → RENAME）
+      4) 重建 idx_jobs_created / idx_jobs_status
+      5) COMMIT;
+      6) PRAGMA foreign_keys = ON;
+      7) PRAGMA foreign_key_check;           -- 必须为空集，否则迁移失败 → 启动失败
+
+- 第 1 步是**硬要求**：`job_results.job_id REFERENCES jobs(id) ON DELETE CASCADE`，FK 开启时 `DROP TABLE jobs`
+  会静默删掉历史结果（v1 库升级时会丢数据）；单元测试
+  `db::tests::upgrades_v1_database_without_data_loss`（[../src/db.rs](../src/db.rs)）覆盖了
+  「v1 库升级不丢 devices/jobs/job_results/audit + 迁移后 foreign_keys 恢复为 ON + 重复迁移不追加版本行」。
+- 迁移可重复执行：`CREATE TABLE IF NOT EXISTS` + 一次性搬行；已到 v2 的库再跑一次是空操作。
+- v2 迁移完成后 `GET /healthz` 的 `db.schemaVersion` 变为 `2`。
 
 ### 5.4 JSON 列约定
 
@@ -402,7 +483,8 @@ Token 的**完整**优先级（高 → 低）：`--token` → `DFM_TOKEN` → `m
 | 算法 | AES-256-GCM |
 | 密钥 | `manager.key` 的 32 字节 |
 | nonce | 每次加密随机 12 字节（`OsRng`），**绝不重用** |
-| AAD | 设备 id 的 UTF-8 字节（绑定行，防止密文搬迁） |
+| AAD（设备 Token） | 设备 id 的 UTF-8 字节（绑定行，防止密文搬迁） |
+| AAD（egress 凭据） | `"egress_proxy:" ‖ proxy_id ‖ ":" ‖ field`，`field ∈ {username, password}`：在绑定 proxy id 之上再绑字段名，防止两列密文互换后仍能解密 |
 | 版本前缀 | `v1:`；未知前缀 → 解密失败，按 `internal_error` 处理 |
 | 编码 | 标准 Base64（带 `=` 填充） |
 
@@ -421,6 +503,8 @@ Token 的**完整**优先级（高 → 低）：`--token` → `DFM_TOKEN` → `m
 - 不把 Token 写入 `audit.detail`；`PATCH` 审计只记录字段名。
 - 异常路径（reqwest 错误、设备 401）不得把请求头拼进 message。
 - WebUI 只在添加设备表单里**输入** Token，从不读取展示；列表 / 详情无 Token 字段。
+- egress 代理凭据沿用同一把 `manager.key`：DTO **没有** `username` / `password` 字段（唯一信号 `hasCredentials`），
+  审计 `detail` 只允许 `{proxyId, name, deviceId, app, changed}`，日志不打印解密后的值，错误 message 不回显凭据。
 
 密钥丢失 = 所有设备 Token 不可解密：只能删除并重新添加设备（文档明示，不做「找回」）。
 
@@ -746,6 +830,36 @@ job 相关 tracing span 字段：`job_id`、`kind`、`total`、`status`、`durat
 assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_status`、`attempts`。
 成功不打印设备响应体；失败只打印 code 与 trace 需要的字段。
 
+### 10.7 egress 下发语义（`kind="egress"`，Manager 侧）
+
+设备端契约见 [../../docs/plans/egress-contract.md](../../docs/plans/egress-contract.md) §6；这里只冻结 Manager 的实现口径。
+
+- **Manager 只拥有三样东西**：`default`（整机代理名）、`apps`（应用级覆盖）、`proxies`（被引用的代理定义 + 凭据）。
+  `failOpen` / `probeUrl` / `probeTimeoutSeconds` / `exclusionList` 不在 Manager 的请求体里出现，
+  设备侧保持现值：Manager 不下发、不比较、不重置。探测 URL 在 Manager 侧是常量
+  `api::egress::DEFAULT_PROBE_URL`（可被 `POST /egress-proxies/{id}/probe` 的请求体 `url` 覆盖）。
+- **零应用级绑定发 `apps: null`**：`[]` 与 `null` 在设备端都表示「没有应用级覆盖」，但契约只把
+  `null` 定义为「清除所有 `[[apps]].egress`」，`[]` 依赖「整体替换为空数组」的实现细节。
+  因此 Manager 在 `apps` 为空时发 `null`；非空时发完整数组（整体替换）。
+- **总是 PUT，不做本地比较**：runner 每次下发都 `PUT /api/v1/egress`，用设备响应的 `changed`
+  判定幂等短路（`changed:false` → 步骤 `egress_put` 记 `skipped` / `egress_unchanged`，结果行
+  `code=egress_unchanged`、`status=ok`，job 因此不会变 `partial`）。这样配置漂移、凭据轮换、
+  设备侧手改都能自然收敛，不需要额外的「已下发指纹」列。
+- **凭据字段总是显式给出**：代理未设置用户名/密码时下发 `username:null` / `password:null`；
+  省略在设备端是「不改该条已存凭据」，会把上一次的密码留在设备上。
+- **assignments 形态先校验后落库**：`plan_egress_targets` 只做校验 / 归一化（返回合并后的行与分组），
+  `persist_egress_bindings` 才写 `device_egress` + `egress.bind` 审计；`dryRun:true` 只走前者。
+- **幂等键与 `POST /apply` 同规则**：1-128 字符、不含空白/控制字符（非法 422）；`insert` 失败时
+  回查 `find_job_by_idempotency` 并重放，回查不到才 500。
+- **egress 专属结果码**：`egress_unsupported`（旧设备无 `/egress`）、`egress_not_configured`
+  （设备 409 `egress.not_configured`）、`decrypt_failed`（代理凭据解密失败，`details.op="decrypt"`，
+  不是 `device_error`）、`device_token_invalid`（设备 Token 解密失败，message 提示 `manager.key` 可能已变更）。
+- **探测结果写入失败不静默**：`egress_checks` 写失败时 job 结果追加 warning `egress_check_not_recorded`；
+  `POST /egress-proxies/{id}/probe` 的响应体同样带该 warning。
+- **egress_checks 清理**：`prune()` 每个 `(device_id, app)` 只保留最近 500 条（`checked_at DESC, id DESC`）。
+- **Manager 侧探测只支持 HTTP 代理**：`socks5` 返回 `422 unsupported_proxy_type` 并落一条 `ok=0`
+  记录（reqwest 未启用 socks feature）；probe URL 必须是 `http://`。
+
 ---
 
 ## 11. 静态托管
@@ -840,6 +954,12 @@ assignment 日志（debug）：`job_id`、`device_id`、`app`、`step`、`http_s
 | `apply.assignments` | `device` / `mixed` | `{jobId, total, assignments}` |
 | `job.finished` | `job` / jobId | `{status, succeeded, skipped, failed, durationMs}` |
 | `token.rotate` | `token` / null | `{source, tokenPersisted}` |
+| `egress.proxy_create` | `egress_proxy` / id | `{proxyId, name, changed}` |
+| `egress.proxy_update` | `egress_proxy` / id | `{proxyId, name, changed}` |
+| `egress.proxy_delete` | `egress_proxy` / id | `{proxyId, name}` |
+| `egress.proxy_probe` | `egress_proxy` / id | `{proxyId, name, changed:false}` |
+| `egress.bind` | `device` / id | `{deviceId, changed, total}` |
+| `egress.apply` | `job` / jobId | `{jobId, total, devices, changed}` |
 
 - `apply.bulk` 的 `target_id` 为 `all` 或 `multiple`，`apply.assignments` 为 `mixed`（避免逗号拼接过长）；
   入队成功后立即写审计（失败只 warn，不影响 202）；assignment 明细不写审计（job_results 已保存）。

@@ -1,0 +1,117 @@
+===== 0. baseline GET /egress =====
+HTTP 200
+{
+  "configured": false,
+  "mode": "direct",
+  "effectiveMode": "direct",
+  "default": null,
+  "failOpen": true,
+  "probeUrl": "http://checkip.amazonaws.com/",
+  "probeTimeoutSeconds": 5,
+  "applied": true,
+  "readback": {
+    "settingsValue": ":0",
+    "dumpsysGlobalProxy": "Global proxy: none",
+    "matches": true,
+    "at": "2026-11-24T13:16:36Z"
+  },
+  "upstream": null,
+  "proxies": [],
+  "apps": [],
+  "egressFile": {
+    "exists": false,
+    "size": 0,
+    "mtime": null
+  }
+}
+revision= 3691c8e1e4e9bf1b8d0f800fa5f6c66d8f7483d579296176a74ff16428a6ceaa
+If-Match revision = 3691c8e1e4e9bf1b8d0f800fa5f6c66d8f7483d579296176a74ff16428a6ceaa
+===== PUT /egress {default: mac_http, proxies:[mac_http(http), mac_socks(socks5+creds)]} =====
+{
+  "default": "mac_http",
+  "failOpen": true,
+  "probeUrl": "http://probe.fixture/",
+  "probeTimeoutSeconds": 5,
+  "proxies": [
+    {
+      "name": "mac_http",
+      "type": "http",
+      "host": "127.0.0.1",
+      "port": 18080
+    },
+    {
+      "name": "mac_socks",
+      "type": "socks5",
+      "host": "127.0.0.1",
+      "port": 18081,
+      "username": "dfsocks",
+      "password": "<redacted in log>"
+    }
+  ]
+}
+HTTP 200
+HTTP/1.1 200 OK
+x-df-egress-revision: 4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c
+{
+  "revision": "4d3f84eef9cc7df20a165723ab8836163197a1ee431ddc890d26c16cbf9c902c",
+  "previousRevision": "3691c8e1e4e9bf1b8d0f800fa5f6c66d8f7483d579296176a74ff16428a6ceaa",
+  "configRevision": "1c36170355c23288ab40152e4718973b6a04b225c798794e617bf89e5e2f6eef",
+  "dryRun": false,
+  "changed": true,
+  "backupId": "toml.20261124T131637.080853588Z-f9f80df8",
+  "mode": "proxy",
+  "effectiveMode": "proxy",
+  "default": "mac_http",
+  "applied": true,
+  "upstream": {
+    "name": "mac_http",
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 18080,
+    "hasCredentials": false
+  },
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T13:16:37Z"
+  },
+  "warnings": []
+}
+===== settings get global http_proxy =====
+127.0.0.1:18080
+===== dumpsys connectivity | grep -i proxy =====
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: [127.0.0.1] 18080 xl=
+  Default proxy: none
+===== settings list global | grep -i proxy =====
+global_http_proxy_exclusion_list=
+global_http_proxy_host=127.0.0.1
+global_http_proxy_port=18080
+global_proxy_pac_url=
+http_proxy=127.0.0.1:18080
+===== device-side files =====
+version = 1
+
+[proxies.mac_http]
+type = "http"
+host = "127.0.0.1"
+port = 18080
+
+[proxies.mac_socks]
+type = "socks5"
+host = "127.0.0.1"
+port = 18081
+username = "dfsocks"
+password = "<redacted>"
+
+[probe]
+url = "http://probe.fixture/"
+timeout_seconds = 5
+fail_open = true
+---
+361:[egress]
+362-default = "mac_http"
+363-
+-rw------- 1 root root 282 2026-11-24 21:16 /data/adb/device_faker/config/egress.toml

@@ -5,9 +5,9 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 
 > 状态（2026-11-24）：**服务端、WebUI、集成测试与运行文档均已落地**。
 > - 契约：[docs/API.md](docs/API.md)、[docs/ARCH.md](docs/ARCH.md)、[docs/api-types.ts](docs/api-types.ts)
-> - Relay 服务端：`manager/src`（18 个端点、SQLite、AES-256-GCM 设备 Token、job runner）
+> - Relay 服务端：`manager/src`（27 个方法级端点（含出口代理池）、SQLite schema v2、AES-256-GCM 设备 Token 与代理凭据、job runner（`kind=bulk/assignments/egress`））
 > - WebUI：`manager/webui`，已接真实 Relay API（loading / 401 / 空态 / 逐设备结果）
-> - 集成测试与 Mock 设备：`manager/tests`（72 个用例，含 `e2e_flow` 全流程与 `review_reverify` 复审回归）
+> - 集成测试与 Mock 设备：`manager/tests`（含 `e2e_flow` 全流程、`egress_flow` 出口下发与 `review_reverify` 复审回归）
 > - 运行手册：[docs/RUN.md](docs/RUN.md)；Mock 设备脚本：[docs/mock_device.py](docs/mock_device.py)
 
 ## 目录
@@ -16,7 +16,7 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
     ├── README.md              # 本文件
     ├── Cargo.toml             # device_faker_manager crate
     ├── docs/
-    │   ├── API.md             # Relay 契约：18 个端点、错误信封、job 结果、curl 验收
+    │   ├── API.md             # Relay 契约：27 个方法级端点、错误信封、job 结果、curl 验收
     │   ├── ARCH.md            # crate 布局、SQLite DDL、Token 加密、静态托管、设备端映射、测试策略
     │   ├── RUN.md             # 从干净状态构建 / 启动 / 接入设备 / 冒烟 / 排错
     │   ├── api-types.ts       # 前端类型（ManagerApi 方法签名）
@@ -30,16 +30,18 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
     │   ├── jobs.rs            # 下发流水线（revision → 模板 → bind → restart）
     │   ├── static_files.rs    # WebUI 托管 + SPA fallback
     │   └── api/               # devices / apply / jobs / apps / templates / overview /
-    │                          #   audit / token / proxy / health / aggregate / dto
+    │                          #   audit / token / proxy / health / aggregate / dto /
+    │                          #   egress（代理池、探测、绑定与批量下发）/ egress_dto
     ├── tests/
     │   ├── common/            # TestApp + axum Mock 设备
     │   ├── manager_api.rs     # 健康检查、鉴权、静态托管、密钥
     │   ├── devices_flow.rs    # 注册 / 探测 / 同步 / overview / 矩阵
     │   ├── apply_flow.rs      # bulk / assignments / 412 / 离线 / 幂等
     │   ├── ops_endpoints.rs   # templates / overview / audit / rotate / proxy / jobs
+    │   ├── egress_flow.rs     # 代理池 CRUD / 绑定 / 批量下发 / 探测 / 迁移
     │   └── e2e_flow.rs        # 全端点单流程 + 离线降级 + 参数校验
     └── webui/                 # Vue 3 管理端
-        ├── src/pages/         # 总览 / 设备 / 应用矩阵 / 批量配置 / 接入 AI / 日志
+        ├── src/pages/         # 总览 / 设备 / 应用矩阵 / 代理池 / 批量配置 / 接入 AI / 日志
         ├── src/api/           # 真实 API client 与冻结类型副本
         ├── src/stores/        # Pinia：真实请求、loading/error、Token 对话框
         ├── src/mock/          # 仅 VITE_MOCK=1 时打包的预览数据
@@ -53,7 +55,7 @@ Rust（axum + SQLite）单进程服务 + Vue 3 管理端，同进程托管。
 | [docs/API.md](docs/API.md) | `/relay/api/v1` 全部端点、字段表、错误码、下发流水线、逐设备结果、curl 脚本 | frontend / backend / test |
 | [docs/ARCH.md](docs/ARCH.md) | crate 布局、依赖、SQLite 表结构、设备 Token 加密、默认监听、静态托管、设备端映射、测试策略 | backend / reviewer |
 | [docs/api-types.ts](docs/api-types.ts) | TypeScript 类型（含 `ManagerApi`），已通过 `tsc --strict --noEmit` | frontend |
-| [docs/mock_device.py](docs/mock_device.py) | 设备端最小 Mock（status / overview / templates / apps + 首次 412） | test / 联调 |
+| [docs/mock_device.py](docs/mock_device.py) | 设备端最小 Mock（status / overview / templates / apps + egress 五端点 + 首次 412）；egress 下发验证见 [RUN.md §6.1](docs/RUN.md) | test / 联调 |
 | [../docs/API.md](../docs/API.md) | 设备端 `/api/v1` 契约（上游，v1.9.0） | 全部 |
 
 ## 页面预览
@@ -167,7 +169,7 @@ assignments（不同设备不同应用 / 模板）：
 
 ## 测试
 
-    cargo test -p device_faker_manager          # 56 单元 + 72 集成
+    cargo test -p device_faker_manager          # 单元 + 集成（含 egress_flow 出口下发）
     cargo test -p device_faker_manager --test e2e_flow
     cargo fmt --check
     cargo clippy -p device_faker_manager --all-targets -- -D warnings
@@ -179,10 +181,11 @@ Mock 设备同时提供可独立运行的 [docs/mock_device.py](docs/mock_device
 
 ## 数据模型与安全
 
-- SQLite（WAL）单文件：`devices`、`device_overviews`、`jobs`、`job_results`、`audit`、`schema_migrations`；
-  完整 DDL 见 [docs/ARCH.md §5](docs/ARCH.md#5-sqlite-数据模型)。
+- SQLite（WAL）单文件，schema v2：`devices`、`device_overviews`、`jobs`（`kind` 含 `egress`）、`job_results`、`audit`、`schema_migrations`
+  + 出口代理三表 `egress_proxies`、`device_egress`、`egress_checks`；完整 DDL 见 [docs/ARCH.md §5](docs/ARCH.md#5-sqlite-数据模型)。
 - 设备 Token：AES-256-GCM 加密后存 `token_cipher`（`v1:` + base64(nonce ‖ ciphertext ‖ tag)），
   密钥为 `<data-dir>/manager.key` 的 32 字节（0600）；解密只发生在发出设备请求的瞬间。
+  代理凭据复用同一把密钥（`username_cipher` / `password_cipher`，AAD 绑 proxy id + 字段名），响应只给 `hasCredentials`。
 - Token 永不出现在 API 响应、错误详情、审计、日志或前端页面；只在添加设备时由用户输入。
 - 聚合视图（`/devices`、`/apps`、`/overview`、`/templates`）全部读缓存，离线设备不会让页面 5xx；
   缓存超过 300 s 或设备离线时标记 `stale`。

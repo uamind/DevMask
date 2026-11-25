@@ -87,8 +87,12 @@ pub async fn list(
 
     let snapshot = store::read_snapshot(state.store())
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error}")))?;
-    let config = Config::from_toml(&snapshot.text)
-        .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
+    let config = Config::from_toml(&snapshot.text).map_err(|error| {
+        ApiError::internal_error(
+            request_id.as_str(),
+            crate::util::parse_error_message(&error),
+        )
+    })?;
 
     // 列表只包含 [[apps]] 内联记录；source=template 时按契约返回空列表。
     let items: Vec<AppListItem> = if source_filter == Some("template") {
@@ -134,8 +138,12 @@ pub async fn get(
     crate::api::templates::ensure_package(&package, "package", request_id.as_str())?;
     let snapshot = store::read_snapshot(state.store())
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error}")))?;
-    let config = Config::from_toml(&snapshot.text)
-        .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
+    let config = Config::from_toml(&snapshot.text).map_err(|error| {
+        ApiError::internal_error(
+            request_id.as_str(),
+            crate::util::parse_error_message(&error),
+        )
+    })?;
 
     let source = source_for(&config, &package);
     let installed = state.packages().is_installed(base_package(&package));
@@ -258,7 +266,7 @@ pub async fn put(
                 let candidate = Config::from_toml(&document.to_string()).map_err(|error| {
                     TxError::Domain(ApiError::internal_error(
                         &request_id_str,
-                        format!("{error:#}"),
+                        crate::util::parse_error_message(&error),
                     ))
                 })?;
                 if !allow_duplicate && !already_bound {

@@ -5,6 +5,7 @@ Configure a fake device identity and system properties per app. The config file 
 ## Config File Path
 
 - `/data/adb/device_faker/config/config.toml`
+- `/data/adb/device_faker/config/egress.toml` (**0600**, proxy definitions and probe policy; never exported, never returned by the API — see [Network Egress](#network-egress-egress))
 
 The config is **hot-reloaded**: the module re-reads the file on every app launch. After editing, just restart the target app — **no system reboot required**.
 
@@ -198,6 +199,155 @@ manufacturer = "Custom"
 - When using a template's `packages`, no `[[apps]]` entry is needed (auto-applied)
 - An `[[apps]]` record replaces the template entirely; unset fields do not fall through (see [Priority](#priority))
 - Fields not listed in the tables above are silently ignored (they do not affect parsing)
+
+## Network Egress (egress)
+
+> Requires `device_faker_server` v1.10.0+ (used by the WebUI "Network egress" card and probing). With only the module installed the config still applies — you just lose probing and read-back verification.
+
+Egress decides **which IP app traffic leaves from**; it is independent of device-identity spoofing. Two granularities:
+
+| Level | Mechanism | Scope | Protocol |
+| --- | --- | --- | --- |
+| Device-wide (plan A) | writes the Android global proxy (`settings global http_proxy`) | apps that honour the system proxy (OkHttp / HttpURLConnection / WebView / most SDKs) | HTTP/HTTPS CONNECT only, **no proxy auth** |
+| Per-app (plan B) | Zygisk injects `http/https/socksProxy` and `ProxySelector` inside the target process | that one app only, system settings untouched | HTTP + SOCKS5; **authenticated proxies do not work in this release** (see known limitations) |
+
+### config.toml: references only
+
+```toml
+[egress]
+default = "office_http"        # device-wide default; omit or leave empty for direct
+
+[[apps]]
+package = "com.example.a"
+egress  = "lab_socks"          # per-app override (SOCKS5 here)
+
+[[apps]]
+package = "com.example.b"
+egress  = "__DIRECT__"         # force direct, overriding the device-wide proxy
+```
+
+| Location | Key | Value | Notes |
+| --- | --- | --- | --- |
+| `[egress]` | `default` | proxy name | Device-wide exit. **Only `default` is accepted**; `host` / `port` / `username` / `password` → `422 unknown_field` (credentials live only in `egress.toml`) |
+| `[[apps]]` | `egress` | proxy name or `"__DIRECT__"` | Per-app override. Omitted = inherit `[egress].default`; `__DIRECT__` = force direct |
+
+Inheritance chain (only two levels): `[[apps]].egress` → `[egress].default` → direct. Templates do **not** take part.
+
+Proxy names: `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$` (1–64 chars, case-sensitive); `__DIRECT__` is reserved. Referring to a proxy that is not defined yet is **allowed** (the two files are decoupled); at runtime you get an `egress_proxy_not_found` warning and the app goes direct.
+
+> **Templates do not support `egress`**: a template is shared by several packages, so it is not a per-app exit. Giving a template-bound app a per-app egress creates an inline record for it, and an inline record **replaces the template wholesale** (identity fields are lost) — the write returns an `egress_inline_shadows_template` warning. To keep both identity and egress, write the identity fields into that `[[apps]]` record explicitly.
+
+### egress.toml: proxy definitions and probe policy
+
+Path `/data/adb/device_faker/config/egress.toml`, **mode 0600** (root only). `config.toml` stays 0644 (shareable / exportable), so **passwords live only here**. The service maintains this file; after editing by hand, restart the service.
+
+```toml
+version = 1
+
+[proxies.office_http]
+type     = "http"              # http | socks5
+host     = "198.51.100.10"     # hostname or IPv4; no scheme / port / path
+port     = 8080
+# username = "<USERNAME>"      # optional
+# password = "<PASSWORD>"      # optional; never appears in any API / log / audit / WebUI
+
+[proxies.lab_socks]
+type     = "socks5"
+host     = "198.51.100.20"
+port     = 1080
+username = "<USERNAME>"
+password = "<PASSWORD>"
+
+[probe]
+url             = "http://checkip.example.com/"   # http:// only (no TLS stack)
+timeout_seconds = 5                                # 1–30, default 5
+fail_open       = true                             # allow direct when the proxy is down (default)
+```
+
+- At most 64 definitions; `host` ≤253 chars, `username` ≤128, `password` ≤256.
+- If permissions get widened, the service heals them back to 0600 and reports `egress_perm_fixed`; backups (`backups/egress-*.toml`) are 0600 as well.
+- `egress.toml` is **not** part of `GET /config?format=toml` and is not exported by the WebUI; `GET /api/v1/egress` only returns redacted summaries (`hasCredentials` is the only credential signal).
+- `username` / `password` are **stored securely** (0600; the API only reports `hasCredentials`), but **app traffic never sends them**: the SOCKS5 properties are readable while libcore does not send credentials, and HTTP Basic is not implemented. Use an **IP allow-list** on the proxy, or wait for the P2 "in-device authenticated relay". See [known limitations](#known-limitations).
+
+### fail-open and degradation
+
+With `fail_open = true` (default), the service switches the system proxy to direct (`settings put global http_proxy :0`) and flips `health.degraded` once a proxy is considered unusable — the config itself is untouched, and one successful probe restores it:
+
+1. an explicit probe fails with `connect` / `dns` / `timeout` / `tls` (`http_status` / `invalid_response` do not trigger it — the path may be fine);
+2. the read-back after a write does not match the expectation;
+3. the read-back during the startup self-heal does not match.
+
+The state is visible in `health` (`degraded` / `degradedSince` / `degradedReason`) of `GET /api/v1/egress` and in the log. With `fail_open = false` (fail-closed) the checks still run but the system proxy is left alone — no network is better than a changed exit IP.
+
+### When it takes effect
+
+| Level | Timing |
+| --- | --- |
+| Device-wide | **immediately** — new connections go through the proxy (established connections must reconnect) |
+| Per-app | **after the target app cold-starts** (same as identity spoofing). Injection happens early in process start and is then corrected by the post-start replay (next section); use `POST /api/v1/apps/{pkg}/restart` if needed |
+
+Clearing the system proxy **must** use `settings put global http_proxy :0` — `settings delete global http_proxy` does not clear it on Android 17 (measured; see [SERVER.md](../SERVER.md)). The service encapsulates this rule; follow it when doing it by hand.
+
+### How per-app injection takes effect (post-start replay)
+
+Per-app egress (`[[apps]].egress`) is **in-process injection plus post-start replay**, not a write-once operation. This order explains most "configured but not effective" reports.
+
+1. **Injection** happens in Zygisk's `pre_app_specialize` (early in process start, before `Application` is constructed): it writes `http.proxyHost/Port`, `https.proxyHost/Port`, `socksProxyHost/Port` and the credential carriers, and tries `ProxySelector.setDefault(...)`.
+2. **The framework then overwrites them**: while binding the app it runs `ActivityThread.handleBindApplication` → `ActivityThread.updateHttpProxy(app)` → `Proxy.setHttpProxyConfiguration(cm.getDefaultProxy())`, rewriting the http/https properties (including nonProxyHosts and ProxySelector) from the **device-wide** `ProxyInfo` — and clearing them when the device-wide setting is direct. Measured on a Pixel 9, that overwrite lands **~28–95ms** after injection (95ms in t9, 28ms in this round).
+3. **Hence the replay**: a short-lived thread started after injection reads the properties back on a fixed schedule and rewrites the **whole** expected set whenever it sees a mismatch.
+
+The replay window is **0–2000ms with no early exit** — we cannot know when the framework writes, and stopping early would miss a later overwrite:
+
+| Range (relative to injection) | Cadence | Purpose |
+| --- | --- | --- |
+| `0..=160ms` | every 2ms | hot zone: restore right around the framework overwrite |
+| `165..=300ms` | every 5ms | slower devices / slower cold starts |
+| `300..=2000ms` | geometric back-off (from 340, ×5/4+10, last point 2000) | backstop for very slow cold starts |
+
+That is **118 probes** in total; the thread sleeps most of the time, so the CPU cost is a few dozen property reads.
+
+**Why the trigger is not "spawn a thread in specialize"**: creating a thread during `pre_app_specialize` makes zygote's `selinux_android_setcontext` (which requires a single-threaded process) fail and the process aborts with SIGABRT (Pixel 9 / Android 17 tombstone: `JNI FatalError called: ... selinux_android_setcontext(...) failed`). So the thread is started from a PLT hook once the process transition is done: `setpriority` on `libandroid_runtime.so` (AOSP always calls `setpriority(PRIO_PROCESS, 0, PROCESS_PRIORITY_DEFAULT)` after `ZygoteHooks.postForkChild`/`SetProcessState`), with `__system_property_get` as the standby trigger.
+
+**Explicit-only injection**: only processes whose `[[apps]].egress` names a proxy or `__DIRECT__` get the hook and the replay thread. Omitted / empty → **no injection** (the device-wide behaviour is already written by the framework into every process; injecting again would only add a hook, a thread and the need to keep the module mapped per process). If the named proxy does not exist in `egress.toml`, nothing is injected and there is **no fallback to the device-wide default** — direct is safer than silently switching the exit IP.
+
+Observability (requires `debug = true`; goes to both logcat and the module log):
+
+```
+[egress] replay hook armed image=libandroid_runtime device=... inode=... symbols=setpriority,__system_property_get   # module log (debug = true)
+[egress] replay hook armed package=com.example.a                                                                  # logcat (DeviceFaker tag)
+[egress] replay start package=com.example.a trigger=post_zygote_setpriority
+[egress] replay package=com.example.a t=28ms reason=framework_overwrite applied=6/6 changed=[http.proxyHost=-->127.0.0.1, http.proxyPort=-->18082]
+[egress] replay done package=com.example.a probes=118 replays=1 divergences=1 state=match elapsed=2003ms
+[egress] replay hook unavailable reason=commit_failed error=...
+[egress] replay hook not fired within 2000ms (no replay started); module retained (code pages stay mapped for this process) package=com.example.a waited=2000ms
+[egress] proxy_selector degraded reason=of_method_missing sdk=Some(37)
+```
+
+`state=match` means every property was in the expected state when the window closed; `state=mismatch` means it was not (e.g. the thread was suspended for too long); `replay hook unavailable` means no hook was installed and this process fell back to one-shot injection.
+
+`replay hook not fired within …` is the diagnostic for "the hook was armed but neither trigger ever fired". It has **two trigger points**, neither of which depends on the hook and neither of which creates a thread:
+
+1. **Timer at the end of the replay window**: after arming, an `alarm(⌈REPLAY_WINDOW_MS/1000⌉)` is installed (window = 2000ms by default). If no replay has been spawned by the time it fires, the line is logged once and `SIGALRM` is **immediately** restored to its previous disposition.
+2. **Process-exit fallback**: if the process exits inside the window, an `atexit` callback logs the same line (`waited=` is then the real elapsed milliseconds; the timer path reports the window value).
+
+**The normal path logs nothing**: the hook usually fires in ~26ms and starts the replay thread; on a hit the code calls `alarm(0)` to cancel the timer, restores the signal disposition and marks the probe as reported — so this line **never appears** in a healthy process (the log stays identical to a build without the diagnostic). The diagnostic is logged at most once; both trigger points share the same flag.
+
+**The module code pages stay mapped after the line is logged**: a process that armed the hook already skips `dlclose`, and it **must not** be unloaded here — the replay thread and the hook live in that `.so`, so unloading would crash. That is exactly what the `module retained (code pages stay mapped for this process)` wording in the line means. The module is still **invisible by name** in `/proc/<pid>/maps` (anonymous mapping, see Known limitations).
+
+Seeing this line means the process only got the pre-`specialize` one-shot injection, so per-app HTTP egress is likely overwritten by the framework afterwards: check whether the ROM changed the call order in `SpecializeCommon`, or whether the hook is being blocked. Note that **SIGKILL** (the usual way AMS kills a process) runs neither trigger point — in that case the only signal is the absence of `replay start` in logcat.
+
+### Known limitations
+
+- **Authenticated proxies do not work in this release**: `egress.toml` credentials are stored safely, but **app traffic never sends authentication** — the injected `java.net.socks.username/password` properties are readable inside the process while libcore's SOCKS client never sends them (measured on Android 17: proxy side `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`), and HTTP Basic is not implemented (only host/port are injected, with an `[egress] unsupported-auth` line). Use a proxy authorised by **IP allow-list**, or wait for the P2 "in-device authenticated relay" (not implemented). Note that **probing** uses the service's own client (SOCKS5 auth works for the device-side probe; the Manager probe only supports HTTP proxies), so "probe succeeded" does not mean "apps can reach the network".
+- **A process with explicit `egress` keeps module code pages resident**: the replay thread and the PLT hook live in the module `.so`, so zygisk cannot `dlclose` it while they run. They are **not visible by name in `/proc/<pid>/maps`**: Zygisk maps the module anonymously (an armed process showed 0 hits for `device_faker`/`arm64-v8a`/`libzygisk` across 3170 lines; only the **companion** process shows `/data/adb/modules/device_faker/zygisk/arm64-v8a.so`). Real detection must compare **anonymous executable segments** (`r-xp`) against a process without egress. Processes **without** per-app egress still unload the module immediately.
+- **Changing the device-wide proxy while an app is running is not replayed**: the window only covers 0–2000ms after a cold start. Changing `[egress] default` later (the AMS `updateHttpProxy` broadcast) lands outside it — restart the app to pick it up.
+- **When the `setpriority` hook cannot be installed the injection degrades to one-shot**: if `libandroid_runtime.so` is missing or the PLT hook commit fails, a single `[egress] replay hook unavailable reason=...` line is logged and no replay happens — the values are still written but may be overwritten by the framework's `updateHttpProxy` (symptom: per-app HTTP egress ineffective, `__DIRECT__` unable to restore direct).
+- `ProxySelector.of(...)` does not exist on Android 17 (SDK 37): the property path is authoritative and the selector is a bonus; a single `[egress] proxy_selector degraded reason=of_method_missing` line is logged per process and injection/replay are unaffected.
+- Device-wide covers HTTP/HTTPS CONNECT only: **SOCKS5 and proxy auth work only via plan B**. Pointing the device-wide default at a proxy with credentials returns `egress_credentials_ignored` (it still applies as `host:port`).
+- UDP / QUIC are not constrained by an HTTP proxy; established connections do not switch paths; VPN apps override the system proxy.
+- WebView follows the system proxy (plan A works, plan B does not); native stacks (cronet, custom C++, QUIC) are the opposite.
+- **Run `DELETE /api/v1/egress` before uninstalling or disabling the module**: the system proxy lives in Android settings and nothing can clear it once the module is disabled. `uninstall.sh` clears it after stopping the service, but toggling the module off by hand does not run it.
+- Probing defaults to `http://checkip.amazonaws.com/`, only accepts `http://`, and runs inside the **service process** (`scope:"app"` results are approximate).
 
 ## How It Takes Effect
 

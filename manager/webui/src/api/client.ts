@@ -7,6 +7,8 @@
 // - Manager Token 存 localStorage.dfm_token；首个请求 401 时抛 AuthError，由 App.vue 弹 Token 对话框
 // - 非 2xx 统一解析错误信封并抛 ApiError（带 status / code / requestId）
 // - 只有 GET 的 retryable 错误会退避重试（250ms / 500ms / 1000ms），写请求不自动重放
+// - 出口代理 egress 契约见 docs/plans/egress-contract.md §6；egress revision 只读
+//   X-DF-Egress-Revision（或响应体 revision），绝不读 X-DF-Revision / ETag 覆盖 config revision
 
 import type {
   AddDeviceRequest,
@@ -16,12 +18,25 @@ import type {
   AppsQuery,
   AuditQuery,
   AuditResponse,
+  CreateEgressProxyRequest,
   DeviceDetail,
+  DeviceEgressPutRequest,
+  DeviceEgressPutResponse,
+  DeviceEgressResponse,
   DeviceId,
   DeviceOverviewResponse,
   DeviceQuery,
   DeviceSummary,
   DevicesResponse,
+  EgressApplyRequest,
+  EgressApplyResponse,
+  EgressProbeRequest,
+  EgressProbeResponse,
+  EgressProxy,
+  EgressProxyDetail,
+  EgressProxyId,
+  EgressProxyListResponse,
+  EgressProxyQuery,
   ErrorEnvelope,
   HealthResponse,
   Job,
@@ -38,6 +53,8 @@ import type {
   SyncDeviceResponse,
   TemplatesResponse,
   UpdateDeviceRequest,
+  UpdateEgressProxyRequest,
+  UpdateEgressProxyResponse,
 } from './types'
 
 /** 默认 API 前缀（与 Relay 同源部署时无需配置）。 */
@@ -152,6 +169,28 @@ export function newIdempotencyKey(): string {
   return `dfm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/**
+ * egress revision 的唯一响应头来源（docs/plans/egress-contract.md §1.2）。
+ *
+ * 硬约束：egress 端点**只**认 `X-DF-Egress-Revision`（或响应体里的 `revision`），
+ * 绝不读 `X-DF-Revision` / `ETag`。那两个属于 config revision，一旦用 egress 的
+ * 值覆盖 WebUI 侧缓存的 config revision，后续 PUT /config 的 If-Match 必然 412。
+ */
+export const EGRESS_REVISION_HEADER = 'X-DF-Egress-Revision'
+
+/** 每台设备的 egress revision（来自 X-DF-Egress-Revision 或响应体），与 config revision 完全隔离。 */
+const egressRevisions = new Map<string, string>()
+
+/** 读某台设备最近一次 egress revision；未知返回 null。 */
+export function egressRevisionFor(deviceId: string): string | null {
+  return egressRevisions.get(deviceId) ?? null
+}
+
+/** 清空 egress revision 缓存（Token 轮换 / 手动重载时用）。 */
+export function clearEgressRevisions(): void {
+  egressRevisions.clear()
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -217,6 +256,11 @@ interface RequestOptions {
   idempotencyKey?: string
   /** GET 默认允许对 retryable 错误退避重试。 */
   retry?: boolean
+  /**
+   * 采集 egress revision 用的设备 id：成功响应里只读 `X-DF-Egress-Revision`，
+   * 不碰 `X-DF-Revision` / `ETag`（见 EGRESS_REVISION_HEADER 的说明）。
+   */
+  egressRevisionKey?: string
 }
 
 /**
@@ -308,6 +352,11 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
           continue
         }
         throw apiError
+      }
+      if (options2.egressRevisionKey) {
+        // 只有这个头能更新 egress revision；config revision 缓存完全不参与。
+        const revision = response.headers.get(EGRESS_REVISION_HEADER)
+        if (revision) egressRevisions.set(options2.egressRevisionKey, revision)
       }
       return payload as T
     }
@@ -450,6 +499,65 @@ export function createManagerClient(options: ManagerClientOptions = {}): RelayCl
         `/devices/${encodeId(id)}/proxy/api/v1/apps/${encodePackage(packageName)}`,
         { method: 'DELETE', query: buildQuery({ confirm: 'true', detach_templates: 'true' }) }
       ),
+
+    // ---- 出口代理 egress（docs/plans/egress-contract.md §6）----
+    listEgressProxies: (query: EgressProxyQuery = {}) =>
+      send<EgressProxyListResponse>('/egress-proxies', {
+        query: buildQuery(
+          {
+            q: query.q,
+            enabled:
+              query.enabled === undefined ? undefined : query.enabled ? 'true' : 'false',
+            tag: query.tag,
+            limit: query.limit,
+            cursor: query.cursor,
+          },
+          ['tag']
+        ),
+      }),
+
+    createEgressProxy: (body: CreateEgressProxyRequest) =>
+      send<EgressProxy>('/egress-proxies', { method: 'POST', body }),
+
+    getEgressProxy: (id: EgressProxyId) =>
+      send<EgressProxyDetail>(`/egress-proxies/${encodeId(id)}`),
+
+    updateEgressProxy: (id: EgressProxyId, body: UpdateEgressProxyRequest) =>
+      send<UpdateEgressProxyResponse>(`/egress-proxies/${encodeId(id)}`, {
+        method: 'PATCH',
+        body,
+      }),
+
+    deleteEgressProxy: async (id: EgressProxyId) => {
+      await send<void>(`/egress-proxies/${encodeId(id)}`, { method: 'DELETE' })
+    },
+
+    probeEgressProxy: (id: EgressProxyId, body?: EgressProbeRequest) =>
+      send<EgressProbeResponse>(`/egress-proxies/${encodeId(id)}/probe`, {
+        method: 'POST',
+        body: body ?? {},
+        retry: false,
+      }),
+
+    getDeviceEgress: (id: DeviceId) =>
+      send<DeviceEgressResponse>(`/devices/${encodeId(id)}/egress`, {
+        // egress revision 只从 X-DF-Egress-Revision 采集，与 config revision 无关。
+        egressRevisionKey: id,
+      }),
+
+    putDeviceEgress: (id: DeviceId, body: DeviceEgressPutRequest) =>
+      send<DeviceEgressPutResponse>(`/devices/${encodeId(id)}/egress`, {
+        method: 'PUT',
+        body,
+        egressRevisionKey: id,
+      }),
+
+    applyEgress: (body: EgressApplyRequest, idempotencyKey?: string) =>
+      send<EgressApplyResponse>('/devices/egress/apply', {
+        method: 'POST',
+        body,
+        idempotencyKey: idempotencyKey ?? newIdempotencyKey(),
+      }),
   }
 }
 

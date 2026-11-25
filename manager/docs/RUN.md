@@ -228,7 +228,8 @@ WebUI：设备页 → 添加设备 → 地址 + Token → 测试连接 → 保�
 
 仓库自带 [mock_device.py](mock_device.py)：实现 status / overview / revision /
 templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Relay 的 revision
-重取与重试。
+重取与重试。自 v1.10.0 起它还实现了 egress 的五个端点，可以直接验证出口下发
+（见 §6.1）。
 
     # 终端 A：Mock 设备（18686 被占用时换成 18687 等，并同步 $DEV）
     python3 manager/docs/mock_device.py 18686
@@ -320,6 +321,90 @@ templates / apps，并在首次 `PUT /apps/{pkg}` 返回 412，用来验证 Rela
 > 独立运行 e2e 集成测试（进程内，无需端口）：
 
     cargo test -p device_faker_manager --test e2e_flow
+
+### 6.1 用 mock 设备验证 egress 下发（代理池 → 绑定 → 批量下发 → 探测）
+
+`mock_device.py` 实现了 egress 的五个端点：`GET/PUT/DELETE /api/v1/egress`、`POST /api/v1/egress/probe`、
+`GET /api/v1/egress/proxies`。所以**不需要真实设备**就能跑通「建代理 → 绑定 → 批量下发 → 回读出口」。
+与真实服务的差异只有一处：探测返回固定出口 IP `198.51.100.7`（RFC 5737 文档网段），不发真实网络请求。
+
+    # 终端 A：mock 设备（换端口时同步改 $DEV）
+    python3 manager/docs/mock_device.py 18786
+
+    # 终端 B：Manager（独立数据目录，避免污染）
+    ./target/debug/device_faker_manager --bind 127.0.0.1:18765 --data-dir /tmp/dfm-egress
+
+    # 终端 C：一条链路跑完
+    set -euo pipefail
+    M=${M:-http://127.0.0.1:18765/relay/api/v1}
+    T=${T:-admin123}
+    DEV=${DEV:-http://127.0.0.1:18786}
+
+    # 1) 注册 mock 设备（Relay 会先探测 /status + /overview）
+    DID=$(curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"name":"Mock Pixel 9","baseUrl":"'$DEV'","token":"admin123"}' "$M/devices" | jq -r .id)
+
+    # 2) 建一条代理（示例地址属文档网段；真实代理把 host/port 换掉即可）
+    PID=$(curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"name":"lab_http","type":"http","host":"198.51.100.10","port":8080,"region":"LAB"}' \
+      "$M/egress-proxies" | jq -r .id)
+
+    # 3) 绑定整机出口（只落库，pendingApply=true）
+    curl -s -X PUT -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"bindings":[{"app":"","proxyId":"'$PID'"}]}' "$M/devices/$DID/egress" \
+      | jq '{changed, pendingApply, bindings}'
+
+    # 4) 批量下发（probe=true：下发后立刻探测一次出口 IP）
+    JOB=$(curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"devices":["'$DID'"],"probe":true}' "$M/devices/egress/apply" | jq -r .jobId)
+    echo "job=$JOB"
+
+    # 5) 轮询到终态
+    for _ in $(seq 1 40); do
+      OUT=$(curl -s -H "Authorization: Bearer $T" "$M/jobs/$JOB")
+      S=$(echo "$OUT" | jq -r .status)
+      [ "$S" = queued ] || [ "$S" = running ] || break
+      sleep 0.25
+    done
+    echo "$OUT" | jq '{status, kind, total, succeeded, skipped, failed,
+                      results:[.results[]|{deviceId, app, status, code, steps:[.steps[].step]}]}'
+
+    # 6) 回读设备侧出口（deviceState 是设备端 GET /egress 的透传子集）
+    curl -s -H "Authorization: Bearer $T" "$M/devices/$DID/egress" \
+      | jq '.deviceState | {mode, effectiveMode, applied, readback, lastProbe: .health.lastProbe}'
+
+    # 7) 幂等重放：同内容再下发一次 → 仍是 ok，只是 code=egress_unchanged
+    curl -s -X POST -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"devices":["'$DID'"]}' "$M/devices/egress/apply" | jq -r .jobId
+
+    # 8) 清理：先解绑（否则删除代理会 409 egress_proxy_in_use）
+    curl -s -X PUT -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
+      -d '{"bindings":[]}' "$M/devices/$DID/egress" > /dev/null
+    curl -s -o /dev/null -w '%{http_code}\n' -X DELETE -H "Authorization: Bearer $T" "$M/egress-proxies/$PID"   # 204
+
+预期：
+
+| 步骤 | 期望 |
+| --- | --- |
+| 1 | `201`，`id` 由设备名生成（如 `mock-pixel-9`） |
+| 3 | `changed:true`、`pendingApply:true`，`bindings[0].mode=proxy` |
+| 4 | `202`，`kind=egress`，`total=1` |
+| 5 | job 终态 `succeeded`；`results[0].status=ok`、`code=null`、`steps` 含 `egress_get`/`egress_put`/`egress_probe` |
+| 6 | `mode:proxy`、`applied:true`、`readback.settingsValue="198.51.100.10:8080"`、`lastProbe.exitIp="198.51.100.7"` |
+| 7 | 新 job 同样 `succeeded`，`results[0].code="egress_unchanged"`（幂等短路，不是失败） |
+| 8 | 解绑后删除代理返回 `204` |
+
+补充说明：
+
+- **绑定值**：`proxyId` 接受代理 id、`"__DIRECT__"`（强制直连）或 `null`（清掉该行）。把应用绑成
+  `"__DIRECT__"` 后重新 apply，可以验证「设备级有代理时该应用仍直连」。
+- **mock 的 egress revision** = `sha256(configRevision ‖ "\n" ‖ egress 文档字节)`；egress 端点只回
+  `X-DF-Egress-Revision`（**不回** `X-DF-Revision` / `ETag`）。直接用 curl 摸 mock 时：`PUT` / `DELETE /egress`
+  不带 `If-Match` → `428`，值不对 → `412`（`details.resource="egress"`），`DELETE` 还必须带 `?confirm=true`。
+- **凭据不会回显**：mock 与真实服务一致，响应里只有 `hasCredentials`；`PUT /egress` 里的
+  `username` / `password` 只把 `hasCredentials` 置真（示例值请用占位符）。本版**不支持带认证的代理**：
+  带凭据的代理下发后 `hasCredentials:true`，但应用流量不会通过认证（见 [../CONFIG.md](../CONFIG.md) 的「已知限制」）。
+- **不配置 egress 时**，本节第 6 条原有的 1–12 步冒烟行为与改动前完全一致（mock 的其余端点未动）。
 
 ---
 

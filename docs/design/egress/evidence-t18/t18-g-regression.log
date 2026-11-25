@@ -1,0 +1,30 @@
+===== G 回归：设备级 PUT / probe / DELETE + 脏状态自愈 =====
+--- G-1 当前状态 ---
+127.0.0.1:18080
+  Global proxy: [127.0.0.1] 18080 xl=
+--- G-2 probe（设备级链路，应经 listener=18080）---
+probe HTTP 200
+{"ok": true, "exitIp": "198.51.100.7", "latencyMs": 10, "checkedAt": "2026-11-24T14:41:00Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}
+2026-11-24T22:41:02+0800 proto=http listener=18080 GET http://probe.fixture/ host=probe.fixture auth=0
+--- G-3 脏状态：settings delete global http_proxy → 重启服务自愈 ---
+Deleted 1 rows
+get:
+null
+global_http_proxy_exclusion_list=
+global_http_proxy_host=127.0.0.1
+global_http_proxy_port=18080
+global_proxy_pac_url=
+  Global proxy: [127.0.0.1] 18080 xl=
+[2m2026-11-24T14:41:04.849832Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mtrue [3meffective_mode[0m[2m=[0m"from_config"
+重启后 settings=127.0.0.1:18080
+  Global proxy: [127.0.0.1] 18080 xl=
+--- G-4 DELETE /egress?confirm=true（:0 无残留）---
+DELETE HTTP 200
+{"changed": true, "mode": "direct", "default": null, "applied": true, "readback": {"settingsValue": ":0", "dumpsysGlobalProxy": "Global proxy: none", "matches": true, "at": "2026-11-24T14:41:14Z"}, "warnings": []}
+:0
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+  Global proxy: none

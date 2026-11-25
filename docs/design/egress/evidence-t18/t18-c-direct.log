@@ -1,0 +1,16 @@
+===== C __DIRECT__（设备级 http_proxy 生效时）=====
+PUT HTTP 200
+settings=127.0.0.1:18080
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: http.proxyHost=<null>
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: http.proxyPort=<null>
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: socksProxyHost=<null>
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: socksProxyPort=<null>
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: selector.app.fixture=DIRECT
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: fetch.app=error=UnknownHostException
+11-24 22:39:36.025 10978 10978 I EGRESSPROBE: fetch.ip=error=SocketTimeoutException
+--- fixture（应无 app.fixture 流量）---
+app.fixture 命中数=0
+--- 同刻设备级 probe 仍应走 18080 ---
+probe HTTP 200
+{"ok": true, "exitIp": "198.51.100.7", "latencyMs": 9, "checkedAt": "2026-11-24T14:39:38Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}
+2026-11-24T22:39:40+0800 proto=http listener=18080 GET http://probe.fixture/ host=probe.fixture auth=0

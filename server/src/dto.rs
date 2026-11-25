@@ -122,6 +122,9 @@ fn map_issue_code(code: &str) -> &'static str {
         "template.name_invalid" => "invalid_template_name",
         "package.invalid" => "invalid_package",
         "package.duplicate_app" => "duplicate_app_record",
+        // egress 的两个校验码（契约 §1.8）core 已按契约命名，server 原样透传，不要收敛成 invalid_value
+        "invalid_egress_name" => "invalid_egress_name",
+        "invalid_egress_default" => "invalid_egress_default",
         "dpi.out_of_range" | "sdk_int.out_of_range" => "out_of_range",
         "android_version.invalid"
         | "security_patch.invalid"
@@ -622,6 +625,27 @@ fn check_string_fields<T: Serialize>(value: &T, path: &str, errors: &mut Vec<Val
         }
     }
 }
+/// `[egress]` 段只允许 `default`：出现 host/port/username/password 等键即 422 unknown_field。
+///
+/// core 把这类键报成 warning（`config.unknown_field`），但契约 §2.3 硬约束 1 要求 422：
+/// 0644 的 config.toml 里不允许出现任何凭据键（凭据只能进 0600 的 egress.toml）。
+pub fn egress_section_issues(document: &toml_edit::DocumentMut) -> Vec<ValidationError> {
+    let mut errors = Vec::new();
+    let Some(table) = document.get("egress").and_then(toml_edit::Item::as_table) else {
+        return errors;
+    };
+    for (key, _) in table.iter() {
+        if !device_faker_core::config::is_known_egress_key(key) {
+            errors.push(ValidationError::new(
+                format!("egress.{key}"),
+                "unknown_field",
+                format!("[egress] 只允许 default，未知字段 {key}"),
+            ));
+        }
+    }
+    errors
+}
+
 /// 从配置文本收集「文件级」警告：未知字段会被原样保留。
 pub fn document_warnings(text: &str) -> Vec<Warning> {
     let Ok(document) = text.parse::<toml_edit::DocumentMut>() else {

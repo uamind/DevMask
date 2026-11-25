@@ -1,0 +1,123 @@
+===== 准备：打开模块 debug 日志（仅测试期）=====
+debug = true
+===== A-1 PUT /egress：设备级 mac_http(18080) + 应用级 mac_http2(18082) =====
+PUT HTTP 412
+{
+  "changed": null,
+  "mode": null,
+  "default": null,
+  "apps": null,
+  "upstream": null,
+  "applied": null,
+  "readback": null
+}
+--- settings（设备级 18080）---
+:0
+===== A-2 安装探针并冷启动 =====
+Success
+Install command complete in 800 ms
+Status: ok
+Complete
+--- 探针进程内属性 ---
+--------- beginning of main
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: pid=10423
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: package=io.df.egressprobe
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: http.proxyHost=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: http.proxyPort=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: https.proxyHost=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: https.proxyPort=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: socksProxyHost=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: socksProxyPort=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: java.net.socks.username=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: java.net.socks.password=<set:false>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: java.net.useSystemProxies=<null>
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: ProxySelector=sun.net.spi.DefaultProxySelector
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: selector.app.fixture=DIRECT
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: fetch.app=error=UnknownHostException
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: fetch.ip=error=SocketTimeoutException
+11-24 22:06:48.967 10423 10423 I EGRESSPROBE: rawsocks=error=ConnectException
+--- 模块日志 [egress] ---
+[2026-11-24 22:01:15.242] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:01:15.242] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:01:15.243] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:01:15.243] [INFO] zygisk - [egress] module kept mapped for the replay window
+[2026-11-24 22:01:31.651] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:01:31.651] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=direct host=- port=- creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:01:31.652] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:01:31.652] [INFO] zygisk - [egress] module kept mapped for the replay window
+[2026-11-24 22:02:13.802] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:02:13.802] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:02:13.803] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:02:13.803] [INFO] zygisk - [egress] module kept mapped for the replay window
+--- fixture 代理日志（listener 端口归因）---
+debug = true
+[cpu_presets]
+1
+--- GET /egress 恢复后 ---
+HTTP 200
+{"configured": false, "mode": "direct", "default": null, "apps": [], "readback": {"settingsValue": ":0", "dumpsysGlobalProxy": "Global proxy: none", "matches": true, "at": "2026-11-24T14:07:03Z"}}
+===== A-1 PUT /egress =====
+If-Match=af8832209daf316b8ab91baacac90a39799d0dc1c6e2b95b568279f34da9142f
+PUT HTTP 200
+{
+  "changed": true,
+  "mode": "proxy",
+  "default": "mac_http",
+  "apps": [
+    {
+      "package": "io.df.egressprobe",
+      "egress": "mac_http2",
+      "effective": "proxy",
+      "proxy": "mac_http2"
+    }
+  ],
+  "upstream": {
+    "name": "mac_http",
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 18080,
+    "hasCredentials": false
+  },
+  "applied": true,
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T14:07:05Z"
+  }
+}
+127.0.0.1:18080
+===== A-2 冷启动探针（先 force-stop）=====
+Status: ok
+Complete
+--------- beginning of main
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: pid=10831
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: package=io.df.egressprobe
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: http.proxyHost=127.0.0.1
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: http.proxyPort=18082
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: https.proxyHost=127.0.0.1
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: https.proxyPort=18082
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: socksProxyHost=<null>
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: socksProxyPort=<null>
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: java.net.socks.username=<null>
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: java.net.socks.password=<set:false>
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: java.net.useSystemProxies=<null>
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: ProxySelector=sun.net.spi.DefaultProxySelector
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18082
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: fetch.app=status=200 body=198.51.100.8
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: fetch.ip=status=200 body=198.51.100.7
+11-24 22:07:12.796 10831 10831 I EGRESSPROBE: rawsocks=error=ConnectException
+--- 模块日志（本轮时间之后的 [egress]）---
+[2026-11-24 22:02:13.802] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:02:13.802] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:02:13.803] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:02:13.803] [INFO] zygisk - [egress] module kept mapped for the replay window
+[2026-11-24 22:07:06.794] [WARN] zygisk::hooks - [egress] proxy_selector degraded reason=of_method_missing sdk=Some(37) (libcore has no ProxySelector.of(Proxy); properties are authoritative and kept in place by the post-bind replay, so F1/F2 do not depend on it)
+[2026-11-24 22:07:06.794] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=0 selector=degraded
+[2026-11-24 22:07:06.795] [INFO] zygisk::hooks - [egress] replay hook armed image=libandroid_runtime device=65034 inode=1891 symbols=setpriority,__system_property_get
+[2026-11-24 22:07:06.795] [INFO] zygisk - [egress] module kept mapped for the replay window
+--- fixture 代理日志 ---
+2026-11-24T22:07:07+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
+2026-11-24T22:07:07+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
+2026-11-24T22:07:12+0800 proto=http listener=18080 CONNECT geller-pa.googleapis.com:443 auth=0
+2026-11-24T22:07:16+0800 proto=http listener=18080 CONNECT digitalassetlinks.googleapis.com:443 auth=0

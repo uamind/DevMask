@@ -1,7 +1,7 @@
 # Device Faker HTTP API（/api/v1）契约
 
-> 文档版本：v1（第一增量契约冻结）
-> 适用：device_faker v1.9.0 起自带的 `device_faker_server`
+> 文档版本：v1.2（第一增量 + egress 增量冻结）
+> 适用：device_faker v1.10.0 起自带的 `device_faker_server`
 > 机器可读契约：[openapi.yaml](openapi.yaml) · 面向 AI 摘要：[llms.txt](llms.txt)
 > 设计依据：[docs/dev/server-api-plan.md](dev/server-api-plan.md) 第 5 节（API 设计）与第 10 节（安全设计）、[docs/CONFIG.md](CONFIG.md)
 
@@ -18,8 +18,9 @@
 - 模板：列表、详情、整体替换、字段合并、删除、批量绑定包名、解绑单个包名
 - 应用：列表、详情（含解析结果）、内联写入或模板绑定、删除、重启
 - 包与设备：已安装包元数据、设备信息、getprop 白名单读取、用户列表
+- 出口代理（egress，v1.10.0 新增）：`GET/PUT/DELETE /api/v1/egress`、`POST /api/v1/egress/probe`、`GET /api/v1/egress/proxies`
 
-合计 **24 个端点**，总表见 §4。
+合计 **29 个端点**，总表见 §4。
 
 ### 1.2 明确不在本增量
 
@@ -93,6 +94,7 @@
 | --- | --- | --- |
 | `X-Request-Id` | 所有响应 | 客户端未提供时服务端生成 `req_<ulid>` |
 | `X-DF-Revision` | 配置 / 模板 / 应用相关的读写响应 | 不带引号的 revision，如 `9f2c…` |
+| `X-DF-Egress-Revision` | egress 端点（`/egress`、`/egress/probe`、`/egress/proxies`） | **egress revision**（不是 config revision），见 §2.5。egress 端点**不**回 `X-DF-Revision` / `ETag` |
 | `ETag` | `GET /config`、`GET /config/revision`、`GET /templates/{name}`、`GET /apps/{pkg}` | **带引号**的强校验值（RFC 9110），可直接作为 `If-Match` 回传 |
 | `Retry-After` | 429 | 秒数 |
 | `Idempotent-Replay: true` | 命中幂等键的重放响应 | 响应体为首次结果 |
@@ -120,6 +122,16 @@
 - 不匹配 → `412 config_revision_mismatch`，`details{expected, actual}`，**服务端不做自动合并**。客户端应重新 `GET` 后重放自己的变更。
 - 任何成功写入（包括只改空白或注释）都会改变 revision；写响应里的 `revision` 是新值。
 - 管理器模式的旧 WebUI 可能直接写文件绕过锁与版本号；原生模式的 API 会在响应里以 `config_revision_mismatch` 暴露这种外部变更。
+
+egress 端点（§5.25–§5.29）使用**另一套 revision**，叫 **egress revision**，因为它同时覆盖两个文件：
+
+    egressRevision = SHA-256( configRevision 的 64 位小写十六进制字符串的 UTF-8 字节 ‖ "\n" ‖ egress.toml 原始字节 )
+                     → 64 位小写十六进制（egress.toml 不存在时按空字节参与）
+
+- 任一文件变化（含只改 `egress.toml` 里的代理密码）都会改变 egress revision。
+- `PUT` / `DELETE /egress` 的 `If-Match` 比较对象是 **egress revision**；`configRevision`（响应体里的另一个字段）只用于排障，**不能**拿来做 egress 端点的 `If-Match`。
+- 缺失 `If-Match` → `428 precondition_required`；不匹配 → `412 config_revision_mismatch` 且 `details` 追加 `resource:"egress"`。
+- egress 端点**不**返回 `X-DF-Revision` / `ETag`（否则会污染 WebUI 缓存的 config revision），改用 `X-DF-Egress-Revision` 头。
 
 ### 2.6 dry_run、diff、confirm、allow_duplicate_package
 
@@ -173,7 +185,7 @@
 | --- | --- | --- |
 | `read` | 只读：状态、配置、模板、应用、包、设备 | `GET /status`、`GET /templates`、`GET /packages` |
 | `write` | 修改配置、模板、应用 | `PUT /config`、`PATCH /templates/{name}`、`PUT /apps/{pkg}` |
-| `ops` | 运行时操作：重启应用 | `POST /apps/{pkg}/restart` |
+| `ops` | 运行时操作：重启应用、出口探测 | `POST /apps/{pkg}/restart`、`POST /egress/probe` |
 | `admin` | 服务端管理：Token、设置、导入导出 | 本增量无端点，仅保留 |
 
 判定规则：
@@ -249,6 +261,11 @@
 | 22 | GET | `/api/v1/device/props` | getprop 白名单读取 | read | — |
 | 23 | GET | `/api/v1/device/users` | 用户列表 | read | — |
 | 24 | GET | `/api/v1/overview` | 设备、模板与每个应用配置汇总 | read | — |
+| 25 | GET | `/api/v1/egress` | 出口代理状态（模式 / 生效值 / 脱敏上游 / 应用覆盖 / 最近探测） | read | — |
+| 26 | PUT | `/api/v1/egress` | 写代理定义与设备级 / 应用级出口，并应用方案 A | write | If-Match 必填（egress revision） |
+| 27 | DELETE | `/api/v1/egress` | 恢复直连（清空定义与系统代理） | write | If-Match + `confirm=true` |
+| 28 | POST | `/api/v1/egress/probe` | 经当前链路探测出口 IP | ops | — |
+| 29 | GET | `/api/v1/egress/proxies` | 代理定义列表（脱敏 + 引用关系） | read | — |
 
 ---
 
@@ -266,7 +283,7 @@
 
     {
       "status": "ok",
-      "version": "1.9.0",
+      "version": "1.10.0",
       "uptimeSec": 3600
     }
 
@@ -282,8 +299,8 @@
     {
       "module": {
         "id": "device_faker",
-        "version": "v1.9.0",
-        "versionCode": 20261125
+        "version": "v1.10.0",
+        "versionCode": 20261201
       },
       "device": {
         "manufacturer": "Google",
@@ -295,7 +312,7 @@
         "abi": "arm64-v8a"
       },
       "server": {
-        "version": "1.9.0",
+        "version": "1.10.0",
         "bind": "127.0.0.1:8686",
         "uptimeSec": 3600,
         "startedAt": "2026-11-24T03:00:00Z",
@@ -310,7 +327,7 @@
         "apps": 27,
         "conflicts": 0
       },
-      "capabilities": ["config", "templates", "apps", "packages", "device", "validate"]
+      "capabilities": ["config", "templates", "apps", "packages", "device", "validate", "overview", "egress"]
     }
 
 字段说明：
@@ -526,7 +543,7 @@ Content-Type: application/json
       "revision": "1a7b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
       "previousRevision": "9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
       "dryRun": false,
-      "backupId": "20261124T031002Z-9f2c",
+      "backupId": "20261124T031002.123456789Z-9f2c5d1e",
       "diff": "--- a/config.toml\n+++ b/config.toml\n@@ -1,3 +1,4 @@\n debug = false\n+default_hide_maps = []\n",
       "diffTruncated": false,
       "warnings": []
@@ -661,7 +678,7 @@ Content-Type: application/json
       "revision": "77aabbcc…",
       "previousRevision": "9f2c5d1e…",
       "dryRun": false,
-      "backupId": "20261124T031002Z-9f2c",
+      "backupId": "20261124T031002.123456789Z-9f2c5d1e",
       "diffTruncated": false,
       "warnings": []
     }
@@ -918,7 +935,7 @@ Content-Type: application/json
 响应 `200`：
 
     {
-      "module": { "id": "device_faker", "version": "v1.9.0", "versionCode": 20261125 },
+      "module": { "id": "device_faker", "version": "v1.10.0", "versionCode": 20261201 },
       "device": {
         "manufacturer": "Google",
         "brand": "google",
@@ -929,7 +946,7 @@ Content-Type: application/json
         "abi": "arm64-v8a",
         "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
       },
-      "server": { "version": "1.9.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
+      "server": { "version": "1.10.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "pid": 4321 },
       "root": { "manager": "kernelsu", "version": "1.0.7" }
     }
 
@@ -985,14 +1002,14 @@ Content-Type: application/json
 
     {
       "revision": "9f2c5d1e…",
-      "module": { "id": "device_faker", "version": "v1.9.0", "versionCode": 20261125 },
+      "module": { "id": "device_faker", "version": "v1.10.0", "versionCode": 20261201 },
       "device": {
         "manufacturer": "Google", "brand": "google", "model": "Pixel 9",
         "device": "tokay", "android": "17", "sdk": 37, "abi": "arm64-v8a",
         "fingerprint": "google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys"
       },
       "root": { "manager": "kernelsu", "version": "1.0.7" },
-      "server": { "version": "1.9.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "startedAt": "2026-11-24T03:00:00Z", "pid": 4321 },
+      "server": { "version": "1.10.0", "bind": "127.0.0.1:8686", "uptimeSec": 3600, "startedAt": "2026-11-24T03:00:00Z", "pid": 4321 },
       "config": {
         "revision": "9f2c5d1e…", "mtime": "2026-11-24T03:00:00Z",
         "size": 9361, "exists": true, "templates": 2, "apps": 1, "conflicts": 1
@@ -1022,6 +1039,220 @@ Content-Type: application/json
 
 错误：401、403、500。
 
+### 5.25 GET /api/v1/egress
+
+- 作用域：`read`。无 `If-Match`；响应头带 `X-DF-Egress-Revision`（不带引号），**不带** `X-DF-Revision` / `ETag`。
+- 用途：一次拿到「当前出口模式 + 设备上真实读回的生效值 + 脱敏上游 + 各应用覆盖 + 最近探测」。不需要自己拼 `egress.toml`。
+
+响应 `200`（状态块字段见 §6.8）：
+
+    {
+      "revision": "5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c",
+      "configRevision": "9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
+      "configured": true,
+      "mode": "proxy",
+      "effectiveMode": "proxy",
+      "default": "office_http",
+      "failOpen": true,
+      "probeUrl": "http://checkip.example.com/",
+      "probeTimeoutSeconds": 5,
+      "exclusionList": ["10.0.0.0/8"],
+      "upstream": {
+        "name": "office_http", "type": "http",
+        "host": "198.51.100.10", "port": 8080, "hasCredentials": false
+      },
+      "proxies": [
+        { "name": "office_http", "type": "http",   "host": "198.51.100.10", "port": 8080, "hasCredentials": false },
+        { "name": "lab_socks",   "type": "socks5", "host": "198.51.100.20", "port": 1080, "hasCredentials": true }
+      ],
+      "apps": [
+        { "package": "com.example.a", "egress": "lab_socks",  "effective": "proxy",  "proxy": "lab_socks" },
+        { "package": "com.example.b", "egress": "__DIRECT__", "effective": "direct", "proxy": null }
+      ],
+      "applied": true,
+      "readback": {
+        "settingsValue": "198.51.100.10:8080",
+        "dumpsysGlobalProxy": "Global proxy: [198.51.100.10] port: 8080",
+        "matches": true,
+        "at": "2026-12-01T03:00:00Z"
+      },
+      "health": {
+        "degraded": false, "degradedSince": null, "degradedReason": null,
+        "lastProbe": {
+          "ok": true, "exitIp": "198.51.100.77", "latencyMs": 412,
+          "checkedAt": "2026-12-01T02:59:12Z", "scope": "device", "via": "proxy",
+          "proxy": "office_http", "upstreamStatus": 200, "errorCode": null
+        }
+      },
+      "egressFile": { "exists": true, "size": 412, "mtime": "2026-12-01T02:58:03Z" },
+      "warnings": []
+    }
+
+- `applied` **只描述方案 A**（设备级 HTTP 代理）：读回值与期望值是否一致；应用级注入（方案 B）无法从服务进程读回，只体现在 `apps[].effective`。
+- `warnings` 可能包含：`egress_proxy_not_found`、`egress_credentials_ignored`、`egress_auth_unsupported`（生效代理带凭据：凭据**不会生效**，`details={scope:"device"|"app", proxy, field:"username"|"password"}`，同一代理只报一次）、`egress_inline_shadows_template`、`egress_app_not_installed`、`egress_degraded_to_direct`（仅在**清直连真的落地**时出现）、`egress_settings_mismatch`（读回不一致，或 `details.reason="settings_unavailable"` 表示 `settings` 命令不可用）、`egress_perm_fixed`、`egress_probe_approximate`、`unknown_field_preserved`（egress.toml 里有未知键，已原样保留）。
+- `health.degradedReason` 取值：`probe_failed`、`settings_mismatch`、`settings_unavailable`（降级动作执行了但**清直连没落地**：此时 `effectiveMode` 报实际模式，不会谎报 `direct`）。
+
+egress 警告码一览（设备端 `warnings[]`；与 §6.6 的通用码同形状）：
+
+| code | details | 触发 |
+| --- | --- | --- |
+| `egress_proxy_not_found` | `{name, scope:"device"\|"app", package?}` | 引用的代理名在 `egress.toml` 未定义（允许写入，运行期按直连处理） |
+| `egress_credentials_ignored` | `{name}` | 设备级指向带凭据代理：方案 A 只写 `host:port` |
+| `egress_auth_unsupported` | `{scope:"device"\|"app", proxy, field:"username"\|"password"}` | 生效代理带凭据但注入不支持认证；**同一代理只报一次**，写操作照常 2xx、不阻断 |
+| `egress_inline_shadows_template` | `{package, template}` | 写应用级 `egress` 会为该包建立内联记录、整记录覆盖模板 |
+| `egress_app_not_installed` | `{package}` | 应用级覆盖的包未安装（不阻断） |
+| `egress_degraded_to_direct` | `{reason}` | 本次请求触发了 fail-open 且**清直连真的落地** |
+| `egress_settings_mismatch` | `{expected, actual}` 或 `{reason:"settings_unavailable"}` | 写后读回不一致 / `settings` 命令不可用 |
+| `egress_perm_fixed` | `{path, mode}` | `egress.toml` 权限被自愈为 0600 |
+| `egress_probe_approximate` | `{package}` | 应用级探测在服务进程内完成（结果只代表该代理定义） |
+| `egress_probe_scope_app` | 出现在 `502 egress.probe_failed` 的 `details.warnings[]` | 应用级探测失败、设备级系统代理保持不变 |
+- **带认证的代理本期不可用**：`username` / `password` 会被接收并安全存储（唯一信号 `hasCredentials`），但**应用流量不会发送认证**——SOCKS5 的 `java.net.socks.username/password` 属性进程内可读但 libcore 不发送（Android 17 实测代理侧 `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`），HTTP Basic 未实现（只注入 host/port）。带凭据的代理请用 **IP 白名单**授权，或等后续「设备内本地认证中继」（P2）。注意本接口看不出这一点：`hasCredentials:true` 只表示**存了凭据**，不表示能出网；设备的探测走服务自己的客户端（SOCKS5 下可带认证），所以「探测成功」也不等于「应用能出网」。**从 v1.10.0 起这一点会显式提示**：生效代理（设备级或应用级）带 `username`/`password` 时，`GET/PUT/DELETE /egress` 与 `POST /egress/probe` 的 `warnings` 都会带 `egress_auth_unsupported`（`details={scope, proxy, field}`，同一代理只报一次）。详见 [CONFIG.md「已知限制」](CONFIG.md#已知限制)。
+- **注入侧状态不在本响应里**：应用级出口的「后置重放」属于 Zygisk 进程内行为（`replay hook unavailable`、`proxy_selector degraded`、`replay done ... state=match|mismatch`），服务进程读不到，**不产生任何 warning / 字段**，只落 logcat 与模块日志（详见 [CONFIG.md](CONFIG.md#应用级注入如何生效后置重放)）。换言之：`apps[].effective` 只表示**配置层的生效目标**，不代表目标进程内的注入结果。
+- `egress.toml` 解析失败 → `500 internal_error`，`details.op="egress_parse"`（fail closed，不按空配置继续）。此时用 `If-Match: *` 的 `PUT /egress` 重写即可修复。
+
+错误：401、403、500。
+
+### 5.26 PUT /api/v1/egress
+
+- 作用域：`write`。**`If-Match` 必填**（egress revision，见 §2.5）。
+- 用途：写代理定义（`egress.toml`）与设备级 / 应用级出口（`config.toml` 的 `[egress].default` 与 `[[apps]].egress`），随后把设备级出口应用到 Android 的 `settings global http_proxy`。
+- 语义总则：**省略 = 不改；`null` = 清空；给了数组 = 整体替换该数组**。
+
+请求体（全部字段可选；未知字段 → 422）：
+
+| 字段 | 类型 | 省略 | `null` | 说明 |
+| --- | --- | --- | --- | --- |
+| `default` | string | 不改 | 清除设备级默认（等价直连） | 设备级代理名，须符合 §8.1 的 egress 名规则；**不接受** `"__DIRECT__"` |
+| `failOpen` | boolean | 不改 | —（不接受 null） | 代理不可用时是否放行直连（默认 `true`） |
+| `probeUrl` | string | 不改 | 恢复默认值 | 探测 URL，必须以 `http://` 开头，≤512 字符 |
+| `probeTimeoutSeconds` | integer | 不改 | — | 1..=30，默认 5 |
+| `exclusionList` | string[] | 不改 | 清除该键 | ≤32 项，每项 ≤64 字符（写 `global_http_proxy_exclusion_list`） |
+| `proxies` | object[] | 不改（**已存定义与密码原样保留**） | —（不接受 null） | **整体替换**；`[]` 清空全部定义；≤64 条 |
+| `proxies[].name` | string | 必填 | — | 代理名；同一请求内唯一 |
+| `proxies[].type` | `"http"` \| `"socks5"` | 必填 | — | 协议 |
+| `proxies[].host` | string | 必填 | — | 主机名或 IPv4；≤253 字符，不含 scheme / 端口 / 路径 |
+| `proxies[].port` | integer | 必填 | — | 1..=65535 |
+| `proxies[].username` | string | 不改**该条已存用户名** | 清除 | ≤128 字符；只写不读。**本期应用流量不使用它**（见 §5.25） |
+| `proxies[].password` | string | 不改**该条已存密码** | 清除 | ≤256 字符；只写不读。**本期应用流量不发送认证**（见 §5.25） |
+| `apps` | object[] | 不改任何应用覆盖 | 清除**所有** `[[apps]].egress` | **整体替换**：列出的应用写入/清除该键，**未列出的应用会删掉 `egress` 键**（其它机型字段不动）；`[]` 与 `null` 等价于清空全部 |
+| `apps[].package` | string | 必填 | — | 包名（可带 `@userId`） |
+| `apps[].egress` | string | **必填**（缺 → 422 `missing_required`） | 清除该应用的覆盖 | 代理名或 `"__DIRECT__"` |
+
+查询参数：
+
+| 参数 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `dry_run` | `true`/`false` | `false` | 完整校验并计算 diff，但不落盘、不改 `settings`、不备份；响应 `dryRun:true`，`revision` / `applied` 保持当前值 |
+| `diff` | `true`/`false` | `false` | 成功写入时附 unified diff（两份文件合并展示）；上限 64 KiB，超出 `diffTruncated:true` |
+
+响应 `200`（`WriteResult` 的超集，见 §6.5 与 §6.8）：
+
+    {
+      "revision": "8c1d…",
+      "previousRevision": "5b1f…",
+      "configRevision": "77aa…",
+      "dryRun": false,
+      "changed": true,
+      "backupId": "20261201T030000.987654321Z-5b1f2c3d",
+      "diffTruncated": false,
+      "mode": "proxy",
+      "effectiveMode": "proxy",
+      "applied": true,
+      "warnings": []
+    }
+
+- **幂等**：期望状态与当前状态一致时不写任何文件、不备份、mtime 不变，返回 `changed:false` 与原 `revision`；因此带同一 `If-Match` 重复提交同内容恒为 `200`。真正写入后再拿**旧** `If-Match` 重放会得到 `412`（客户端重新 `GET` 即可）。
+  - **但 `settings` 的读回/补写与「文件是否变化」无关**：文件没变（`changed:false`）时仍会读回系统代理，发现被外部改回直连就补写一次，响应保持 `changed:false`、`revision` 不变（只有读回本身不产生写入时才 `write_count=0`）。
+- 写入顺序固定：先把 `egress.toml`、`config.toml` 落盘，再在**同一把排他锁内**应用 `settings`（避免与并发写交叉）；应用失败不回滚文件（差异由 `applied` / `readback` 暴露，可重试）。
+- **diff 脱敏**：`diff=true` 与 `dry_run=true` 返回的 unified diff 会在返回前对 `username` / `password` 行做行级脱敏（值替换为 `<redacted>`，键名保留），**不会出现**旧值或新密码。
+- **fail-open 粒度**：只有**设备级**（`scope=device`，链路来自 `[egress].default`）的失败才会清直连降级；`POST /egress/probe` 的应用级失败（`scope=app`）只记 `health.lastProbe` 并在错误 `details.warnings` 里说明，**不动**设备级系统代理。
+- `backupId` 形态：`<YYYYMMDDTHHMMSS.nnnnnnnnnZ>-<revision 前 8 位>`（例 `20261201T030000.987654321Z-5b1f2c3d`）；备份文件名 `backups/egress.toml.<stamp>-<rev8>.bak`（`config.toml` 同规则，见 [SERVER.md](SERVER.md)）。
+- 本端点**不自动探测**；需要「下发 + 校验」的调用方另外调 `POST /egress/probe`。
+- 应用级 `egress` 会给该包建立内联记录（整记录覆盖模板指纹），此时返回 `egress_inline_shadows_template` 警告。
+
+错误：401、403、412、413、415、422、428、500、503。
+
+> `503 upstream_unavailable` 只表示 `settings` 命令失败或不可用（`details.component="settings"`）：文件已写入但应用/读回失败，服务端另记一行 `settings 命令执行失败`（`code` 为退出码、`stderr` 截断 ≤256 字符、不含凭据）。**不存在**名为 `settings_api_error` 的对公错误码——那是实现里的函数名。
+
+### 5.27 DELETE /api/v1/egress
+
+- 作用域：`write`。**`If-Match` 必填**；**`confirm=true` 必填**（缺失 → `400 confirmation_required`，`details.action="egress_clear"`）。
+- 用途：一键恢复直连。
+- 清除内容：`[proxies.*]` 全部定义、`[egress].default`、**所有** `[[apps]].egress`、`global_http_proxy_exclusion_list`，并执行 `settings put global http_proxy :0`（**必须用 `:0`**：`settings delete` 在 Android 17 上清不掉，实测见 [SERVER.md](SERVER.md)）；`[probe]` 段（`url` / `timeout_seconds` / `fail_open`）保留。
+- 已经是直连且无定义 → `changed:false`，不写盘、不执行 `settings`。
+- 响应 `200`：与 §5.26 同结构（`mode:"direct"`、`default:null`、`upstream:null`、`applied:true` 为正常结果）。
+
+错误：400、401、403、412、428、500、503。
+
+### 5.28 POST /api/v1/egress/probe
+
+- 作用域：`ops`。无 `If-Match`；**不支持** `Idempotency-Key`（每次都真发请求，且可能触发 fail-open）。
+- 用途：经**当前生效链路**请求 probe URL，返回出口 IP。
+
+请求体可省略（全字段可选）：
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `package` | string | `null` | `null` = 按设备级链路；给定包名 = 用该应用的生效代理定义发请求 |
+| `url` | string | `[probe].url` | 单次覆盖探测 URL；规则同 §5.26 |
+
+响应 `200`（字段见 §6.10）：
+
+    {
+      "ok": true,
+      "exitIp": "198.51.100.77",
+      "latencyMs": 412,
+      "checkedAt": "2026-12-01T03:00:00Z",
+      "scope": "device",
+      "via": "proxy",
+      "proxy": "office_http",
+      "url": "http://checkip.example.com/",
+      "upstreamStatus": 200,
+      "approximate": false,
+      "warnings": []
+    }
+
+失败（统一走错误信封，不用 200 包 `ok:false`）：
+
+| 情形 | HTTP | code | details |
+| --- | --- | --- | --- |
+| 没有任何可用出口 | 409 | `egress.not_configured` | `{scope, package?}` |
+| 探测失败 | 502 | `egress.probe_failed` | `{url, reason, timeoutMs, upstreamStatus?, scope, warnings[]}`（`scope` = `device`/`app`；`warnings` 见下） |
+| `settings` 不可用 | 503 | `upstream_unavailable` | `{component:"settings"}` |
+| `package` / `url` 非法 | 422 | `validation_failed` | `{errors:[…]}` |
+
+- 探测本身**不回落**：失败就是 502，`via` 不会因为开了 fail-open 变成 `direct`。fail-open 只影响流量链路，且**只对设备级链路生效**：当 `scope="device"`、`reason` ∈ `connect`/`dns`/`timeout`/`tls` 且 `fail_open=true` 时，服务把系统代理切成直连并在 `GET /egress` 的 `health` 里标记降级；`details.warnings` 会带一条 `egress_degraded_to_direct`（`details.cleared` 表示清直连是否真的落地）。
+- **应用级失败不降级**：`scope="app"` 的失败只记 `health.lastProbe`，`details.scope="app"`，并在 `details.warnings` 里给一条 `egress_probe_scope_app`（说明「设备级系统代理保持不变」）；不会写任何 `settings`。
+- `scope:"app"` 时 `approximate` 恒为 `true` 且附 `egress_probe_approximate` 警告：探测在**服务进程**里用该应用的代理定义发请求，不代表目标应用进程内的真实链路（注入发生在 Zygisk 侧，无回传通道）。
+
+错误：401、403、409、422、502、503、500。
+
+### 5.29 GET /api/v1/egress/proxies
+
+- 作用域：`read`。无 `If-Match`。
+- 用途：给 WebUI 下拉框与「删定义前看谁在引用」提供**脱敏**定义列表。
+
+响应 `200`：
+
+    {
+      "revision": "5b1f…",
+      "configRevision": "9f2c…",
+      "total": 2,
+      "egressFile": { "exists": true, "size": 412, "mtime": "2026-12-01T02:58:03Z" },
+      "items": [
+        { "name": "office_http", "type": "http",   "host": "198.51.100.10", "port": 8080,
+          "hasCredentials": false, "usedAsDefault": true,  "apps": [] },
+        { "name": "lab_socks",   "type": "socks5", "host": "198.51.100.20", "port": 1080,
+          "hasCredentials": true,  "usedAsDefault": false, "apps": ["com.example.a"] }
+      ],
+      "warnings": []
+    }
+
+- `items[].apps` 是引用该定义的包名（按 `[[apps]]` 顺序）；`usedAsDefault` 表示它是否是 `[egress].default`。
+- 列表**不分页**（定义上限 64 条）；**永不含** `username` / `password`，唯一凭据信号是 `hasCredentials`。
+
+错误：401、403、500。
+
 ---
 
 ## 6. 数据结构
@@ -1034,6 +1265,7 @@ Content-Type: application/json
       "debug": false,
       "default_force_denylist_unmount": false,
       "default_hide_maps": [],
+      "egress": { "default": "office_http" },
       "templates": {
         "<name>": { "packages": [], "brand": "google", "model": "Pixel 9", "sdk_int": 35, "dpi": 420 }
       },
@@ -1047,6 +1279,7 @@ Content-Type: application/json
 | `debug` | boolean | `false` | 调试日志 |
 | `default_force_denylist_unmount` | boolean | `false` | 全局 FORCE_DENYLIST_UNMOUNT 默认值 |
 | `default_hide_maps` | string[] | `[]` | 默认 maps 清理模式 |
+| `egress` | object | 省略 | 设备级出口：只允许一个键 `default`（代理名，v1.10.0 新增）。出现 `host` / `port` / `username` / `password` 等其它键 → 422 `unknown_field`（凭据只存在于 `egress.toml`） |
 | `templates` | object | `{}` | 键为模板名；**顺序即书写顺序**，服务端保留 |
 | `apps` | array | `[]` | 内联应用配置，顺序保留 |
 
@@ -1108,7 +1341,7 @@ Content-Type: application/json
 | `android_version` | string | 数字（可带点）≤16 字符 | `android_version` |
 | `sdk_int` | integer 或 `"__DELETE__"` | 1..=1000 | `sdk_int` |
 | `dpi` | integer | 120..=640 | `dpi` |
-| `custom_props` | object | 键 `^(ro|persist)\.`，值 ≤1024 字符，≤128 项 | `custom_props` |
+| `custom_props` | object | 键 `^(ro\|persist)\.`，值 ≤1024 字符，≤128 项 | `custom_props` |
 | `force_denylist_unmount` | boolean | — | `force_denylist_unmount` |
 | `hide_maps` | string[] | 每项 ≤256，≤64 项 | `hide_maps` |
 | `companion_resetprop` | boolean | — | `companion_resetprop` |
@@ -1139,12 +1372,14 @@ Content-Type: application/json
 - `package` 必填（`PUT /apps/{pkg}` 的 `config` 里可省略，路径值胜出）。
 - 内联记录是**整记录**语义：未设置字段**不**回落模板，只回落全局默认（`docs/CONFIG.md` 优先级）。
 - 同一 `package` 出现多次 → 422 `duplicate_app_record`。
+- `egress`（v1.10.0 新增）：应用级出口，取值是 `egress.toml` 里的代理名或 `"__DIRECT__"`（强制直连，会主动覆盖设备级系统代理）；未设置时继承 `[egress].default`，两者都没有则直连。非法名 → 422 `invalid_egress_name`；引用了尚未定义的代理名**允许写入**（运行期给 `egress_proxy_not_found` 警告）。模板（`[templates.*]`）**不支持** `egress`。
 
 ### 6.4 resolved（`GET /apps/{pkg}` 的解析结果）
 
 - 字符串字段：只出现在配置里显式设置过时；未设置则**省略**。
 - 布尔字段（`force_denylist_unmount`、`companion_resetprop`）与数组字段（`hide_maps`）：给出继承后的有效值。
 - 不包含 `packages` 与 `package`。
+- 也不包含 `egress`：出口链路不是机型字段，它在 `GET /apps/{pkg}` 里不可见，要看 `GET /egress` 的 `apps[].effective`（§5.25）。
 
 ### 6.5 WriteResult
 
@@ -1152,7 +1387,7 @@ Content-Type: application/json
       "revision": "新值",
       "previousRevision": "旧值",
       "dryRun": false,
-      "backupId": "20261124T031002Z-9f2c",
+      "backupId": "20261124T031002.123456789Z-9f2c5d1e",
       "diff": "--- a/config.toml\n+++ b/config.toml\n@@ …",
       "diffTruncated": false,
       "warnings": [
@@ -1189,9 +1424,71 @@ Content-Type: application/json
 | `pm_unavailable` | PackageManager 不可用 | `{}` |
 | `no_config` | `GET /apps/{pkg}` 查不到任何配置 | `{package}` |
 
+> egress 相关的警告码见 §5.25。**带认证的代理失败不会产生 warning**：服务进程看不到应用侧的认证结果，症状表现为应用自己的网络错误（见 §5.25 的认证说明与 [CONFIG.md「已知限制」](CONFIG.md#已知限制)）。
+
 ### 6.7 ValidationError
 
     { "path": "apps[0].package", "code": "invalid_package", "message": "不是合法 Java 包名" }
+
+### 6.8 egress 状态块（EgressConfig，GET/PUT/DELETE `/egress` 共用）
+
+`GET /egress` 的顶层字段（除 `revision` / `configRevision`）与 `PUT` / `DELETE` 的响应体是同一块，字段名全部 lowerCamelCase，来源全部是 **TOML 键或运行时读回值**：
+
+| 字段 | 类型 | 可空 | 来源 / TOML 键 | 说明 |
+| --- | --- | --- | --- | --- |
+| `configured` | boolean | 否 | 派生 | 至少有一条代理定义，或 `[egress].default` 非空，或任一 `[[apps]].egress` 非空 |
+| `mode` | `"proxy"` \| `"direct"` | 否 | `[egress].default` | 设备级**期望**模式：`default` 非空即 `proxy` |
+| `effectiveMode` | `"proxy"` \| `"direct"` | 否 | 派生 | 计入 fail-open 后的**实际**模式；`health.degraded && failOpen` 时为 `direct` |
+| `default` | string | 是 | `[egress].default` | 设备级代理名；`null` 表示未配置 |
+| `failOpen` | boolean | 否 | `[probe].fail_open` | 默认 `true` |
+| `probeUrl` | string | 否 | `[probe].url` | 探测目标，默认 `http://checkip.amazonaws.com/` |
+| `probeTimeoutSeconds` | integer | 否 | `[probe].timeout_seconds` | 1..=30，默认 5 |
+| `exclusionList` | string[] | 否 | **无 TOML**（落 `settings global global_http_proxy_exclusion_list`） | 逗号连接的网段清单；空数组表示该键为空 |
+| `upstream` | object\|null | 是 | 由 `default` 解析出的定义 | 脱敏摘要（§6.9）；`default` 为空或定义缺失时为 `null` |
+| `proxies` | object[] | 否 | `[proxies.*]` | 全部定义（脱敏，§6.9），按文件书写顺序 |
+| `apps` | object[] | 否 | `[[apps]]`（**只列显式写了 `egress` 的记录**） | `{package, egress, effective, proxy}`；`effective` ∈ `proxy`/`direct`，`proxy` 是生效代理名或 `null` |
+| `applied` | boolean | 否 | 派生 | **只描述方案 A**：读回值与期望值是否一致 |
+| `readback` | object | 否 | 运行时 | `{settingsValue, dumpsysGlobalProxy, matches, at}`；`settingsValue` 原文可能是 `null` / `:0` / `host:port` |
+| `health` | object | 否 | 运行时 + 最近探测 | `{degraded, degradedSince, degradedReason, lastProbe}`；`degradedReason` ∈ `probe_failed`/`settings_mismatch`/`null` |
+| `health`（范围） | — | — | — | **只描述方案 A**（设备级 `settings global http_proxy`）：探测失败或读回不一致才置 `degraded`。应用级注入的重放/selector 降级与此无关，也不会让它变 `degraded` |
+| `egressFile` | object | 否 | `egress.toml` 元数据 | `{exists, size, mtime}`，**不含内容** |
+| `warnings` | Warning[] | 否 | 运行时 | §6.6 的警告码 + §5.25 列出的 egress 警告 |
+
+`health.lastProbe` 的结构与 §5.28 的探测响应同源：`{ok, exitIp, latencyMs, checkedAt, scope, via, proxy, upstreamStatus, errorCode}`，只保留**最近一次**（内存态，服务重启后为 `null`）。
+
+### 6.9 EgressProxySummary（脱敏代理摘要）
+
+`upstream`、`proxies[]`、`GET /egress/proxies` 的 `items[]` 都基于这一组字段，**固定 5 个键**：
+
+    { "name": "office_http", "type": "http", "host": "198.51.100.10", "port": 8080, "hasCredentials": false }
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | string | 代理名（`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`） |
+| `type` | `"http"` \| `"socks5"` | 协议（TOML 键也是 `type`） |
+| `host` | string | 主机名或 IPv4，不含 scheme |
+| `port` | integer | 1..=65535 |
+| `hasCredentials` | boolean | **唯一的凭据信号**：只要 `username` 或 `password` 有值即为 `true`；任何响应都不回凭据值。**它只表示存了凭据，不表示认证可用**——本期应用流量不发送认证（§5.25） |
+
+`GET /egress/proxies` 的 `items[]` 在此基础上追加两个引用字段：`usedAsDefault`（boolean）与 `apps`（string[]）。
+
+### 6.10 ProbeResult（出口探测结果）
+
+`POST /egress/probe` 的响应体；`health.lastProbe` 复用同一组字段（去掉 `url` / `approximate` / `warnings`）：
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| `ok` | boolean | 否 | 成功时恒 `true`（失败走错误信封） |
+| `exitIp` | string | 否 | 出口 IP 字面量（IPv4 或 IPv6） |
+| `latencyMs` | integer | 否 | 从发请求到读完响应体的毫秒数 |
+| `checkedAt` | string | 否 | 探测时刻（RFC 3339 UTC） |
+| `scope` | `"device"` \| `"app"` | 否 | 请求里省略 `package` 时为 `device` |
+| `via` | `"proxy"` \| `"direct"` | 否 | 本次实际走的链路 |
+| `proxy` | string | 是 | 实际使用的代理名；`via:"direct"` 时为 `null` |
+| `url` | string | 否 | 实际请求的 URL |
+| `upstreamStatus` | integer | 是 | probe URL 返回的 HTTP 状态码；没拿到响应时为 `null` |
+| `approximate` | boolean | 否 | `scope:"app"` 时恒 `true`（探测在服务进程内完成，见 §5.28） |
+| `warnings` | Warning[] | 否 | 例如 `egress_probe_approximate` |
 
 ---
 
@@ -1237,7 +1534,9 @@ Content-Type: application/json
 | `unsupported_media_type` | 415 | false | `{supported:[…]}` | `Content-Type` 不支持 |
 | `rate_limited` | 429 | true | `{limit, windowSec}` | P4 限流预留；本增量不会返回（见 §2.9） |
 | `internal_error` | 500 | true | `null` | 未预期错误，用 `requestId` 查日志 |
-| `upstream_unavailable` | 503 | true | `{component}` | `pm` / `am` / `getprop` 调用失败或超时 |
+| `upstream_unavailable` | 503 | true | `{component}` | `pm` / `am` / `getprop` / `settings` 调用失败或超时 |
+| `egress.not_configured` | 409 | false | `{scope, package?}` | 没有任何可用出口，无法按当前链路探测（v1.10.0 新增） |
+| `egress.probe_failed` | 502 | true | `{url, reason, timeoutMs, upstreamStatus?}` | 出口探测失败；`reason` ∈ `connect`/`dns`/`timeout`/`tls`/`http_status`/`invalid_response`（v1.10.0 新增） |
 
 补充规则：
 
@@ -1260,12 +1559,14 @@ Content-Type: application/json
 | `sdk_int` | 1..=1000，或字符串 `"__DELETE__"` |
 | `android_version` | `^[0-9]{1,2}(\.[0-9]{1,2}){0,2}$` |
 | `security_patch` | `^[0-9]{4}-[0-9]{2}-[0-9]{2}$` |
-| `custom_props` 键 | `^(ro|persist)\.[A-Za-z0-9_.-]{1,120}$` |
+| `custom_props` 键 | `^(ro\|persist)\.[A-Za-z0-9_.-]{1,120}$` |
 | `custom_props` 值 | ≤1024 字符；`"__EMPTY__"`、`"__DELETE__"` 为保留标记 |
 | `hide_maps` / `default_hide_maps` | 每项 ≤256 字符，≤64 项 |
 | 普通字符串字段 | ≤512 字符 |
 | 单个模板 `packages` | ≤200 项，去重后保留首次出现顺序 |
 | `apps` 记录 | ≤500 条，`package` 唯一 |
+| egress 代理名 | `^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`（1..=64 字符）；保留值 `__DIRECT__` 不能当代理名；≤64 条定义 |
+| egress 目标 | `host` ≤253 字符且不含 scheme / 端口 / 路径；`port` 1..=65535；`username` ≤128 / `password` ≤256 |
 | 请求体 | ≤2 MiB |
 
 ### 8.2 校验错误码（`ValidationError.code`）
@@ -1281,6 +1582,8 @@ Content-Type: application/json
 | `unknown_field` | API 请求里出现未知字段 |
 | `missing_required` | 缺少必填字段（`apps[].package`） |
 | `duplicate_app_record` | 同一包名出现多条内联记录 |
+| `invalid_egress_name` | 代理名不合法（`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`，或用了保留值 `__DIRECT__`） |
+| `invalid_egress_default` | `[egress].default` 写成了 `__DIRECT__`（设备级要直连请删掉该键） |
 
 ### 8.3 冲突判定
 
@@ -1430,6 +1733,42 @@ Content-Type: application/json
 
 预期：步骤 4 返回 `valid:true`；步骤 5 首次 201、重复同内容 200；步骤 7 的 `source.type="template"`。
 
+出口代理（egress）冒烟：
+
+    # 8) 读当前出口状态（拿 egress revision；注意响应头是 X-DF-Egress-Revision）
+    curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" \
+      | jq '{revision, configured, mode, effectiveMode, default, applied, readback, health}'
+
+    # 9) 写代理定义 + 设备级出口（If-Match 用 egress revision）
+    EREV=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq -r .revision)
+    curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "If-Match: \"$EREV\"" \
+      -H "Content-Type: application/json" \
+      -d '{"default":"office_http","failOpen":true,"probeUrl":"http://checkip.example.com/","proxies":[{"name":"office_http","type":"http","host":"198.51.100.10","port":8080}]}' \
+      "$BASE/egress" | jq '{changed, applied, readback, warnings}'
+
+    # 10) 设备侧读回（需要 root）
+    adb shell su -c 'settings get global http_proxy'                  # 期望 198.51.100.10:8080
+    adb shell su -c 'dumpsys connectivity | grep -i "global proxy"'   # 期望 Global proxy: [198.51.100.10] port: 8080
+
+    # 11) 探测出口 IP
+    curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+      -d '{}' "$BASE/egress/probe" | jq '{exitIp, latencyMs, checkedAt, via}'
+
+    # 12) 应用级覆盖：只给单个应用指定 SOCKS5
+    EREV=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq -r .revision)
+    curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "If-Match: \"$EREV\"" \
+      -H "Content-Type: application/json" \
+      -d '{"proxies":[{"name":"lab_socks","type":"socks5","host":"198.51.100.20","port":1080,"username":"<USERNAME>","password":"<PASSWORD>"}],"apps":[{"package":"com.example.a","egress":"lab_socks"},{"package":"com.example.b","egress":"__DIRECT__"}]}' \
+      "$BASE/egress" | jq '.apps, .warnings'
+
+    # 13) 回滚直连（必须 confirm=true）
+    EREV=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE/egress" | jq -r .revision)
+    curl -s -X DELETE -H "Authorization: Bearer $TOKEN" -H "If-Match: \"$EREV\"" \
+      "$BASE/egress?confirm=true" | jq '{changed, mode, applied}'
+    adb shell su -c 'dumpsys connectivity | grep -i "global proxy"'   # 期望 Global proxy: none
+
+预期（egress）：步骤 9 的 `changed:true`、`applied:true`；步骤 11 `exitIp` 与代理出口一致；步骤 12 只影响 `com.example.a`（`com.example.b` 直连）；步骤 13 后 `mode:"direct"` 且设备侧显示 `Global proxy: none`。同一份内容重复 PUT（用新 revision）应返回 `changed:false`。
+
 ---
 
 ## 13. 变更记录
@@ -1438,3 +1777,4 @@ Content-Type: application/json
 | --- | --- | --- |
 | v1 | 2026-11-24 | 第一增量契约冻结：23 个端点、错误码表、revision/If-Match 语义、WebUI 注入与降级规则 |
 | v1.1 | 2026-11-25 | 新增 `GET /overview`（合计 24 个端点）；首次启动 Token 默认 `admin123`，可在管理器 WebUI 修改 |
+| v1.2 | 2026-12-01 | egress 增量（v1.10.0）：新增 `/egress`、`/egress/probe`、`/egress/proxies` 共 5 个端点（合计 29）；新增 `X-DF-Egress-Revision`、egress revision 语义、`egress.not_configured` / `egress.probe_failed` 与两个校验码；`upstream_unavailable` 的 `component` 增加 `settings` |

@@ -1,0 +1,24 @@
+=== 0. 准备：注册 mock 设备 + 建一条带凭据的代理 ===
+device: HTTP 201 id=t12-mock
+proxy : HTTP 201 id=egp_14db1e831775406089069a854d788e5b hasCredentials=True
+
+=== A. dryRun + assignments 是否真的「不落库」 ===
+dryRun 前 bindings = []
+dryRun 响应: HTTP 200 dryRun=True total=1
+plan = [{"deviceId": "t12-mock", "app": "", "mode": "proxy", "proxyName": "t12-http"}]
+dryRun 后 bindings = [{'app': '', 'mode': 'proxy', 'proxyId': 'egp_14db1e831775406089069a854d788e5b', 'proxyName': 't12-http', 'updatedAt': '2026-11-24T15:04:17Z'}]
+>>> A 结论: dryRun 之后绑定行数变化 = 1（契约 §6.10 要求 0；非 0 即 dryRun 落库）
+
+=== B. 凭据轮换后 apply 是否把新密码推到设备 ===
+PUT bindings: HTTP 200
+首次 apply: HTTP 202 status=succeeded results=[('', 'ok', None)]
+设备侧 PUT /egress 次数（首次下发后）= 1
+-- 轮换密码：PATCH /egress-proxies/{id} password=s3cret-2 --
+PATCH: HTTP 200 hasCredentials=True updatedAt=2026-11-24T15:04:17Z
+轮换后 apply: HTTP 202 status=succeeded results=[('', 'ok', 'egress_unchanged')]
+设备侧 PUT /egress 次数（轮换后）= 1（与首次相同 = 没有下发新密码）
+>>> B 结论: 轮换后 code='egress_unchanged'、PUT 次数增量=0
+
+=== C. 旁证：设备侧最后一次收到的定义（mock 内存态，GET /egress/proxies 脱敏）===
+deviceState.proxies = [{"hasCredentials": true, "host": "127.0.0.1", "name": "t12-http", "port": 18080, "type": "http"}]
+deviceState.default = t12-http

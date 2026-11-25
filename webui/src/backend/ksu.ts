@@ -7,6 +7,30 @@ import { normalizePackageName, parsePackageUser } from '../utils/package'
 import type { InstalledApp } from '../types'
 import { parseDhcpProps, parseIpAddrOutput } from '../utils/serverConfig'
 import {
+  EGRESS_PATH,
+  DEFAULT_PROBE_URL,
+  DIRECT_MARKER,
+  clearConfigEgress,
+  expectedSettingsValue,
+  parseEgressFile,
+  readConfigEgressRefs,
+  renderEgressFile,
+  setConfigEgressDefault,
+  type EgressAppView,
+  type EgressFileInfo,
+  type EgressFileModel,
+  type EgressProbeRequest,
+  type EgressProbeResult,
+  type EgressProxyInput,
+  type EgressProxySummary,
+  type EgressSnapshot,
+  type EgressUpdateInput,
+  type EgressWarning,
+  type EgressWriteResult,
+} from './egress'
+import { UnsupportedError } from './errors'
+import {
+  CONFIG_DIR,
   CONFIG_PATH,
   MODULE_DIR_FALLBACK,
   SERVER_CONFIG_PATH,
@@ -906,6 +930,392 @@ export async function getLanAddresses(): Promise<string[]> {
   return addresses
 }
 
+// ---------------------------------------------------------------------------
+// 出口代理（egress）：管理器模式的读写（契约 §1 / §2 / §3）
+// ---------------------------------------------------------------------------
+//
+// 管理器模式没有 /api/v1，因此这里直接读写两个文件：
+// - egress.toml：代理定义 + [probe]（0600，含密码，只在本进程内存里出现）；
+// - config.toml：[egress].default（只放引用，不放凭据）。
+// 写完后按 service.sh restart 拉起原生服务，让它按文件状态应用方案 A；
+// 同时本地执行一次 settings put 让保存立即生效（幂等，服务启动后会再校正一次）。
+
+const EGRESS_FILE_MODE = '600'
+const CONFIG_FILE_MODE = '644'
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function chmodPath(path: string, mode: string): Promise<void> {
+  try {
+    await execCommand(`chmod ${mode} ${shellQuotePath(path)}`)
+  } catch {
+    // 权限收紧失败不阻塞主流程：服务端读 egress.toml 时会自愈成 0600（契约 §2.2）
+  }
+}
+
+async function readTextOrEmpty(path: string): Promise<string> {
+  try {
+    return await readFile(path)
+  } catch {
+    return ''
+  }
+}
+
+interface SystemProxyReadback {
+  value: string | null
+  dumpsys: string | null
+  available: boolean
+}
+
+/** 用 shell 读方案 A 的真实读回值（settings get + dumpsys 交叉验证）。 */
+async function readSystemProxy(): Promise<SystemProxyReadback> {
+  let value: string | null
+  let dumpsys: string | null
+  let available = false
+
+  try {
+    const output = (await execCommand('settings get global http_proxy 2>/dev/null || true')).trim()
+    value = !output || output === 'null' ? null : output
+    available = true
+  } catch {
+    value = null
+  }
+
+  try {
+    const output = await execCommand(
+      "dumpsys connectivity 2>/dev/null | grep -m1 -i 'global proxy' || true"
+    )
+    const line =
+      output
+        .split('\n')
+        .map((item) => item.trim())
+        .find((item) => item.length > 0) ?? ''
+    dumpsys = line || null
+  } catch {
+    dumpsys = null
+  }
+
+  return { value, dumpsys, available }
+}
+
+/** settings 的直连表示：null / 空串 / "null" / ":0" 都算直连。 */
+function normalizeSettingsValue(value: string | null): string {
+  if (!value) return ':0'
+  const trimmed = value.trim()
+  return !trimmed || trimmed === 'null' ? ':0' : trimmed
+}
+
+async function readEgressFileInfo(text: string): Promise<EgressFileInfo> {
+  let exists: boolean
+  try {
+    exists = await fileExists(EGRESS_PATH)
+  } catch {
+    // 宿主文件接口不可用时按「文件内容是否非空」推断，界面不因一次 stat 失败整块报错
+    exists = text.length > 0
+  }
+  let mtime: string | null = null
+  if (exists) {
+    try {
+      const output = (
+        await execCommand(`stat -c %Y ${shellQuotePath(EGRESS_PATH)} 2>/dev/null || true`)
+      ).trim()
+      const seconds = Number.parseInt(output, 10)
+      if (Number.isFinite(seconds) && seconds > 0) {
+        mtime = new Date(seconds * 1000).toISOString()
+      }
+    } catch {
+      mtime = null
+    }
+  }
+  return { exists, size: text.length, mtime }
+}
+
+function toProxySummaries(proxies: readonly EgressProxyInput[]): EgressProxySummary[] {
+  return proxies.map((proxy) => ({
+    name: proxy.name,
+    type: proxy.type,
+    host: proxy.host,
+    port: proxy.port,
+    hasCredentials: Boolean(proxy.username || proxy.password),
+  }))
+}
+
+/** 代理定义 → 应用级视图（与 GET /egress 的 apps[] 同义）。 */
+function toAppViews(
+  apps: ReadonlyArray<{ package: string; egress: string | null }>,
+  proxies: readonly EgressProxySummary[]
+): EgressAppView[] {
+  return apps.flatMap((item) => {
+    const name = item.egress
+    if (!name) return []
+    if (name === DIRECT_MARKER) {
+      return [{ package: item.package, egress: name, effective: 'direct' as const, proxy: null }]
+    }
+    const proxy = proxies.find((candidate) => candidate.name === name)
+    return [
+      {
+        package: item.package,
+        egress: name,
+        effective: proxy ? ('proxy' as const) : ('direct' as const),
+        proxy: proxy ? proxy.name : null,
+      },
+    ]
+  })
+}
+
+/** 管理器模式的 GET /egress 等价物：两个文件 + settings 读回。 */
+async function readEgress(): Promise<EgressSnapshot> {
+  const egressText = await readTextOrEmpty(EGRESS_PATH)
+  const file = parseEgressFile(egressText)
+  const configText = await readTextOrEmpty(CONFIG_PATH)
+  const refs = readConfigEgressRefs(configText)
+  const system = await readSystemProxy()
+  const egressFile = await readEgressFileInfo(egressText)
+
+  const proxies = toProxySummaries(file.proxies)
+  const defaultName = refs.default
+  const upstream = proxies.find((proxy) => proxy.name === defaultName) ?? null
+  const expected = expectedSettingsValue(defaultName, proxies)
+  const actual = normalizeSettingsValue(system.value)
+  const applied = system.available ? actual === expected : false
+  const apps = toAppViews(refs.apps, proxies)
+  const mode = defaultName ? ('proxy' as const) : ('direct' as const)
+
+  const warnings: EgressWarning[] = []
+  if (file.parseError) {
+    warnings.push({ code: 'egress_parse', message: file.parseError })
+  }
+  if (refs.parseError) {
+    warnings.push({ code: 'egress_parse', message: `config.toml 解析失败：${refs.parseError}` })
+  }
+  if (defaultName && !upstream) {
+    warnings.push({
+      code: 'egress_proxy_not_found',
+      message: `设备级默认代理没有对应定义：${defaultName}`,
+    })
+  }
+  if (upstream?.hasCredentials) {
+    warnings.push({
+      code: 'egress_credentials_ignored',
+      message: '设备级代理带凭据：方案 A 只写 host:port，认证不生效',
+    })
+  }
+  if (system.available && !applied) {
+    warnings.push({
+      code: 'egress_settings_mismatch',
+      message: `settings 读回与期望不一致（期望 ${expected}，实际 ${actual}）`,
+    })
+  }
+
+  return {
+    revision: '',
+    configRevision: '',
+    configured: proxies.length > 0 || Boolean(defaultName) || apps.length > 0,
+    mode,
+    effectiveMode: mode,
+    default: defaultName,
+    failOpen: file.probe.failOpen,
+    probeUrl: file.probe.url,
+    probeTimeoutSeconds: file.probe.timeoutSeconds,
+    exclusionList: [],
+    upstream,
+    proxies,
+    apps,
+    applied,
+    readback: {
+      settingsValue: system.value,
+      dumpsysGlobalProxy: system.dumpsys,
+      matches: applied,
+      at: new Date().toISOString(),
+    },
+    health: { degraded: false, degradedSince: null, degradedReason: null, lastProbe: null },
+    egressFile,
+    warnings,
+    revisionAvailable: false,
+    readbackAvailable: system.available,
+  }
+}
+
+/** 入参里省略的凭据沿用同名的已存值（对应 PUT 语义里的「省略 = 不改」）。 */
+function mergeStoredCredentials(
+  current: readonly EgressProxyInput[],
+  incoming: readonly EgressProxyInput[]
+): EgressProxyInput[] {
+  return incoming.map((proxy) => {
+    const previous = current.find((item) => item.name === proxy.name)
+    const entry: EgressProxyInput = {
+      name: proxy.name,
+      type: proxy.type,
+      host: proxy.host,
+      port: proxy.port,
+    }
+    const username = proxy.username === undefined ? previous?.username : proxy.username
+    const password = proxy.password === undefined ? previous?.password : proxy.password
+    if (typeof username === 'string' && username) entry.username = username
+    if (typeof password === 'string' && password) entry.password = password
+    return entry
+  })
+}
+
+async function applySystemProxy(value: string): Promise<void> {
+  await execCommand(`settings put global http_proxy ${shellQuotePath(value)}`)
+}
+
+/** service.sh restart 后轮询状态，确认服务真的回来了。 */
+async function restartServerAndWait(timeoutMs = 8000): Promise<boolean> {
+  await restartServer()
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const status = await getServerControlStatus()
+      if (/server:\s*running/i.test(status)) return true
+    } catch {
+      // 服务刚拉起时 status 可能短暂失败，继续轮询
+    }
+    await sleep(500)
+  }
+  return false
+}
+
+async function writeEgress(input: EgressUpdateInput): Promise<EgressWriteResult> {
+  if (input.apps !== undefined) {
+    throw new UnsupportedError('管理器模式不支持写入应用级出口覆盖，请在原生服务模式下操作')
+  }
+
+  const file = parseEgressFile(await readTextOrEmpty(EGRESS_PATH))
+  const model: EgressFileModel = {
+    proxies: input.proxies ? mergeStoredCredentials(file.proxies, input.proxies) : file.proxies,
+    probe: {
+      url: input.probeUrl === undefined ? file.probe.url : (input.probeUrl ?? DEFAULT_PROBE_URL),
+      timeoutSeconds: input.probeTimeoutSeconds ?? file.probe.timeoutSeconds,
+      failOpen: input.failOpen ?? file.probe.failOpen,
+    },
+    parseError: null,
+  }
+
+  await mkdir(CONFIG_DIR)
+  await writeFile(EGRESS_PATH, renderEgressFile(model))
+  await chmodPath(EGRESS_PATH, EGRESS_FILE_MODE)
+
+  const configText = await readTextOrEmpty(CONFIG_PATH)
+  const nextConfig =
+    input.default === undefined ? configText : setConfigEgressDefault(configText, input.default)
+  if (nextConfig !== configText) {
+    await writeFile(CONFIG_PATH, nextConfig)
+    await chmodPath(CONFIG_PATH, CONFIG_FILE_MODE)
+  }
+
+  // 立即应用一次方案 A：管理器模式下服务不一定在跑，保存就该当场生效。
+  // 服务启动后会按 egress.toml + config.toml 再校正一次（幂等）。
+  if (input.default !== undefined) {
+    const target = input.default
+      ? model.proxies.find((item) => item.name === input.default)
+      : undefined
+    const value = target ? `${target.host}:${target.port}` : ':0'
+    try {
+      await applySystemProxy(value)
+    } catch {
+      // 写 settings 失败不算致命：readback.applied 会显示 false，界面提示
+    }
+  }
+
+  const running = await restartServerAndWait()
+  const after = await readEgress()
+  const warnings = [...after.warnings]
+  if (!running) {
+    warnings.push({
+      code: 'server_not_running',
+      message: '服务未在超时内恢复运行：出口配置已写入，但可能尚未被服务应用',
+    })
+  }
+
+  return {
+    revision: '',
+    previousRevision: null,
+    configRevision: '',
+    dryRun: false,
+    changed: true,
+    backupId: null,
+    mode: after.mode,
+    effectiveMode: after.effectiveMode,
+    default: after.default,
+    applied: after.applied,
+    upstream: after.upstream,
+    readback: after.readback,
+    health: after.health,
+    warnings,
+    revisionAvailable: false,
+  }
+}
+
+/** 一键恢复直连：清定义 + 清 config 引用 + settings 置 :0 + 重启服务。 */
+async function clearEgress(): Promise<EgressWriteResult> {
+  const file = parseEgressFile(await readTextOrEmpty(EGRESS_PATH))
+  const model: EgressFileModel = {
+    proxies: [],
+    // [probe] 是策略不是出口，保留（契约 §1.5 第 4 项）
+    probe: { ...file.probe },
+    parseError: null,
+  }
+
+  await mkdir(CONFIG_DIR)
+  await writeFile(EGRESS_PATH, renderEgressFile(model))
+  await chmodPath(EGRESS_PATH, EGRESS_FILE_MODE)
+
+  const configText = await readTextOrEmpty(CONFIG_PATH)
+  const nextConfig = clearConfigEgress(configText)
+  if (nextConfig !== configText) {
+    await writeFile(CONFIG_PATH, nextConfig)
+    await chmodPath(CONFIG_PATH, CONFIG_FILE_MODE)
+  }
+
+  // 立即切直连（必须用 :0，settings delete 无效，契约 §3.2）
+  try {
+    await applySystemProxy(':0')
+  } catch {
+    // readback 会暴露不一致
+  }
+
+  const running = await restartServerAndWait()
+  const after = await readEgress()
+  const warnings = [...after.warnings]
+  if (!running) {
+    warnings.push({
+      code: 'server_not_running',
+      message: '服务未在超时内恢复运行：出口配置已清空，但可能尚未被服务应用',
+    })
+  }
+
+  return {
+    revision: '',
+    previousRevision: null,
+    configRevision: '',
+    dryRun: false,
+    changed: true,
+    backupId: null,
+    mode: after.mode,
+    effectiveMode: after.effectiveMode,
+    default: after.default,
+    applied: after.applied,
+    upstream: after.upstream,
+    readback: after.readback,
+    health: after.health,
+    warnings,
+    revisionAvailable: false,
+  }
+}
+
+/** 管理器模式下探测必须由原生服务执行：这里明确失败，绝不假装成功。 */
+async function probeEgress(_request?: EgressProbeRequest): Promise<EgressProbeResult> {
+  throw new UnsupportedError(
+    '管理器模式下无法探测出口 IP：探测由原生服务执行，请改用服务地址访问 WebUI'
+  )
+}
+
 export function createKsuBackend(): Backend {
   return {
     runtime: 'ksu',
@@ -937,6 +1347,10 @@ export function createKsuBackend(): Backend {
     getLanAddresses,
     openDeepLink,
     fetchOnlineTemplates,
+    readEgress,
+    writeEgress,
+    clearEgress,
+    probeEgress,
   }
 }
 

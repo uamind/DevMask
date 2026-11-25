@@ -30,13 +30,16 @@ use crate::store;
 pub mod apps;
 pub mod config;
 pub mod device;
+pub mod egress;
 pub mod overview;
 pub mod packages;
 pub mod schema;
 pub mod templates;
 
-/// 契约里 24 个操作的 (method, path)，用于契约测试与路由双向校验。
-pub const CONTRACT_OPERATIONS: [(&str, &str); 24] = [
+/// 契约里 29 个操作的 (method, path)，用于契约测试与路由双向校验。
+///
+/// 本增量（egress）+5：GET/PUT/DELETE /egress、POST /egress/probe、GET /egress/proxies。
+pub const CONTRACT_OPERATIONS: [(&str, &str); 29] = [
     ("GET", "/api/v1/healthz"),
     ("GET", "/api/v1/status"),
     ("GET", "/api/v1/overview"),
@@ -61,10 +64,15 @@ pub const CONTRACT_OPERATIONS: [(&str, &str); 24] = [
     ("GET", "/api/v1/device"),
     ("GET", "/api/v1/device/props"),
     ("GET", "/api/v1/device/users"),
+    ("GET", "/api/v1/egress"),
+    ("PUT", "/api/v1/egress"),
+    ("DELETE", "/api/v1/egress"),
+    ("POST", "/api/v1/egress/probe"),
+    ("GET", "/api/v1/egress/proxies"),
 ];
 
 /// 本增量已实现的能力标签（契约固定顺序）。
-pub const CAPABILITIES: [&str; 7] = [
+pub const CAPABILITIES: [&str; 8] = [
     "config",
     "templates",
     "apps",
@@ -72,10 +80,24 @@ pub const CAPABILITIES: [&str; 7] = [
     "device",
     "validate",
     "overview",
+    "egress",
 ];
 
 const X_DF_REVISION: HeaderName = HeaderName::from_static("x-df-revision");
 const ETAG: HeaderName = HeaderName::from_static("etag");
+const X_DF_EGRESS_REVISION: HeaderName = HeaderName::from_static("x-df-egress-revision");
+
+/// 给 egress 响应加 X-DF-Egress-Revision。
+///
+/// **不要**在 egress 端点上用 [with_revision] / [with_etag]：既有 WebUI 的传输层会把任何
+/// 响应上的 X-DF-Revision / ETag 当成 config revision 缓存，一次 GET /egress 就会让
+/// 下一次 PUT /config 必然 412（契约 §1.1）。
+pub fn with_egress_revision(mut response: Response, revision: &str) -> Response {
+    if let Ok(value) = HeaderValue::from_str(revision) {
+        response.headers_mut().insert(X_DF_EGRESS_REVISION, value);
+    }
+    response
+}
 
 /// 给响应加 `X-DF-Revision`（不带引号）。
 pub fn with_revision(mut response: Response, revision: &str) -> Response {
@@ -304,6 +326,6 @@ packages = ["com.example.three"]
         for (method, path) in CONTRACT_OPERATIONS {
             assert!(seen.insert((method, path)), "{method} {path} 重复");
         }
-        assert_eq!(seen.len(), 24);
+        assert_eq!(seen.len(), 29);
     }
 }

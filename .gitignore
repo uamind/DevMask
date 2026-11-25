@@ -11,3 +11,7 @@ website/docs/.vitepress/cache/
 # Local agent/team state and Python bytecode
 .agent-teams/
 __pycache__/
+
+# Egress 探针 APK 的中间产物（由 fixtures/probe-app/build.sh 重新生成）
+docs/design/egress/fixtures/probe-app/build/
+docs/design/egress/fixtures/probe-app/*.idsig

@@ -26,14 +26,24 @@ import type {
   ApplyBulkRequest,
   AppsMatrixResponse,
   AuditEntry,
+  CreateEgressProxyRequest,
   DeviceDetail,
+  DeviceEgressResponse,
   DeviceSummary,
+  EgressApplyPlanItem,
+  EgressApplyRequest,
+  EgressProbeResponse,
+  EgressProxy,
+  EgressProxyDetail,
+  EgressProxyQuery,
   HealthResponse,
   Job,
   JsonObject,
   ManagerOverviewResponse,
   RotateTokenResponse,
   TemplateSummary,
+  UpdateEgressProxyRequest,
+  UpdateEgressProxyResponse,
   Warning,
 } from '../api/types'
 import { appDefFor, knownAppPackages } from '../appCatalog'
@@ -123,6 +133,15 @@ export const useManagerStore = defineStore('manager', () => {
 
   // ---------------------------------------------------------------- state
   const devices = ref<DeviceSummary[]>([])
+  // 出口代理（egress）：代理池列表与每台设备的绑定/实时状态缓存。
+  const egressProxies = ref<EgressProxy[]>([])
+  const egressProxyTotal = ref(0)
+  const egressLoading = ref(false)
+  const egressSaving = ref(false)
+  const egressProbingIds = ref<string[]>([])
+  const deviceEgressById = ref<Record<string, DeviceEgressResponse>>({})
+  /** 代理池当前筛选条件（增删改后复用，避免列表与工具栏筛选不一致）。 */
+  const egressQueryState = ref<EgressProxyQuery>({})
   const templateSummaries = ref<TemplateSummary[]>([])
   const matrixData = ref<AppsMatrixResponse | null>(null)
   const matrixNextCursor = ref<string | null>(null)
@@ -234,6 +253,20 @@ export const useManagerStore = defineStore('manager', () => {
     return Math.round(samples.reduce((sum, value) => sum + value, 0) / samples.length)
   })
 
+  /** 代理池里有绑定（整机或应用级）的代理数量。 */
+  const boundProxyCount = computed(
+    () =>
+      egressProxies.value.filter((proxy) => proxy.boundDevices > 0 || proxy.boundApps > 0).length
+  )
+
+  /** 设备级没有代理绑定的设备（DevicesPage「未配代理」筛选 + 批量绑定候选）。 */
+  const devicesWithoutEgress = computed(() => devices.value.filter((device) => !hasDeviceEgress(device)))
+
+  /** 设备级代理摘要（DeviceSummary.egress）是否指向一个代理。 */
+  function hasDeviceEgress(device: DeviceSummary): boolean {
+    return device.egress?.mode === 'proxy' && Boolean(device.egress?.proxyName)
+  }
+
   // ---------------------------------------------------------------- helpers
   function deviceById(id: string): DeviceSummary | undefined {
     return devices.value.find((device) => device.id === id)
@@ -262,6 +295,19 @@ export const useManagerStore = defineStore('manager', () => {
 
   function isSyncing(id: string): boolean {
     return syncingIds.value.includes(id)
+  }
+
+  function egressProxyById(id: string): EgressProxy | undefined {
+    return egressProxies.value.find((proxy) => proxy.id === id)
+  }
+
+  /** 某台设备最近一次 GET /devices/{id}/egress 的结果（未拉取过为 null）。 */
+  function deviceEgressState(deviceId: string): DeviceEgressResponse | null {
+    return deviceEgressById.value[deviceId] ?? null
+  }
+
+  function isProbingProxy(id: string): boolean {
+    return egressProbingIds.value.includes(id)
   }
 
   function clearError(): void {
@@ -302,6 +348,9 @@ export const useManagerStore = defineStore('manager', () => {
     try {
       const mock = await import('../mock/data')
       devices.value = mock.mockDevices.map((device) => ({ ...device, tags: [...device.tags] }))
+      egressProxies.value = mock.mockEgressProxies.map((proxy) => ({ ...proxy, tags: [...proxy.tags] }))
+      egressProxyTotal.value = mock.mockEgressProxies.length
+      deviceEgressById.value = mock.mockDeviceEgress
       templateSummaries.value = mock.mockTemplates.map((template) => ({ ...template }))
       matrixData.value = mock.mockMatrix
       matrixNextCursor.value = null
@@ -528,6 +577,196 @@ export const useManagerStore = defineStore('manager', () => {
     return client.getDevice(id)
   }
 
+  // ---------------------------------------------------------------- egress
+  // 契约：docs/plans/egress-contract.md §6。所有写操作都不带 config revision；
+  // egress revision 由 client.ts 从 X-DF-Egress-Revision 采集，互不覆盖。
+
+  async function loadEgressProxies(query?: EgressProxyQuery): Promise<void> {
+    if (query) egressQueryState.value = query
+    const active = egressQueryState.value
+    if (mockMode) {
+      egressLoading.value = true
+      try {
+        const mock = await import('../mock/data')
+        const keyword = (active.q ?? '').trim().toLowerCase()
+        const items = mock.mockEgressProxies.filter((proxy) => {
+          if (active.enabled !== undefined && proxy.enabled !== active.enabled) return false
+          if (!keyword) return true
+          return `${proxy.name} ${proxy.host} ${proxy.region ?? ''}`
+            .toLowerCase()
+            .includes(keyword)
+        })
+        egressProxies.value = items.map((proxy) => ({ ...proxy, tags: [...proxy.tags] }))
+        egressProxyTotal.value = items.length
+      } finally {
+        egressLoading.value = false
+      }
+      return
+    }
+    egressLoading.value = true
+    try {
+      const response = await client.listEgressProxies({ limit: PAGE_LIMIT, ...active })
+      egressProxies.value = response.items
+      egressProxyTotal.value = response.total
+    } catch (cause) {
+      reportError(cause, '加载代理池失败')
+    } finally {
+      egressLoading.value = false
+    }
+  }
+
+  /** 静默刷新代理池（探测失败后同步 lastCheck 用）。 */
+  async function reloadEgressProxiesQuiet(): Promise<void> {
+    if (mockMode) return
+    try {
+      const response = await client.listEgressProxies({
+        limit: PAGE_LIMIT,
+        ...egressQueryState.value,
+      })
+      egressProxies.value = response.items
+      egressProxyTotal.value = response.total
+    } catch {
+      // 刷新失败不影响主流程
+    }
+  }
+
+  async function loadEgressProxyDetail(id: string): Promise<EgressProxyDetail> {
+    if (mockMode) {
+      const mock = await import('../mock/data')
+      const detail = mock.mockEgressProxyDetails[id]
+      if (!detail) throw previewOnly()
+      return detail
+    }
+    return client.getEgressProxy(id)
+  }
+
+  async function createProxy(input: CreateEgressProxyRequest): Promise<EgressProxy> {
+    if (mockMode) throw previewOnly()
+    egressSaving.value = true
+    try {
+      const created = await client.createEgressProxy(input)
+      await loadEgressProxies()
+      await reloadAuditQuiet()
+      return created
+    } catch (cause) {
+      throw reportErrorThrown(cause, '创建代理失败')
+    } finally {
+      egressSaving.value = false
+    }
+  }
+
+  async function updateProxy(
+    id: string,
+    patch: UpdateEgressProxyRequest
+  ): Promise<UpdateEgressProxyResponse> {
+    if (mockMode) throw previewOnly()
+    egressSaving.value = true
+    try {
+      const updated = await client.updateEgressProxy(id, patch)
+      const { warnings: _warnings, ...proxy } = updated
+      egressProxies.value = egressProxies.value.map((item) =>
+        item.id === proxy.id ? proxy : item
+      )
+      await reloadAuditQuiet()
+      return updated
+    } catch (cause) {
+      throw reportErrorThrown(cause, '更新代理失败')
+    } finally {
+      egressSaving.value = false
+    }
+  }
+
+  async function deleteProxy(id: string): Promise<void> {
+    if (mockMode) throw previewOnly()
+    egressSaving.value = true
+    try {
+      await client.deleteEgressProxy(id)
+      egressProxies.value = egressProxies.value.filter((proxy) => proxy.id !== id)
+      egressProxyTotal.value = Math.max(0, egressProxyTotal.value - 1)
+      // 绑定摘要挂在设备列表里，删除后重新拉一次（不含代理的设备不受影响）。
+      const devicesResult = await client.listDevices({ limit: PAGE_LIMIT })
+      devices.value = devicesResult.devices
+      await reloadAuditQuiet()
+    } catch (cause) {
+      throw reportErrorThrown(cause, '删除代理失败')
+    } finally {
+      egressSaving.value = false
+    }
+  }
+
+  async function probeProxy(id: string, url?: string): Promise<EgressProbeResponse> {
+    if (mockMode) throw previewOnly()
+    egressProbingIds.value = [...egressProbingIds.value, id]
+    try {
+      const result = await client.probeEgressProxy(id, url ? { url } : {})
+      // 就地更新 lastCheck（后端同时写了一条 manager 来源的 egress_checks）。
+      egressProxies.value = egressProxies.value.map((proxy) =>
+        proxy.id === id
+          ? {
+              ...proxy,
+              lastCheck: {
+                source: 'manager' as const,
+                deviceId: null,
+                app: '',
+                ok: true,
+                exitIp: result.exitIp,
+                latencyMs: result.latencyMs,
+                errorCode: null,
+                checkedAt: result.checkedAt,
+              },
+            }
+          : proxy
+      )
+      await reloadAuditQuiet()
+      return result
+    } catch (cause) {
+      // 失败也写了一条 ok=0 的 egress_checks：拉一次让「最近探测」显示原因。
+      await reloadEgressProxiesQuiet()
+      throw cause
+    } finally {
+      egressProbingIds.value = egressProbingIds.value.filter((item) => item !== id)
+    }
+  }
+
+  async function loadDeviceEgress(deviceId: string): Promise<DeviceEgressResponse> {
+    if (mockMode) {
+      const mock = await import('../mock/data')
+      const cached = mock.mockDeviceEgress[deviceId] ?? {
+        deviceId,
+        bindings: [],
+        deviceState: null,
+        warnings: [],
+      }
+      deviceEgressById.value = { ...deviceEgressById.value, [deviceId]: cached }
+      return cached
+    }
+    const response = await client.getDeviceEgress(deviceId)
+    deviceEgressById.value = { ...deviceEgressById.value, [deviceId]: response }
+    return response
+  }
+
+  async function applyEgress(
+    body: EgressApplyRequest
+  ): Promise<{ job: Job | null; plan: EgressApplyPlanItem[] | null }> {
+    if (mockMode) throw previewOnly()
+    egressSaving.value = true
+    try {
+      const accepted = await client.applyEgress(body)
+      if ('plan' in accepted) return { job: null, plan: accepted.plan }
+      const job = await pollJob(accepted.jobId)
+      const devicesResult = await client.listDevices({ limit: PAGE_LIMIT })
+      devices.value = devicesResult.devices
+      await refreshAggregates()
+      await reloadEgressProxiesQuiet()
+      await reloadAuditQuiet()
+      return { job, plan: null }
+    } catch (cause) {
+      throw reportErrorThrown(cause, '下发出口代理失败')
+    } finally {
+      egressSaving.value = false
+    }
+  }
+
   // ---------------------------------------------------------------- apply
   async function pollJob(jobId: string): Promise<Job> {
     const startedAt = Date.now()
@@ -676,11 +915,20 @@ export const useManagerStore = defineStore('manager', () => {
     tokenVisible,
     mockMode,
     matrixNextCursor,
+    // egress state
+    egressProxies,
+    egressProxyTotal,
+    egressLoading,
+    egressSaving,
+    egressProbingIds,
+    deviceEgressById,
     // derived
     onlineCount,
     offlineCount,
     deviceCount,
     averageLatencyMs,
+    boundProxyCount,
+    devicesWithoutEgress,
     // getters
     deviceById,
     appById,
@@ -688,6 +936,10 @@ export const useManagerStore = defineStore('manager', () => {
     configFor,
     appCountForDevice,
     isSyncing,
+    hasDeviceEgress,
+    egressProxyById,
+    deviceEgressState,
+    isProbingProxy,
     // actions
     load,
     refreshHealth,
@@ -698,6 +950,16 @@ export const useManagerStore = defineStore('manager', () => {
     syncDevice,
     syncAll,
     getDeviceDetail,
+    // egress actions
+    loadEgressProxies,
+    reloadEgressProxiesQuiet,
+    loadEgressProxyDetail,
+    createProxy,
+    updateProxy,
+    deleteProxy,
+    probeProxy,
+    loadDeviceEgress,
+    applyEgress,
     batchApply,
     setAppConfig,
     removeAppConfig,

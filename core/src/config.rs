@@ -30,12 +30,143 @@ pub const DELETE_MARKER: &str = "__DELETE__";
 /// 字符串字段的「写空值」标记（`""` 在配置里表示未设置，故另设标记）。
 pub const EMPTY_MARKER: &str = "__EMPTY__";
 
+/// 应用级出口代理的「强制直连」保留值（docs/plans/egress-contract.md §2.4）。
+///
+/// 它不是代理名：不能写进设备级 `[egress].default`，也不能出现在 `egress.toml` 的
+/// `[proxies]` 表名里；只允许作为 `[[apps]].egress` 的取值。
+pub const DIRECT_MARKER: &str = "__DIRECT__";
+
+/// 代理名字符集与长度（契约 §2.5）：`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`。
+///
+/// 同一套规则三处复用：`egress.toml` 的表名、`config.toml` 的 `[egress].default`、
+/// `[[apps]].egress`（后者额外允许保留值 `__DIRECT__`）。
+pub const EGRESS_PROXY_NAME_PATTERN: &str = "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$";
+
+/// 代理名长度上限（字符数；字符集限定 ASCII，因此与字节数相同）。
+pub const EGRESS_PROXY_NAME_MAX: usize = 64;
+
 /// `sdk_int` 的合法区间（校验与 JSON Schema 共用）。
 pub const SDK_INT_MIN: u32 = 1;
 pub const SDK_INT_MAX: u32 = 1000;
 
 fn valid_dpi(value: Option<u32>) -> Option<u32> {
     value.filter(|dpi| (DPI_MIN..=DPI_MAX).contains(dpi))
+}
+
+/// 代理名是否符合 EGRESS_PROXY_NAME_PATTERN 的字符集与长度。
+///
+/// 不排除保留值 __DIRECT__（它恰好满足字符集）；判断「能否当代理名」请用
+/// is_valid_egress_proxy_name。
+pub fn is_egress_name_shaped(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let Some((first, rest)) = bytes.split_first() else {
+        return false;
+    };
+    if bytes.len() > EGRESS_PROXY_NAME_MAX {
+        return false;
+    }
+    (first.is_ascii_alphanumeric() || *first == b'_')
+        && rest
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
+}
+
+/// 能否作为 egress.toml 里的代理名：字符集/长度合法，且不是保留值 __DIRECT__。
+pub fn is_valid_egress_proxy_name(value: &str) -> bool {
+    value != DIRECT_MARKER && is_egress_name_shaped(value)
+}
+
+/// 能否作为 [[apps]].egress 的取值：普通代理名或保留值 __DIRECT__。
+///
+/// 空串在配置语义里等价于「未设置」（契约 §2.4），由调用方先行过滤。
+pub fn is_valid_egress_app_value(value: &str) -> bool {
+    value == DIRECT_MARKER || is_egress_name_shaped(value)
+}
+
+/// JSON Schema 专用：把代理名规则描述成字符串 schema（不参与 serde 解析）。
+#[cfg(feature = "schema")]
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct EgressProxyNameSchema;
+
+/// JSON Schema 专用：[[apps]].egress 的取值（代理名或 __DIRECT__）。
+#[cfg(feature = "schema")]
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct EgressAppNameSchema;
+
+#[cfg(feature = "schema")]
+fn egress_name_schema(
+    pattern: String,
+    description: &str,
+    reserved: Option<&str>,
+) -> schemars::schema::Schema {
+    use schemars::schema::{
+        InstanceType, Metadata, Schema, SchemaObject, StringValidation, SubschemaValidation,
+    };
+
+    let mut object = SchemaObject {
+        instance_type: Some(InstanceType::String.into()),
+        string: Some(Box::new(StringValidation {
+            pattern: Some(pattern),
+            ..Default::default()
+        })),
+        metadata: Some(Box::new(Metadata {
+            description: Some(description.to_owned()),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    if let Some(reserved) = reserved {
+        object.subschemas = Some(Box::new(SubschemaValidation {
+            not: Some(Box::new(Schema::Object(SchemaObject {
+                const_value: Some(serde_json::Value::String(reserved.to_owned())),
+                ..Default::default()
+            }))),
+            ..Default::default()
+        }));
+    }
+    Schema::Object(object)
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for EgressProxyNameSchema {
+    fn is_referenceable() -> bool {
+        // 内联进 EgressSection.default：schema 直接是 {type:["string","null"], pattern, not}。
+        false
+    }
+
+    fn schema_name() -> String {
+        "EgressProxyName".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+        egress_name_schema(
+            EGRESS_PROXY_NAME_PATTERN.to_owned(),
+            "代理名：字母/数字/下划线开头，其后只允许字母、数字、下划线、点、减号，最长 64 字符；设备级 default 不接受 __DIRECT__",
+            Some(DIRECT_MARKER),
+        )
+    }
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for EgressAppNameSchema {
+    fn is_referenceable() -> bool {
+        // 内联进 AppConfig.egress：schema 直接是 {type:["string","null"], pattern}。
+        false
+    }
+
+    fn schema_name() -> String {
+        "EgressAppName".to_owned()
+    }
+
+    fn json_schema(_: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+        egress_name_schema(
+            format!("^({DIRECT_MARKER}|[A-Za-z0-9_][A-Za-z0-9_.-]{{0,63}})$"),
+            "应用级出口：代理名，或 __DIRECT__（强制直连，显式覆盖设备级系统代理）",
+            None,
+        )
+    }
 }
 
 /// `ro.product.*` 会按属性来源顺序读取不同分区的副本。模板字段必须同步这些副本，
@@ -327,6 +458,26 @@ fn expand_known_custom_property(map: &mut HashMap<String, String>, key: &str, va
     }
 }
 
+/// `config.toml` 顶层 `[egress]` 段：设备级出口代理的**引用**。
+///
+/// 这里只放代理名，不放地址与凭据——`config.toml` 是 0644、可导出、可分享的；
+/// 真正的 host/port/username/password 在 `egress.toml`（0600，由 server 维护，
+/// core 既不读也不写该文件）。
+///
+/// - `default` 省略、整段缺失或空串 = 直连；
+/// - `default` **不接受** `__DIRECT__`（直连就是删掉该键），校验报 `invalid_egress_default`；
+/// - 指向的代理名在 `egress.toml` 里未定义是允许的（跨文件解耦，运行期再处理）。
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct EgressSection {
+    /// 设备级默认代理名（§2.5 字符集）；省略或空串 = 直连
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<EgressProxyNameSchema>"))]
+    pub default: Option<String>,
+}
+
 /// 机型模板
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, Serialize)]
@@ -504,6 +655,13 @@ pub struct AppConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub companion_resetprop: Option<bool>,
+    /// 出口代理：代理名（§2.5 字符集）或 `__DIRECT__`（强制直连，显式覆盖设备级系统代理）。
+    ///
+    /// 键不存在 = 继承 `[egress].default`；空串同样视为未设置；模板不支持该字段。
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<EgressAppNameSchema>"))]
+    pub egress: Option<String>,
 }
 
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -528,6 +686,10 @@ pub struct Config {
     /// 要从 /proc/self/maps 中清除的属性映射模式列表（默认不启用）
     #[serde(default)]
     pub default_hide_maps: Vec<String>,
+    /// 出口代理引用（设备级默认）；凭据在 `egress.toml`，core 只见代理名
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub egress: Option<EgressSection>,
 }
 
 impl Config {
@@ -1058,6 +1220,7 @@ pub const CONFIG_KEYS: &[&str] = &[
     "templates",
     "apps",
     "default_hide_maps",
+    "egress",
 ];
 
 /// `[templates.<name>]` 已知键（与结构体字段顺序一致；未知键检测用）。
@@ -1119,7 +1282,14 @@ pub const APP_KEYS: &[&str] = &[
     "force_denylist_unmount",
     "hide_maps",
     "companion_resetprop",
+    "egress",
 ];
+
+/// `[egress]` 已知键（契约 §2.3 硬约束 1：只允许 `default`）。
+///
+/// `host` / `port` / `type` / `username` / `password` 等凭据键出现在 0644 的
+/// `config.toml` 里一律按未知字段报出，由 server 升级成 422。
+pub const EGRESS_KEYS: &[&str] = &["default"];
 
 /// 顶层已知键判断。
 pub fn is_known_config_key(key: &str) -> bool {
@@ -1134,4 +1304,9 @@ pub fn is_known_template_key(key: &str) -> bool {
 /// 应用已知键判断。
 pub fn is_known_app_key(key: &str) -> bool {
     APP_KEYS.contains(&key)
+}
+
+/// `[egress]` 已知键判断。
+pub fn is_known_egress_key(key: &str) -> bool {
+    EGRESS_KEYS.contains(&key)
 }

@@ -15,6 +15,7 @@
 //! - 模块侧只做一次 `GetSpec{keys}` 往返 + 一次 TOML 解析，无磁盘 IO。
 
 use crate::config::{Config, MergedAppConfig, NumberSetting};
+use crate::egress::{self, EgressProxy};
 use log::{info, warn};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -22,8 +23,8 @@ use std::time::SystemTime;
 
 /// 已渲染的 spec 表：包名 → TOML 文本。
 static SPECS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
-/// 最近一次渲染依据的 config.toml mtime。
-static LAST_RENDER: Mutex<Option<SystemTime>> = Mutex::new(None);
+/// 最近一次渲染依据的 mtime 快照（config.toml + egress.toml）。
+static LAST_RENDER: Mutex<Option<RenderStamp>> = Mutex::new(None);
 static WATCHER: OnceLock<()> = OnceLock::new();
 
 /// 按顺序返回第一个命中的 spec 文本（`pkg@uid` → 裸包名）。
@@ -123,7 +124,12 @@ fn app_table(merged: &MergedAppConfig, package: &str) -> toml::Value {
     toml::Value::Table(app)
 }
 
-fn render_doc(config: &Config, merged: &MergedAppConfig, package: &str) -> String {
+fn render_doc(
+    config: &Config,
+    merged: &MergedAppConfig,
+    package: &str,
+    proxy: Option<&EgressProxy>,
+) -> String {
     let mut root = toml::map::Map::new();
     root.insert("debug".to_string(), toml::Value::Boolean(config.debug));
     root.insert(
@@ -144,6 +150,12 @@ fn render_doc(config: &Config, merged: &MergedAppConfig, package: &str) -> Strin
         "apps".to_string(),
         toml::Value::Array(vec![app_table(merged, package)]),
     );
+    // 出口代理（方案 B，契约 §5.1）：**只有真的解析出代理才写这个小节**。
+    // 「未配置」必须表现为「没有 [egress_proxy]」，模块侧据此完全跳过注入——
+    // 老配置（没有 [egress] / [[apps]].egress）的 spec 与改动前逐字节一致。
+    if let Some(proxy) = proxy {
+        egress::insert_spec_section(&mut root, proxy);
+    }
     toml::to_string(&toml::Value::Table(root)).unwrap_or_default()
 }
 
@@ -156,31 +168,55 @@ fn render_map(config: &Config) -> HashMap<String, String> {
     packages.sort();
     packages.dedup();
 
+    // 代理定义只读一次（egress.toml 是 0600，只有 companion 所在的 root 域读得到；
+    // 模块进程不碰这个文件，见 egress 模块的文档）。
+    let proxies = egress::load_proxies();
+
     let mut table = HashMap::with_capacity(packages.len());
     for package in packages {
         if let Some(merged) = config.get_merged_config(&package) {
-            table.insert(package.clone(), render_doc(config, &merged, &package));
+            let proxy = egress::resolve_for_package(config, &proxies, &package);
+            table.insert(
+                package.clone(),
+                render_doc(config, &merged, &package, proxy.as_ref()),
+            );
         }
     }
     table
 }
 
-/// companion 侧调用：config.toml 的 mtime 变了才重新渲染内存表。
+/// 渲染依据的 mtime 快照：config.toml 必有，egress.toml 可能不存在。
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RenderStamp {
+    config: SystemTime,
+    egress: Option<SystemTime>,
+}
+
+/// 取当前的 mtime 快照；config.toml 读不到（还没写下来）时返回 `None`。
+fn render_stamp() -> Option<RenderStamp> {
+    let config = std::fs::metadata(crate::CONFIG_PATH)
+        .ok()?
+        .modified()
+        .ok()?;
+    let egress = std::fs::metadata(egress::EGRESS_PATH)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok());
+    Some(RenderStamp { config, egress })
+}
+
+/// companion 侧调用：config.toml / egress.toml 的 mtime 变了才重新渲染内存表。
 pub fn maybe_render() {
-    let Ok(metadata) = std::fs::metadata(crate::CONFIG_PATH) else {
-        return;
-    };
-    let Ok(mtime) = metadata.modified() else {
+    let Some(stamp) = render_stamp() else {
         return;
     };
     {
         let mut last = LAST_RENDER
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if last.as_ref() == Some(&mtime) {
+        if last.as_ref() == Some(&stamp) {
             return;
         }
-        *last = Some(mtime);
+        *last = Some(stamp);
     }
 
     match crate::load_config() {

@@ -7,6 +7,7 @@ mod atexit;
 mod companion;
 mod config;
 mod cow_props;
+mod egress;
 #[cfg(target_os = "android")]
 mod fg_observer;
 #[cfg(target_os = "android")]
@@ -24,7 +25,7 @@ use std::{
 use anyhow::Context;
 use companion::{handle_companion_request, spoof_system_props_via_companion};
 use config::Config;
-use hooks::hook_build_fields;
+use hooks::{apply_egress_proxy, arm_egress_replay, egress_replay_active, hook_build_fields};
 use jni::{EnvUnowned, errors::ThrowRuntimeExAndDefault};
 use log::{LevelFilter, error, info, warn};
 use zygisk_api::{
@@ -120,7 +121,16 @@ impl ZygiskModule for MyModule {
         _env: EnvUnowned,
         _args: &<V4 as ZygiskRaw>::AppSpecializeArgs,
     ) {
-        api.set_option(ZygiskOption::DlCloseModuleLibrary);
+        // 重放线程仍在跑时不能 dlclose 模块（见 hooks::egress_replay_active）。
+        //
+        // 注意：这里**不能**判定「replay hook 没命中」。本模块挂在 setpriority 上，而框架
+        // 是在 zygisk 的 specialize 回调之后才调用它（hooks.rs 的时序说明），在 post 阶段
+        // 查会把正常武装误判成失败。诊断改由两个更晚的点负责
+        // （hooks::install_never_fired_probe）：重放窗口到点的 alarm 定时器 + 进程退出兜底；
+        // 正常命中路径两者都静默。
+        if !egress_replay_active() {
+            api.set_option(ZygiskOption::DlCloseModuleLibrary);
+        }
     }
 
     fn pre_server_specialize(
@@ -166,8 +176,8 @@ impl MyModule {
         // companion 侧现在自己管理会话状态和恢复逻辑；
         // Zygisk 模块侧不再需要跨应用恢复（ACTIVE_RESET_SESSION 已移除）。
 
-        let config = match load_config_for(api, &package_with_user, &package_name) {
-            Ok(Some(cfg)) => cfg,
+        let (config, egress_proxy) = match load_config_for(api, &package_with_user, &package_name) {
+            Ok(Some((cfg, egress_proxy))) => (cfg, egress_proxy),
             Ok(None) => {
                 api.set_option(ZygiskOption::DlCloseModuleLibrary);
                 return Ok(());
@@ -232,6 +242,22 @@ impl MyModule {
         hook_build_fields(env, &merged)?;
         if config.debug {
             info!("Build fields faked successfully");
+        }
+
+        // ①-ter 应用级出口代理（方案 B，docs/plans/egress-contract.md §5）
+        //   companion 已经把该包实际的代理（含 __DIRECT__）解析好随 spec 下发；
+        //   未配置时 egress_proxy 为 None，apply_egress_proxy 立刻返回，不碰任何属性、
+        //   不起线程——老配置零回归。注入失败只记日志，绝不影响应用启动（契约 §5.5）。
+        //
+        //   注意「写一次不够」：框架在 ActivityThread 绑定应用时会按设备级 ProxyInfo
+        //   重写 http/https 属性（t9 F1/F2，注入后 ~95ms），所以还要挂一个「过渡完成」钩子，
+        //   在 zygote 完成 SELinux/uid 过渡之后拉起重放线程把属性钉住。
+        //   不能在 specialize 里直接起线程：那会让 zygote 的 selinux_android_setcontext
+        //   失败并 SIGABRT 整个应用进程（真机 tombstone 已确认）。
+        if let Some(arming) =
+            apply_egress_proxy(env, &package_name, config.debug, egress_proxy.as_ref())
+        {
+            arm_egress_replay(api, arming);
         }
 
         // ①-bis 清除 /proc/self/maps 中匹配模式的属性映射（anti-detection）
@@ -347,8 +373,17 @@ impl MyModule {
             warn!("Unreadable-context property synth failed: {e:#}");
         }
 
-        // ③ DlClose（始终执行）
-        api.set_option(ZygiskOption::DlCloseModuleLibrary);
+        // ③ DlClose —— 但应用级代理的「后置重放」还在跑时必须保留模块映射：
+        //    重放线程的代码就在这个 .so 里，zygisk 一旦 dlclose，线程执行到的下一条指令
+        //    就是野指针。只对配置了 egress 的应用生效；未配置 egress 的应用照旧 dlclose
+        //    （启动路径与内存足迹零回归）。
+        if egress_replay_active() {
+            if config.debug {
+                info!("[egress] module kept mapped for the replay window");
+            }
+        } else {
+            api.set_option(ZygiskOption::DlCloseModuleLibrary);
+        }
         Ok(())
     }
 
@@ -392,11 +427,15 @@ impl MyModule {
 }
 
 /// 从 companion 取某个包的预渲染 spec（内存，不落盘），按 `pkg@uid` → 裸包名顺序尝试。
+///
+/// 返回 `(机型配置, 该包的出口代理)`：两者同源于同一份 spec TOML，但解析失败的影响面
+/// 完全不同——机型配置解析失败 = 整个 spec 坏了（返回 Err，卸载模块）；出口代理小节
+/// 解析失败只等于「没配代理」（[egress::from_spec_doc] 自己吞掉错误返回 None）。
 fn load_config_for(
     api: &mut ZygiskApi<V4>,
     package_with_user: &str,
     package: &str,
-) -> anyhow::Result<Option<Config>> {
+) -> anyhow::Result<Option<(Config, Option<egress::EgressProxy>)>> {
     let request = companion::CompanionRequest::GetSpec(companion::SpecRequest {
         keys: vec![package_with_user.to_string(), package.to_string()],
     });
@@ -407,7 +446,21 @@ fn load_config_for(
     let Some(text) = response.spec else {
         return Ok(None);
     };
-    Ok(Some(Config::from_toml(&text)?))
+
+    // 出口代理小节与机型字段同源：先单独取它，解析失败只丢代理、不影响机型。
+    let egress_proxy = egress::from_spec_doc(&text);
+
+    let config = Config::from_toml(&text).map_err(|err| {
+        // 契约 §7.1：spec 里可能带出口代理的 password，而 toml 错误的 Display 会附上
+        // 出错行的**原文**——这里只保留不含源码片段的摘要。
+        let detail = err
+            .downcast_ref::<toml::de::Error>()
+            .map(|err| err.message().to_string())
+            .unwrap_or_else(|| "unclassified parse error".to_string());
+        anyhow::anyhow!("spec TOML is invalid: {detail}")
+    })?;
+
+    Ok(Some((config, egress_proxy)))
 }
 
 /// 只在 companion 侧使用：读取 `/data/adb/device_faker/config/config.toml` 用于渲染 spec。

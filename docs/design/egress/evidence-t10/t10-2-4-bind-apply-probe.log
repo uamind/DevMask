@@ -1,0 +1,125 @@
+===== 重新创建 t10-http（上一轮误删）=====
+POST HTTP 201
+http=egp_b663eb1e23c04887ba66bf1e0405d00c socks=egp_72c062155fd44860930fdf59c8170aec
+
+===== 2) 整机绑定 =====
+PUT HTTP 200
+{
+    "deviceId": "mock-a-ok",
+    "changed": true,
+    "bindings": [
+        {
+            "app": "",
+            "mode": "proxy",
+            "proxyId": "egp_b663eb1e23c04887ba66bf1e0405d00c",
+            "proxyName": "t10-http",
+            "updatedAt": "2026-11-24T14:48:49Z"
+        }
+    ],
+    "pendingApply": true,
+    "warnings": []
+}
+--- GET 读回（含 deviceState 透传键）---
+GET HTTP 200
+  bindings= [{'app': '', 'mode': 'proxy', 'proxyId': 'egp_b663eb1e23c04887ba66bf1e0405d00c', 'proxyName': 't10-http', 'updatedAt': '2026-11-24T14:48:49Z'}]
+  deviceState keys= ['applied', 'apps', 'configRevision', 'configured', 'default', 'effectiveMode', 'egressFile', 'exclusionList', 'failOpen', 'health', 'mode', 'probeTimeoutSeconds', 'probeUrl', 'proxies', 'readback', 'revision', 'upstream', 'warnings']
+  deviceState.mode= direct applied= True settings= :0
+
+===== 2b) 整机 + 应用级各一条 =====
+PUT HTTP 200
+{
+    "deviceId": "mock-a-ok",
+    "changed": true,
+    "bindings": [
+        {
+            "app": "",
+            "mode": "proxy",
+            "proxyId": "egp_b663eb1e23c04887ba66bf1e0405d00c",
+            "proxyName": "t10-http",
+            "updatedAt": "2026-11-24T14:48:49Z"
+        },
+        {
+            "app": "com.xingin.xhs",
+            "mode": "proxy",
+            "proxyId": "egp_72c062155fd44860930fdf59c8170aec",
+            "proxyName": "t10-socks",
+            "updatedAt": "2026-11-24T14:48:49Z"
+        }
+    ],
+    "pendingApply": true,
+    "warnings": []
+}
+GET HTTP 200
+  bindings= [{"app": "", "mode": "proxy", "proxyId": "egp_b663eb1e23c04887ba66bf1e0405d00c", "proxyName": "t10-http", "updatedAt": "2026-11-24T14:48:49Z"}, {"app": "com.xingin.xhs", "mode": "proxy", "proxyId": "egp_72c062155fd44860930fdf59c8170aec", "proxyName": "t10-socks", "updatedAt": "2026-11-24T14:48:49Z"}]
+  deviceState.default= None  apps= []
+
+===== 1b) DELETE 被绑定代理 → 409 =====
+DELETE bound HTTP 409
+{
+    "error": {
+        "code": "egress_proxy_in_use",
+        "details": {
+            "apps": [],
+            "devices": [
+                "mock-a-ok"
+            ],
+            "name": "t10-http",
+            "proxyId": "egp_b663eb1e23c04887ba66bf1e0405d00c",
+            "total": 1
+        },
+        "message": "\u4ee3\u7406 t10-http \u4ecd\u88ab 1 \u6761\u7ed1\u5b9a\u5f15\u7528",
+        "requestId": "req_c30eb853211f4406a93e0a0516e6d705",
+        "retryable": false
+    }
+}
+
+===== 3) 批量下发 apply（A/B/C/D，probe=true）=====
+apply HTTP=202
+{
+    "jobId": "job_01a20e07e9a47733be4b2ac0473e84a4",
+    "status": "queued",
+    "kind": "egress",
+    "total": 5,
+    "createdAt": "2026-11-24T14:48:49Z",
+    "requestId": "req_74da24d12c964ed488e4995ec24f032e"
+}
+  job.status=partial kind=egress total=5 succeeded=4 skipped=0 failed=1
+Traceback (most recent call last):
+  File "<stdin>", line 5, in <module>
+TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
+
+===== 4) 代理探测 =====
+probe http HTTP 200
+{
+    "proxyId": "egp_b663eb1e23c04887ba66bf1e0405d00c",
+    "ok": true,
+    "exitIp": "198.51.100.7",
+    "latencyMs": 0,
+    "checkedAt": "2026-11-24T14:48:49Z",
+    "url": "http://probe.fixture/",
+    "upstreamStatus": 200
+}
+probe socks HTTP 422
+{
+    "error": {
+        "code": "validation_failed",
+        "details": {
+            "errors": [
+                {
+                    "code": "unsupported_proxy_type",
+                    "message": "Manager \u4fa7\u63a2\u6d4b\u53ea\u652f\u6301 HTTP \u4ee3\u7406",
+                    "path": "proxyId"
+                }
+            ]
+        },
+        "message": "\u8bf7\u6c42\u53c2\u6570\u4e0d\u5408\u6cd5",
+        "requestId": "req_15a2e5c51e8f452080203142bd29d833",
+        "retryable": false
+    }
+}
+--- 两条代理的 lastCheck（egress_checks 落库验证）---
+  http lastCheck= {'source': 'manager', 'deviceId': None, 'app': '', 'ok': True, 'exitIp': '198.51.100.7', 'latencyMs': 0, 'errorCode': None, 'checkedAt': '2026-11-24T14:48:49Z'}
+  socks lastCheck= {'source': 'manager', 'deviceId': None, 'app': '', 'ok': False, 'exitIp': None, 'latencyMs': None, 'errorCode': 'unsupported_proxy_type', 'checkedAt': '2026-11-24T14:48:49Z'}
+--- fixture 日志（证明探测真的经过代理）---
+2026-11-24T22:47:36+0800 proto=start http_ports=18080,18082 socks=18081 virtual=198.51.100.7 app=198.51.100.8 raw=198.51.100.9 socks_auth=1
+2026-11-24T22:48:49+0800 proto=http listener=18080 GET http://probe.fixture/ host=probe.fixture auth=0

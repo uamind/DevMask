@@ -1,0 +1,1 @@
+{"error":{"code":"egress_proxy_in_use","details":{"apps":[],"devices":["mock-a-ok"],"name":"t10-http","proxyId":"egp_b663eb1e23c04887ba66bf1e0405d00c","total":1},"message":"代理 t10-http 仍被 1 条绑定引用","requestId":"req_c30eb853211f4406a93e0a0516e6d705","retryable":false}}

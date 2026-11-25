@@ -1,5 +1,34 @@
 # 📝更新日志
 
+## ⬆️[v1.9.0 → v1.10.0] - 2026-12-01
+
+### 🆕 新功能
+- 🌐 **出口代理（egress）**：整机级 HTTP/HTTPS 代理写入 Android 全局设置（`settings global http_proxy`），应用流量按指定出口出网
+- 🧩 应用级出口：Zygisk 在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector`，支持 **SOCKS5** 与每应用独立出口；`__DIRECT__` 强制直连（会主动覆盖系统代理）
+- 📡 出口 IP 探测：`POST /api/v1/egress/probe` 经当前链路请求可配置探测 URL，返回出口 IP / 延迟 / 时间；失败给结构化错误码
+- 🗄️ Manager 代理池：`/relay/api/v1/egress-proxies` CRUD、绑定（整机 / 应用级）、批量下发（job `kind=egress`）、代理侧独立探测
+- 🖥️ 双侧 WebUI：设备端设置页「网络出口」卡片（代理配置 + 探测 + 直连回滚），Manager 新增「代理池」页并在设备卡片显示出口 IP / 代理名
+- 🔐 凭据保护：代理定义独立存 `egress.toml`（`0600`），API / 日志 / 审计 / WebUI 全程只给 `hasCredentials`；Manager 侧用 `manager.key` AES-256-GCM 加密落库
+
+### ⚡ 改进
+- 🧯 清除系统代理只用 `settings put global http_proxy :0`（`settings delete` 在 Android 17 上清不掉，实测记录在案）
+- 🛟 fail-open 默认开启：探测失败或读回不一致时自动回落直连，一次配错不会让设备断网
+- 🔁 幂等：期望状态与现状一致时不写盘、不备份、revision 不变（`changed:false`）；Manager 重放同内容记 `egress_unchanged` 而不是把 job 变成 partial
+- 🧹 卸载 / 停用前清理：`uninstall.sh` 停服后清空系统代理并删运行时目录
+- 📚 文档：新增 [API.md](API.md) egress 五端点、[CONFIG.md](CONFIG.md)「网络出口」章节、[openapi.yaml](openapi.yaml) 五个操作、Manager 契约与架构同步
+- ⚖️ 应用级注入改为**只对显式写法**生效：只有 `[[apps]].egress` 写了代理名或 `__DIRECT__` 的进程才挂 hook / 起重放线程（设备级默认不再给每个应用加开销）
+- ⚠️ 明确记录重放机制的三条代价：① 显式配置 egress 的进程会保留**常驻模块代码页**（重放线程与 PLT hook 都在 `.so` 里）——但**按名字扫 `/proc/<pid>/maps` 看不到**（Zygisk 用无名/匿名映射，实测 armed 进程 3170 行命中 0），真判断要比匿名可执行段；② 应用运行中修改设备级代理不落在 0–2000ms 重放窗口内，需重启应用；③ `setpriority` hook 未命中时退化为一次性注入（`replay hook unavailable`），注入值可能被框架覆盖
+- ⚠️ **带用户名/密码的代理本期不可用**：SOCKS5 的 `java.net.socks.username/password` 进程内可读，但 libcore 不发送凭据（Android 17 实测代理侧 `methods=0002 user_ok=0 pass_ok=0` → `auth-failed`）；HTTP Basic 未实现（只注入 host/port，记 `unsupported-auth`）。带凭据的代理请用 **IP 白名单**授权，或等 P2「设备内本地认证中继」（尚未实现）
+
+### 🐛 修复
+- 🔁 修复应用级 HTTP 出口在目标进程内不生效：框架（`ActivityThread.handleBindApplication` → `Proxy.setHttpProxyConfiguration`）会在注入后约 28–95ms 按**设备级**代理整体重写 http/https 属性；现在改由 PLT hook（`setpriority`）在进程过渡完成后拉起重放线程，按 0–2000ms 时间表读回并重写（118 次探针、不早退）
+- 🚫 修复 `__DIRECT__` 在设备级代理开启时失效（与上条同源：清空动作被框架随后写入覆盖，重放会把直连状态拉回来）
+- 🧩 修复 `ProxySelector.of(...)` 在 Android 17（SDK 37）不存在导致的每进程告警：改为先探能力再调用，缺失时只记一行 `proxy_selector degraded`（selector 是加分项，属性路径才是权威载体）
+- 🔒 修复配置读快照在跨文件事务中自我死锁（持排他 flock 时又取共享锁）
+- 🔐 修复 `dry_run` / `diff` 响应回显代理密码：diff 里 `username` / `password` 行的值现在行级脱敏为 `<redacted>`（键名保留，旧值与新密码都不出现）
+- 🎯 修复应用级探测失败误清设备级代理：`scope="app"` 的失败只记 `health.lastProbe`，`502` 带 `scope` 与 `egress_probe_scope_app` 警告，**不再**执行 `settings put global http_proxy :0`；只有设备级失败才触发 fail-open
+- 📦 修复 `PUT /egress` 的 `apps` 数组语义：`apps: []` 与 `apps: null` 都清空全部 `[[apps]].egress`（整体替换），未列出的应用会删掉 `egress` 键
+
 ## ⬆️[v1.6.0 → v1.7.0] - 2026-11-09
 
 ### 🆕 新功能

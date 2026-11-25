@@ -264,12 +264,16 @@ pub async fn list(
 
     let total = filtered.len();
     let online_count = filtered.iter().filter(|record| record.online).count();
+    let egress = crate::api::egress::device_egress_summaries(&state).await?;
     let start = page.offset.min(total);
     let devices: Vec<DeviceSummary> = filtered
         .into_iter()
         .skip(start)
         .take(page.limit)
-        .map(DeviceSummary::from)
+        .map(|record| {
+            let id = record.id.clone();
+            DeviceSummary::with_egress(record, egress.get(&id).cloned())
+        })
         .collect();
     let next_cursor = paging::next_cursor(total, page.offset, devices.len());
 
@@ -472,8 +476,9 @@ pub async fn get(
         ));
     }
 
+    let egress = crate::api::egress::device_egress_summaries(&state).await?;
     Ok(Json(DeviceDetail {
-        summary: DeviceSummary::from(record),
+        summary: DeviceSummary::with_egress(record, egress.get(&device_id).cloned()),
         overview,
         templates,
         apps,

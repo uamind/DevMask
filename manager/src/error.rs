@@ -241,6 +241,63 @@ impl ApiError {
         )
     }
 
+    /// 409：代理名已被占用。
+    pub fn egress_proxy_exists(name: &str, id: &str) -> Self {
+        Self::new(
+            StatusCode::CONFLICT,
+            "egress_proxy_exists",
+            format!("代理名已被占用：{name}"),
+            Some(json!({ "field": "name", "value": name, "id": id })),
+            false,
+        )
+    }
+
+    /// 409：代理仍被绑定引用，拒绝删除。
+    pub fn egress_proxy_in_use(
+        proxy_id: &str,
+        name: &str,
+        total: i64,
+        devices: Vec<String>,
+        apps: Vec<String>,
+    ) -> Self {
+        Self::new(
+            StatusCode::CONFLICT,
+            "egress_proxy_in_use",
+            format!("代理 {name} 仍被 {total} 条绑定引用"),
+            Some(json!({
+                "proxyId": proxy_id,
+                "name": name,
+                "total": total,
+                "devices": devices,
+                "apps": apps,
+            })),
+            false,
+        )
+    }
+
+    /// 502：Manager 侧经代理探测出口失败。
+    pub fn egress_probe_failed(
+        proxy_id: &str,
+        url: &str,
+        reason: &str,
+        timeout_ms: u64,
+        upstream_status: Option<u16>,
+    ) -> Self {
+        Self::new(
+            StatusCode::BAD_GATEWAY,
+            "egress_probe_failed",
+            format!("经代理探测出口失败（{reason}）"),
+            Some(json!({
+                "proxyId": proxy_id,
+                "url": url,
+                "reason": reason,
+                "timeoutMs": timeout_ms,
+                "upstreamStatus": upstream_status,
+            })),
+            true,
+        )
+    }
+
     /// 502：设备不可达。
     pub fn device_offline(device_id: &str, reason: &str) -> Self {
         Self::new(

@@ -1,0 +1,4 @@
+clear() 的返回值: Ok(ApplyOutcome { write_count: 1, matches: false })
+degrade_to_direct 只看 is_ok() -> cleared = true
+而读回仍然是: Some("127.0.0.1:18080")
+=> 服务会把 health.degraded 置 true、effectiveMode 报 direct；设备实际仍走 127.0.0.1:18080

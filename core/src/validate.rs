@@ -10,7 +10,9 @@
 //!
 //! 严重级别：
 //!
-//! - `error`：写入应当被拒绝（包名格式、dpi 越界、sdk_int 越界、custom_props 键不在白名单）；
+//! - `error`：写入应当被拒绝（包名格式、dpi 越界、sdk_int 越界、custom_props 键不在白名单、
+//!   egress 代理名不合法）。egress 的 error 码直接用契约 §2.6 的 ValidationError 码
+//!   `invalid_egress_name` / `invalid_egress_default`，server 侧可原样透传成 422；
 //! - `warning`：可以写入但要提示（重复包名冲突、值超过 Android 属性上限、未知字段）。
 
 use std::collections::{BTreeMap, HashSet};
@@ -18,8 +20,9 @@ use std::collections::{BTreeMap, HashSet};
 use serde::Serialize;
 
 use crate::config::{
-    AppConfig, Config, DELETE_MARKER, DPI_MAX, DPI_MIN, DeviceTemplate, EMPTY_MARKER,
-    NumberSetting, SDK_INT_MAX, SDK_INT_MIN,
+    AppConfig, Config, DELETE_MARKER, DIRECT_MARKER, DPI_MAX, DPI_MIN, DeviceTemplate,
+    EGRESS_PROXY_NAME_MAX, EGRESS_PROXY_NAME_PATTERN, EMPTY_MARKER, EgressSection, NumberSetting,
+    SDK_INT_MAX, SDK_INT_MIN, is_egress_name_shaped,
 };
 
 /// custom_props 允许的属性名前缀白名单。
@@ -224,6 +227,51 @@ pub fn is_valid_package_key(value: &str) -> bool {
     validate_package_key(value).is_none()
 }
 
+/// 校验代理名（契约 §2.5：字符集/长度 + 保留值）；返回错误说明。
+///
+/// 只用于 `egress.toml` 的代理名与 `[egress].default`。`[[apps]].egress` 额外允许
+/// `__DIRECT__`，见 [`validate_app`]。
+pub fn validate_egress_proxy_name(value: &str) -> Option<String> {
+    if value.is_empty() {
+        return Some("代理名不能为空".to_owned());
+    }
+    if value.len() > EGRESS_PROXY_NAME_MAX {
+        return Some(format!(
+            "代理名 {value:?} 超过 {EGRESS_PROXY_NAME_MAX} 字符上限"
+        ));
+    }
+    if value == DIRECT_MARKER {
+        return Some(format!(
+            "{DIRECT_MARKER} 是保留值（应用级强制直连），不能作为代理名"
+        ));
+    }
+    if !is_egress_name_shaped(value) {
+        return Some(format!(
+            "代理名 {value:?} 不合法：必须以字母/数字/下划线开头，其后只允许字母、数字、下划线、点、减号（正则 {EGRESS_PROXY_NAME_PATTERN}）"
+        ));
+    }
+    None
+}
+
+/// 校验 `[egress]` 段（设备级）：空串视为未设置；`__DIRECT__` 不接受（直连请删键）。
+pub fn validate_egress(section: &EgressSection) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    let Some(value) = section.default.as_deref().filter(|value| !value.is_empty()) else {
+        return report;
+    };
+    if value == DIRECT_MARKER {
+        // 契约 §2.3 / §2.6：设备级 default 不接受保留值，直连应当删键。
+        report.error(
+            "invalid_egress_default",
+            "egress.default",
+            format!("设备级 default 不能是 {DIRECT_MARKER}；直连请删除 [egress].default"),
+        );
+    } else if let Some(message) = validate_egress_proxy_name(value) {
+        report.error("invalid_egress_name", "egress.default", message);
+    }
+    report
+}
+
 fn is_java_identifier(segment: &str) -> bool {
     let mut bytes = segment.bytes();
     let Some(first) = bytes.next() else {
@@ -291,6 +339,20 @@ pub fn validate_app(app: &AppConfig) -> ValidationReport {
             "package.invalid",
             path.clone(),
             format!("package {:?}：{message}", app.package),
+        );
+    }
+
+    // 应用级出口：空串 = 未设置（继承设备级），__DIRECT__ = 强制直连，其余必须是合法代理名。
+    if let Some(value) = app.egress.as_deref().filter(|value| !value.is_empty())
+        && value != DIRECT_MARKER
+        && let Some(message) = validate_egress_proxy_name(value)
+    {
+        report.error(
+            "invalid_egress_name",
+            format!("{path}.egress"),
+            format!(
+                "egress 只能是代理名（{EGRESS_PROXY_NAME_PATTERN}）或 {DIRECT_MARKER}：{message}"
+            ),
         );
     }
 
@@ -419,6 +481,10 @@ pub fn duplicate_packages(config: &Config) -> Vec<DuplicatePackage> {
 pub fn validate_config(config: &Config, options: &ValidationOptions) -> ValidationReport {
     let mut report = ValidationReport::new();
 
+    if let Some(section) = &config.egress {
+        report.merge(validate_egress(section));
+    }
+
     for (name, template) in &config.templates {
         report.merge(validate_template(name, template));
     }
@@ -493,6 +559,19 @@ pub fn unknown_fields(document: &toml_edit::DocumentMut) -> Vec<UnknownField> {
                 path: "config".to_owned(),
                 key: key.to_owned(),
             });
+        }
+    }
+
+    // [egress] 只允许 default：host/port/username/password 等凭据键出现在 0644 的
+    // config.toml 里必须被看见（server 会升级成 422 unknown_field）。
+    if let Some(egress) = table.get("egress").and_then(toml_edit::Item::as_table) {
+        for (key, _) in egress.iter() {
+            if !crate::config::is_known_egress_key(key) {
+                fields.push(UnknownField {
+                    path: "egress".to_owned(),
+                    key: key.to_owned(),
+                });
+            }
         }
     }
 

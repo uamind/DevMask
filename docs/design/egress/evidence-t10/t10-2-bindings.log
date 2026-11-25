@@ -1,0 +1,137 @@
+===== 2) PUT /devices/{id}/egress：整机绑定 =====
+http proxy=egp_016516d6449d44d8bb4a5cd979acd512 socks proxy=egp_72c062155fd44860930fdf59c8170aec
+PUT device-level HTTP 422
+{
+    "error": {
+        "code": "validation_failed",
+        "details": {
+            "errors": [
+                {
+                    "code": "invalid_value",
+                    "message": "\u4ee3\u7406\u4e0d\u5b58\u5728\uff1aegp_016516d6449d44d8bb4a5cd979acd512",
+                    "path": "bindings[0].proxyId"
+                }
+            ]
+        },
+        "message": "\u8bf7\u6c42\u53c2\u6570\u4e0d\u5408\u6cd5",
+        "requestId": "req_498206c022fb42cf88e1e76cfe48f546",
+        "retryable": false
+    }
+}
+--- GET 读回（整机）---
+GET HTTP 200
+{
+    "deviceId": "mock-a-ok",
+    "bindings": [],
+    "deviceState": {
+        "applied": true,
+        "apps": [],
+        "configRevision": "da029b6f234cfded0a8b8654c6aab2ed937b584ce75288c80ed4b3f9807646c8",
+        "configured": false,
+        "default": null,
+        "effectiveMode": "direct",
+        "egressFile": {
+            "exists": true,
+            "mtime": "2026-11-24T14:48:29Z",
+            "size": 240
+        },
+        "exclusionList": [],
+        "failOpen": true,
+        "health": {
+            "degraded": false,
+            "degradedReason": null,
+            "degradedSince": null,
+            "lastProbe": null
+        },
+        "mode": "direct",
+        "probeTimeoutSeconds": 5,
+        "probeUrl": "http://checkip.amazonaws.com/",
+        "proxies": [],
+        "readback": {
+            "at": "2026-11-24T14:48:29Z",
+            "dumpsysGlobalProxy": "Global proxy: none",
+            "matches": true,
+            "settingsValue": ":0"
+        },
+        "revision": "adc6b5e48b8aabdb1867b30a22dab91e608fe64aed6fa738ba3b0db38f350f0d",
+        "upstream": null,
+        "warnings": []
+    },
+    "warnings": []
+}
+
+===== 2b) 整机 + 应用级各一条 =====
+PUT device+app HTTP 422
+{
+    "error": {
+        "code": "validation_failed",
+        "details": {
+            "errors": [
+                {
+                    "code": "invalid_value",
+                    "message": "\u4ee3\u7406\u4e0d\u5b58\u5728\uff1aegp_016516d6449d44d8bb4a5cd979acd512",
+                    "path": "bindings[0].proxyId"
+                }
+            ]
+        },
+        "message": "\u8bf7\u6c42\u53c2\u6570\u4e0d\u5408\u6cd5",
+        "requestId": "req_fc9eb7dc9a3045ab88f977e6690a221c",
+        "retryable": false
+    }
+}
+--- GET 读回（整机 + 应用级 + deviceState 透传）---
+GET HTTP 200
+{
+    "deviceId": "mock-a-ok",
+    "bindings": [],
+    "deviceState": {
+        "applied": true,
+        "apps": [],
+        "configRevision": "da029b6f234cfded0a8b8654c6aab2ed937b584ce75288c80ed4b3f9807646c8",
+        "configured": false,
+        "default": null,
+        "effectiveMode": "direct",
+        "egressFile": {
+            "exists": true,
+            "mtime": "2026-11-24T14:48:29Z",
+            "size": 240
+        },
+        "exclusionList": [],
+        "failOpen": true,
+        "health": {
+            "degraded": false,
+            "degradedReason": null,
+            "degradedSince": null,
+            "lastProbe": null
+        },
+        "mode": "direct",
+        "probeTimeoutSeconds": 5,
+        "probeUrl": "http://checkip.amazonaws.com/",
+        "proxies": [],
+        "readback": {
+            "at": "2026-11-24T14:48:29Z",
+            "dumpsysGlobalProxy": "Global proxy: none",
+            "matches": true,
+            "settingsValue": ":0"
+        },
+        "revision": "adc6b5e48b8aabdb1867b30a22dab91e608fe64aed6fa738ba3b0db38f350f0d",
+        "upstream": null,
+        "warnings": []
+    },
+    "warnings": []
+}
+
+===== 1b) DELETE 被绑定代理 → 期望 409 egress_proxy_in_use =====
+DELETE bound HTTP 404
+{
+    "error": {
+        "code": "not_found",
+        "details": {
+            "name": "egp_016516d6449d44d8bb4a5cd979acd512",
+            "resource": "egress_proxy"
+        },
+        "message": "egress_proxy \u4e0d\u5b58\u5728\uff1aegp_016516d6449d44d8bb4a5cd979acd512",
+        "requestId": "req_e043de0d4c9f41a9b29aa56b8b085971",
+        "retryable": false
+    }
+}

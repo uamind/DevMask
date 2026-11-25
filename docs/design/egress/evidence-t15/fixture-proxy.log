@@ -1,0 +1,2 @@
+2026-11-24T22:43:43+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
+2026-11-24T22:43:43+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0

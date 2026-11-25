@@ -1,10 +1,10 @@
 [workspace]
-members = ["core", "manager", "server", "xtask"]
+members = ["core", "manager", "server", "module-tests", "xtask"]
 exclude = ["device_faker_cli"]
 
 [package]
 name = "device_faker"
-version = "1.9.0"
+version = "1.10.0"
 edition = "2024"
 authors = ["Seyud"]
 

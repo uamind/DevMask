@@ -21,6 +21,7 @@ Zygisk tabanlı, farklı uygulamalar için farklı cihaz modellerini yapılandı
 * 🎭 **Birleşik Yürütme Akışı**: Mod seçimi gerektirmez; JNI alan sahteleştirmesi, COW özellik sahteleştirmesi ve companion hizmetleri otomatik olarak yönetilir.
 * 🔒 **COW Özellik Motoru**: Sistem özelliklerini sürece özel özellik alanı kopyalarıyla sahteler; süreç başına izolasyon, sıfır kalıcılık ve yazma eşlemesi izi yok.
 * 🌐 **WebUI Yönetimi**: Yapılandırmaları kolayca yönetebilmeniz için grafiksel bir web arayüzü sunar.
+* 🛰️ **Çıkış Proxy'si**: Cihaz geneli HTTP proxy ve uygulama başına SOCKS5 enjeksiyonu; uygulama başına çıkış IP'si (uygulama başına çıkışlar, uygulamanın bir sonraki soğuk başlatmasında yeniden oynatmayla oturur; kimlik doğrulamalı proxy'ler bu sürümde desteklenmez — IP izin listesi kullanın), çıkış IP'si sorgulama ve tek dokunuşla doğrudan bağlantıya dönüş; tanılama satırları (replay / never-fired) için [en/CONFIG.md](../en/CONFIG.md) ve [en/SERVER.md](../en/SERVER.md).
 
 
 ## WebUI Özellikleri 🖥️
@@ -31,6 +32,7 @@ Device Faker modern, web tabanlı bir yönetim arayüzü sunar.
 - 📱 **Uygulama Yönetimi**: Yüklü uygulamalar ve bunların yapılandırma durumuna ilişkin sezgisel bir görünüm; çok kullanıcılı uygulamaların görüntülenmesini destekler
 - 🖋️ **Yapılandırma Düzenleme**: Uygulama yapılandırmasını düzenlemek için grafik arayüz; şablon uygulamaları ve özel yapılandırmaları destekler
 - 🌍 **Çoklu Dil Desteği**: 简体中文, English, Türkçe
+- 🛰️ **Ağ Çıkışı**: Cihaz geneli / uygulama başına çıkışları yapılandırın, çıkış IP'sini canlı sorgulayın ve düşme durumunu görün
 
 ## Yapılandırma Rehberi ⚙️
 

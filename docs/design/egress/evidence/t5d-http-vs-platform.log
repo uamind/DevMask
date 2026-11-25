@@ -1,0 +1,64 @@
+===== E1: 全局 mac_http(18080) + 应用级 mac_http2(18082)，看应用进程内是哪个端口 =====
+PUT HTTP 200
+{
+  "mode": "proxy",
+  "default": "mac_http",
+  "apps": [
+    {
+      "package": "io.df.egressprobe",
+      "egress": "mac_http2",
+      "effective": "proxy",
+      "proxy": "mac_http2"
+    }
+  ],
+  "upstream": {
+    "name": "mac_http",
+    "type": "http",
+    "host": "127.0.0.1",
+    "port": 18080,
+    "hasCredentials": false
+  },
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T13:21:14Z"
+  }
+}
+127.0.0.1:18080
+--------- beginning of main
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: pid=13785
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: package=io.df.egressprobe
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: http.proxyHost=127.0.0.1
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: http.proxyPort=18080
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: https.proxyHost=127.0.0.1
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: https.proxyPort=18080
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: socksProxyHost=<null>
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: socksProxyPort=<null>
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: java.net.socks.username=<null>
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: java.net.socks.password=<set:false>
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: java.net.useSystemProxies=<null>
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: ProxySelector=sun.net.spi.DefaultProxySelector
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: selector.probe.fixture=HTTP @ 127.0.0.1/<unresolved>:18080
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: fetch.ip=status=200 body=198.51.100.7
+11-24 21:21:16.310 13785 13785 I EGRESSPROBE: fetch.hostname=status=200 body=198.51.100.7
+
+===== E2: 设备级直连 + 应用级 mac_http2(18082) =====
+PUT HTTP 200
+:0
+--------- beginning of main
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: pid=13903
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: package=io.df.egressprobe
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: http.proxyHost=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: http.proxyPort=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: https.proxyHost=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: https.proxyPort=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: socksProxyHost=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: socksProxyPort=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: java.net.socks.username=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: java.net.socks.password=<set:false>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: java.net.useSystemProxies=<null>
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: ProxySelector=sun.net.spi.DefaultProxySelector
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: selector.probe.fixture=DIRECT
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: fetch.ip=error=SocketTimeoutException
+11-24 21:21:26.595 13903 13903 I EGRESSPROBE: fetch.hostname=error=UnknownHostException

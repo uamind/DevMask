@@ -1,0 +1,48 @@
+===== 6) 安全：全量响应 + 审计中无密码明文 =====
+--- 拉取审计（含 egress.* 动作）---
+GET /audit HTTP 200
+  egress 审计条数= 14
+    egress.apply ok {'type': 'job', 'id': 'job_01a20e0812b077e5aea40175cceeef40'} {'changed': True, 'devices': 1, 'jobId': 'job_01a20e0812b077e5aea40175cceeef40', 'total': 1}
+    egress.apply ok {'type': 'job', 'id': 'job_01a20e080e2472aa8b5b621e34b3b6b8'} {'changed': True, 'devices': 2, 'jobId': 'job_01a20e080e2472aa8b5b621e34b3b6b8', 'total': 3}
+    egress.proxy_probe ok {'type': 'egress_proxy', 'id': 'egp_b663eb1e23c04887ba66bf1e0405d00c'} {'changed': False, 'name': 't10-http', 'proxyId': 'egp_b663eb1e23c04887ba66bf1e0405d00c'}
+    egress.apply ok {'type': 'job', 'id': 'job_01a20e07e9a47733be4b2ac0473e84a4'} {'changed': True, 'devices': 4, 'jobId': 'job_01a20e07e9a47733be4b2ac0473e84a4', 'total': 5}
+    egress.bind ok {'type': 'device', 'id': 'mock-a-ok'} {'changed': True, 'deviceId': 'mock-a-ok', 'total': 2}
+    egress.bind ok {'type': 'device', 'id': 'mock-a-ok'} {'changed': True, 'deviceId': 'mock-a-ok', 'total': 1}
+    egress.proxy_create ok {'type': 'egress_proxy', 'id': 'egp_b663eb1e23c04887ba66bf1e0405d00c'} {'changed': True, 'name': 't10-http', 'proxyId': 'egp_b663eb1e23c04887ba66bf1e0405d00c'}
+    egress.proxy_delete ok {'type': 'egress_proxy', 'id': 'egp_016516d6449d44d8bb4a5cd979acd512'} {'name': 't10-http', 'proxyId': 'egp_016516d6449d44d8bb4a5cd979acd512'}
+    egress.proxy_delete ok {'type': 'egress_proxy', 'id': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'} {'name': 't10-tmp2', 'proxyId': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'}
+    egress.proxy_update ok {'type': 'egress_proxy', 'id': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'} {'changed': True, 'name': 't10-tmp2', 'proxyId': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'}
+    egress.proxy_update ok {'type': 'egress_proxy', 'id': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'} {'changed': True, 'name': 't10-tmp2', 'proxyId': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'}
+    egress.proxy_create ok {'type': 'egress_proxy', 'id': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'} {'changed': True, 'name': 't10-tmp', 'proxyId': 'egp_0653c3a2c8174b90a1e590b4f8dd70ae'}
+--- 逐个代理详情（响应里应只有 hasCredentials）---
+--- 扫描 evidence-t10 全部文件里的密码明文（只输出命中数）---
+  扫描文件数=35 命中=0
+--- 扫描 manager 数据目录（SQLite/密钥/日志）---
+  manager.db                               size=4096     命中=0
+  manager.db-shm                           size=32768    命中=0
+  manager.db-wal                           size=1421432  命中=0
+  manager.key                              size=32       命中=0
+--- manager 日志里是否出现密码 ---
+0
+  manager 日志命中=0
+--- PATCH 响应原文（凭据字段只有 hasCredentials）---
+{
+    "boundApps": 0,
+    "boundDevices": 0,
+    "createdAt": "2026-11-24T14:48:11Z",
+    "enabled": true,
+    "hasCredentials": true,
+    "host": "127.0.0.1",
+    "id": "egp_0653c3a2c8174b90a1e590b4f8dd70ae",
+    "lastCheck": null,
+    "name": "t10-tmp2",
+    "port": 18082,
+    "region": null,
+    "tags": [
+        "t10",
+        "patched"
+    ],
+    "type": "http",
+    "updatedAt": "2026-11-24T14:48:11Z",
+    "warnings": []
+}

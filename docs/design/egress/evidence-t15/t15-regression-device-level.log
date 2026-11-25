@@ -1,0 +1,97 @@
+
+===== 回归：设备级 PUT / probe / DELETE 三条主路径 =====
+--- R-1 当前设备级状态 ---
+127.0.0.1:18080
+  Global proxy: [127.0.0.1] 18080 xl=
+--- R-2 probe（设备级，应经 18080 并返回固定出口 IP）---
+probe HTTP 200
+{"ok": true, "exitIp": "198.51.100.7", "latencyMs": 8, "checkedAt": "2026-11-24T14:09:35Z", "scope": "device", "via": "proxy", "proxy": "mac_http", "url": "http://probe.fixture/", "upstreamStatus": 200, "approximate": false, "warnings": []}
+2026-11-24T22:09:35+0800 proto=http listener=18080 GET http://probe.fixture/ host=probe.fixture auth=0
+--- R-3 DELETE /egress?confirm=true（含 :0 与残留键检查）---
+If-Match=50bc66512708202d351348a2be3f0c3e8dffccf78abb41c253ed985ee12c1542
+DELETE HTTP 200
+{
+  "changed": true,
+  "mode": "direct",
+  "effectiveMode": "direct",
+  "default": null,
+  "upstream": null,
+  "applied": true,
+  "readback": {
+    "settingsValue": ":0",
+    "dumpsysGlobalProxy": "Global proxy: none",
+    "matches": true,
+    "at": "2026-11-24T14:09:37Z"
+  },
+  "warnings": []
+}
+--- settings / dumpsys ---
+:0
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+--- 文件清理（egress.toml 只剩 [probe]；config.toml 无 [egress]/app 记录）---
+version = 1
+
+[probe]
+url = "http://probe.fixture/"
+timeout_seconds = 5
+fail_open = true
+(no [egress] section)
+363:package = "io.df.egressprobe"
+--- R-4 清空后再冷启动探针（应无任何代理属性，走直连）---
+11-24 22:09:45.926 11952 11952 I EGRESSPROBE: http.proxyHost=<null>
+11-24 22:09:45.926 11952 11952 I EGRESSPROBE: socksProxyHost=<null>
+11-24 22:09:45.926 11952 11952 I EGRESSPROBE: selector.app.fixture=DIRECT
+
+===== 回归 R-5：脏状态自愈（settings delete global http_proxy）=====
+PUT HTTP 200
+写入后 settings=127.0.0.1:18080
+--- 制造脏状态 ---
+Deleted 1 rows
+get:
+null
+global_http_proxy_exclusion_list=
+global_http_proxy_host=127.0.0.1
+global_http_proxy_port=18080
+global_proxy_pac_url=
+  Global proxy: [127.0.0.1] 18080 xl=
+--- 重启服务，观察 reconcile 自愈 ---
+[2m2026-11-24T14:19:24.447928Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mtrue [3meffective_mode[0m[2m=[0m"from_config"
+重启后 settings=127.0.0.1:18080
+  Global proxy: [127.0.0.1] 18080 xl=
+--- 清理：DELETE /egress + 恢复 server.toml + 移除测试残留 ---
+DELETE HTTP 200
+{"changed": true, "mode": "direct", "default": null, "applied": true, "readback": {"settingsValue": ":0", "dumpsysGlobalProxy": "Global proxy: none", "matches": true, "at": "2026-11-24T14:19:33Z"}}
+0
+t15c token removed
+[2m2026-11-24T14:19:37.161013Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:19:37.709097Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+--- 残留与最终状态 ---
+0
+0
+0
+0
+ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+List of devices attached
+4A190DLAQ002QR	device
+
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+---
+:0
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+
+(reverse list end)

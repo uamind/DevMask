@@ -17,6 +17,11 @@ pub fn new_job_id() -> String {
     format!("job_{}", Uuid::now_v7().simple())
 }
 
+/// 生成代理池 id：egp_ + 32 位小写十六进制。
+pub fn new_egress_proxy_id() -> String {
+    format!("egp_{}", Uuid::new_v4().simple())
+}
+
 /// 当前 UTC 时间，RFC 3339、秒精度、以 Z 结尾。
 pub fn now_rfc3339() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true)
@@ -90,6 +95,11 @@ mod tests {
         let job = new_job_id();
         assert!(job.starts_with("job_"), "{job}");
         assert_eq!(job.len(), 4 + 32);
+
+        let proxy = new_egress_proxy_id();
+        assert!(proxy.starts_with("egp_"), "{proxy}");
+        assert_eq!(proxy.len(), 4 + 32);
+        assert!(proxy[4..].bytes().all(|b| b.is_ascii_hexdigit()));
     }
 
     #[test]

@@ -9,7 +9,10 @@
 import type {
   AppsMatrixResponse,
   AuditEntry,
+  DeviceEgressResponse,
   DeviceSummary,
+  EgressProxy,
+  EgressProxyDetail,
   HealthResponse,
   ManagerOverviewResponse,
   MatrixApp,
@@ -39,6 +42,15 @@ export const mockDevices: DeviceSummary[] = [
     latencyMs: 38,
     createdAt: '2026-11-20T03:11:02Z',
     lastError: null,
+    egress: {
+      mode: 'proxy',
+      proxyId: 'egp_3f1c9b7a2d4e5f60819a0b1c2d3e4f50',
+      proxyName: 'us_la_01',
+      exitIp: '203.0.113.7',
+      checkedAt: '2026-11-24T07:58:12Z',
+      ok: true,
+      errorCode: null,
+    },
   },
   {
     id: 'xiaomi-15',
@@ -59,6 +71,7 @@ export const mockDevices: DeviceSummary[] = [
     latencyMs: 21,
     createdAt: '2026-11-20T04:02:10Z',
     lastError: null,
+    egress: null,
   },
   {
     id: 'redmi-k80',
@@ -79,6 +92,7 @@ export const mockDevices: DeviceSummary[] = [
     latencyMs: null,
     createdAt: '2026-11-21T02:40:00Z',
     lastError: { code: 'device_offline', message: '连接超时' },
+    egress: null,
   },
   {
     id: 'oneplus-13',
@@ -99,6 +113,15 @@ export const mockDevices: DeviceSummary[] = [
     latencyMs: 64,
     createdAt: '2026-11-22T09:15:00Z',
     lastError: null,
+    egress: {
+      mode: 'direct',
+      proxyId: null,
+      proxyName: null,
+      exitIp: null,
+      checkedAt: null,
+      ok: null,
+      errorCode: null,
+    },
   },
 ]
 
@@ -385,7 +408,159 @@ export const mockHealth: HealthResponse = {
   apiVersion: 'v1',
   uptimeSec: 3612,
   startedAt: '2026-11-24T07:12:31Z',
-  db: { status: 'ok', schemaVersion: 1, path: 'manager.db' },
+  db: { status: 'ok', schemaVersion: 2, path: 'manager.db' },
   devices: { total: 4, online: 3, offline: 1 },
   jobs: { queued: 0, running: 0 },
+}
+
+// ---------------------------------------------------------------------------
+// 出口代理（egress）预览数据：凭据只有 hasCredentials，永远没有 username / password。
+// ---------------------------------------------------------------------------
+
+export const mockEgressProxies: EgressProxy[] = [
+  {
+    id: 'egp_3f1c9b7a2d4e5f60819a0b1c2d3e4f50',
+    name: 'us_la_01',
+    type: 'http',
+    host: '203.0.113.10',
+    port: 1080,
+    hasCredentials: true,
+    region: 'US-LA',
+    tags: ['us', 'mobile'],
+    enabled: true,
+    boundDevices: 1,
+    boundApps: 1,
+    lastCheck: {
+      source: 'device',
+      deviceId: 'pixel-9',
+      app: '',
+      ok: true,
+      exitIp: '203.0.113.7',
+      latencyMs: 412,
+      errorCode: null,
+      checkedAt: '2026-11-24T07:58:12Z',
+    },
+    createdAt: '2026-11-24T02:00:00Z',
+    updatedAt: '2026-11-24T03:30:00Z',
+  },
+  {
+    id: 'egp_7a2b1c3d4e5f60718293a4b5c6d7e8f9',
+    name: 'jp_tokyo_02',
+    type: 'socks5',
+    host: '198.51.100.24',
+    port: 10800,
+    hasCredentials: false,
+    region: 'JP-TYO',
+    tags: ['jp'],
+    enabled: true,
+    boundDevices: 0,
+    boundApps: 0,
+    lastCheck: null,
+    createdAt: '2026-11-24T04:10:00Z',
+    updatedAt: '2026-11-24T04:10:00Z',
+  },
+  {
+    id: 'egp_9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f',
+    name: 'hk_hkg_03',
+    type: 'http',
+    host: '198.51.100.88',
+    port: 3128,
+    hasCredentials: false,
+    region: 'HK-HKG',
+    tags: ['hk', '备用'],
+    enabled: false,
+    boundDevices: 0,
+    boundApps: 0,
+    lastCheck: {
+      source: 'manager',
+      deviceId: null,
+      app: '',
+      ok: false,
+      exitIp: null,
+      latencyMs: 5002,
+      errorCode: 'connect',
+      checkedAt: '2026-11-24T06:44:31Z',
+    },
+    createdAt: '2026-11-23T11:20:00Z',
+    updatedAt: '2026-11-24T06:44:31Z',
+  },
+]
+
+export const mockEgressProxyDetails: Record<string, EgressProxyDetail> = {
+  [mockEgressProxies[0].id]: {
+    ...mockEgressProxies[0],
+    bindings: [
+      {
+        deviceId: 'pixel-9',
+        deviceName: 'Pixel 9 · 主力机',
+        app: '',
+        updatedAt: '2026-11-24T07:40:00Z',
+      },
+      {
+        deviceId: 'pixel-9',
+        deviceName: 'Pixel 9 · 主力机',
+        app: 'com.xingin.xhs',
+        updatedAt: '2026-11-24T07:40:00Z',
+      },
+    ],
+    recentChecks: mockEgressProxies[0].lastCheck ? [mockEgressProxies[0].lastCheck] : [],
+  },
+}
+
+export const mockDeviceEgress: Record<string, DeviceEgressResponse> = {
+  'pixel-9': {
+    deviceId: 'pixel-9',
+    bindings: [
+      {
+        app: '',
+        mode: 'proxy',
+        proxyId: 'egp_3f1c9b7a2d4e5f60819a0b1c2d3e4f50',
+        proxyName: 'us_la_01',
+        updatedAt: '2026-11-24T07:40:00Z',
+      },
+      {
+        app: 'com.xingin.xhs',
+        mode: 'proxy',
+        proxyId: 'egp_3f1c9b7a2d4e5f60819a0b1c2d3e4f50',
+        proxyName: 'us_la_01',
+        updatedAt: '2026-11-24T07:40:00Z',
+      },
+    ],
+    deviceState: {
+      fetchedAt: '2026-11-24T08:12:10Z',
+      revision: '5b1f0c9e7a2d4e5f60819a0b1c2d3e4f507a8b9c0d1e2f3a4b5c6d7e8f9012345',
+      configRevision: '9f2c5d1e7a2d4e5f60819a0b1c2d3e4f507a8b9c0d1e2f3a4b5c6d7e8f9012345',
+      configured: true,
+      mode: 'proxy',
+      effectiveMode: 'proxy',
+      default: 'us_la_01',
+      applied: true,
+      readback: {
+        settingsValue: '203.0.113.10:1080',
+        dumpsysGlobalProxy: 'Global proxy: [203.0.113.10] port: 1080',
+        matches: true,
+        at: '2026-11-24T08:12:09Z',
+      },
+      health: {
+        degraded: false,
+        degradedSince: null,
+        degradedReason: null,
+        lastProbe: {
+          ok: true,
+          exitIp: '203.0.113.7',
+          latencyMs: 412,
+          checkedAt: '2026-11-24T07:58:12Z',
+          scope: 'device',
+          via: 'proxy',
+          proxy: 'us_la_01',
+          upstreamStatus: 200,
+          errorCode: null,
+        },
+      },
+      apps: [
+        { package: 'com.xingin.xhs', egress: 'us_la_01', effective: 'proxy', proxy: 'us_la_01' },
+      ],
+    },
+    warnings: [],
+  },
 }

@@ -187,6 +187,13 @@ export function sanitizeAppConfig(input: unknown): AppConfig | null {
     ...normalizeDeviceInfoFields(source),
   }
 
+  // 应用级出口（契约 §2.4）：界面不编辑，但保存配置时必须原样带回，
+  // 否则一次模板编辑就会把 Manager 下发的应用级出口静默抹掉。
+  const egress = asOptionalString(source.egress)
+  if (egress !== undefined) {
+    normalized.egress = egress
+  }
+
   return normalized
 }
 
@@ -195,6 +202,13 @@ export function sanitizeConfigForSave(input: Config): Config {
 
   if (input.default_force_denylist_unmount === true) {
     normalized.default_force_denylist_unmount = true
+  }
+
+  // [egress] 只有 default 一个键（core 的 EgressSection 是 deny_unknown_fields）：
+  // 这里只透传合法值，绝不把凭据类键写进 0644 的 config.toml。
+  const egressDefault = asOptionalString(input.egress?.default)
+  if (egressDefault !== undefined) {
+    normalized.egress = { default: egressDefault }
   }
 
   if (input.debug === true) {

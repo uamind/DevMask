@@ -13,10 +13,12 @@ use axum::{
     http::{HeaderMap, Method, Request, StatusCode},
     response::Response,
 };
+use std::sync::Arc;
+
 use device_faker_server::{
     app::{AppState, router},
     auth::{Scope, TokenEntry},
-    commands::FixtureRunner,
+    commands::{CommandRunner, FixtureRunner},
     device::DeviceSummary,
     settings::Settings,
     util,
@@ -93,13 +95,32 @@ pub fn fixture_with_config(config_text: Option<&str>) -> Fixture {
 
 /// 构造夹具并指定命令执行器。
 pub fn fixture_with_runner(config_text: Option<&str>, runner: FixtureRunner) -> Fixture {
-    fixture_with_settings(config_text, runner, |_| {})
+    build_fixture(config_text, Arc::new(runner), |_| {})
 }
 
 /// 构造夹具并允许改设置（body_limit、audit_log、adb_dir 等）。
 pub fn fixture_with_settings(
     config_text: Option<&str>,
     runner: FixtureRunner,
+    customize: impl FnOnce(&mut Settings),
+) -> Fixture {
+    build_fixture(config_text, Arc::new(runner), customize)
+}
+
+/// 构造夹具并注入**共享**的命令执行器。
+///
+/// 测试侧需要知道「写了几次 settings」或模拟读回值时必须拿到同一个 Arc
+/// （egress 的幂等/读回校验断言）。
+pub fn fixture_with_arc_runner(
+    config_text: Option<&str>,
+    runner: Arc<dyn CommandRunner>,
+) -> Fixture {
+    build_fixture(config_text, runner, |_| {})
+}
+
+fn build_fixture(
+    config_text: Option<&str>,
+    runner: Arc<dyn CommandRunner>,
     customize: impl FnOnce(&mut Settings),
 ) -> Fixture {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -146,12 +167,7 @@ pub fn fixture_with_settings(
 
     let audit_path = settings.audit_path();
     let adb_dir = settings.adb_dir.clone();
-    let state = AppState::with_runner(
-        settings,
-        "127.0.0.1:8686".to_owned(),
-        device,
-        std::sync::Arc::new(runner),
-    );
+    let state = AppState::with_runner(settings, "127.0.0.1:8686".to_owned(), device, runner);
     let router = router(state.clone());
     Fixture {
         dir,

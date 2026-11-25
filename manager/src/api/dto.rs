@@ -13,6 +13,20 @@ use crate::db::DeviceRecord;
 /// 缓存过期阈值（秒）。
 pub const CACHE_TTL_SECS: i64 = 300;
 
+/// 设备出口摘要：最近一次探测的 exitIp 与绑定的 proxyName（只读聚合）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceEgressSummary {
+    /// proxy / direct；设备级没有任何绑定时为 null。
+    pub mode: Option<String>,
+    pub proxy_id: Option<String>,
+    pub proxy_name: Option<String>,
+    pub exit_ip: Option<String>,
+    pub checked_at: Option<String>,
+    pub ok: Option<bool>,
+    pub error_code: Option<String>,
+}
+
 /// 设备摘要（API.md 5.1）。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +49,18 @@ pub struct DeviceSummary {
     pub latency_ms: Option<i64>,
     pub created_at: String,
     pub last_error: Option<Value>,
+    /// 设备级出口摘要（未知时为 null，字段只增不改）。
+    pub egress: Option<DeviceEgressSummary>,
+}
+
+impl DeviceSummary {
+    /// 附带出口摘要的构造（列表 / 详情 / 总览使用）。
+    pub fn with_egress(record: DeviceRecord, egress: Option<DeviceEgressSummary>) -> Self {
+        Self {
+            egress,
+            ..Self::from(record)
+        }
+    }
 }
 
 impl From<DeviceRecord> for DeviceSummary {
@@ -58,8 +84,50 @@ impl From<DeviceRecord> for DeviceSummary {
             latency_ms: record.latency_ms,
             created_at: record.created_at,
             last_error: record.last_error,
+            egress: None,
         }
     }
+}
+
+/// 汇总设备级出口摘要：绑定（app 为空）叠加最近一条整机探测结果。
+pub fn device_egress_summaries(
+    bindings: &[crate::db::DeviceEgressRow],
+    checks: &std::collections::HashMap<String, crate::db::EgressCheckRow>,
+) -> std::collections::HashMap<String, DeviceEgressSummary> {
+    let mut summaries: std::collections::HashMap<String, DeviceEgressSummary> =
+        std::collections::HashMap::new();
+    for binding in bindings.iter().filter(|binding| binding.app.is_empty()) {
+        summaries.insert(
+            binding.device_id.clone(),
+            DeviceEgressSummary {
+                mode: Some(binding.mode.clone()),
+                proxy_id: binding.proxy_id.clone(),
+                proxy_name: binding.proxy_name.clone(),
+                exit_ip: None,
+                checked_at: None,
+                ok: None,
+                error_code: None,
+            },
+        );
+    }
+    for (device_id, check) in checks {
+        let entry = summaries
+            .entry(device_id.clone())
+            .or_insert_with(|| DeviceEgressSummary {
+                mode: None,
+                proxy_id: None,
+                proxy_name: None,
+                exit_ip: None,
+                checked_at: None,
+                ok: None,
+                error_code: None,
+            });
+        entry.exit_ip = check.exit_ip.clone();
+        entry.checked_at = Some(check.checked_at.clone());
+        entry.ok = Some(check.ok);
+        entry.error_code = check.error_code.clone();
+    }
+    summaries
 }
 
 /// 警告（code / message / details）。

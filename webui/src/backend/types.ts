@@ -3,6 +3,13 @@
 // Device Faker: https://github.com/Seyud/device_faker
 
 import type { InstalledApp } from '../types'
+import type {
+  EgressProbeRequest,
+  EgressProbeResult,
+  EgressSnapshot,
+  EgressUpdateInput,
+  EgressWriteResult,
+} from './egress'
 
 /**
  * WebUI 传输层（backend）的公共接口。
@@ -222,6 +229,19 @@ export interface Backend {
   restartServer(): Promise<string>
   /** 原生服务状态（`service.sh status`）的原始输出。 */
   getServerControlStatus(): Promise<string>
+  // ---- 出口代理（egress，契约 §1）----
+  /**
+   * 读出口状态：原生模式 GET /api/v1/egress；管理器模式读 egress.toml + config.toml
+   * 并用 shell 读 settings 读回值（拿不到的字段由 revisionAvailable / readbackAvailable 标注）。
+   */
+  readEgress(): Promise<EgressSnapshot>
+  /** 写出口配置：原生模式 PUT /egress（If-Match=egress revision）；管理器模式写文件 + 重启服务。 */
+  writeEgress(input: EgressUpdateInput): Promise<EgressWriteResult>
+  /** 恢复直连：原生模式 DELETE /egress?confirm=true；管理器模式清文件 + 重启服务。 */
+  clearEgress(): Promise<EgressWriteResult>
+  /** 经当前生效链路探测出口 IP（管理器模式抛 UnsupportedError，界面必须明示不可用）。 */
+  probeEgress(request?: EgressProbeRequest): Promise<EgressProbeResult>
+
   /** 生成一个只返回、不落盘的访问 Token 与其 sha256。 */
   generateServerToken(): Promise<ServerTokenPair>
   /** 计算任意 Token 的 sha256，返回明文与 `sha256:` 前缀哈希（管理器模式写 server.toml 用）。 */

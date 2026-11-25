@@ -5,7 +5,8 @@
 //! schemars 生成的 JSON Schema（docs/dev/server-api-plan.md 9.2 / 5.8）。
 //!
 //! server 侧 @@/api/v1/schema@@ 直接返回这里的产物；字段名与 TOML 完全一致（snake_case），
-//! @@sdk_int@@ 用 @@anyOf@@ 描述「整数 或字符串 `__DELETE__`」。
+//! @@sdk_int@@ 用 @@anyOf@@ 描述「整数 或字符串 `__DELETE__`」；egress 的代理名规则
+//! （`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$`、应用级另允许 `__DIRECT__`）随模型 derive 自动带出。
 //!
 //! 版本约定：TOML / JSON 都对着同一份模型，所以 **不要**为了 API 另写一套 DTO——
 //! 否则两份定义迟早漂移。

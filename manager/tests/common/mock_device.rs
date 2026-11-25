@@ -69,6 +69,16 @@ pub struct MockOptions {
     pub force_template_412_once: bool,
     /// PUT /apps/{pkg} 绑定的模板名等于该值时，返回 404 resource=template。
     pub bind_template_404: Option<String>,
+    /// 是否支持 /api/v1/egress*（false = 旧版本设备，全部 404 resource=path）。
+    pub egress_supported: bool,
+    /// 首次 PUT /api/v1/egress 强制 412（并推进 revision）。
+    pub force_egress_412_once: bool,
+    /// /api/v1/egress/probe 返回的出口 IP。
+    pub egress_probe_exit_ip: String,
+    /// /api/v1/egress/probe 固定失败状态码。
+    pub egress_probe_status: Option<u16>,
+    /// PUT /api/v1/egress 固定失败状态码。
+    pub egress_put_status: Option<u16>,
 }
 
 impl Default for MockOptions {
@@ -107,6 +117,11 @@ impl Default for MockOptions {
             oversized_overview: false,
             force_template_412_once: false,
             bind_template_404: None,
+            egress_supported: true,
+            force_egress_412_once: false,
+            egress_probe_exit_ip: "203.0.113.7".to_string(),
+            egress_probe_status: None,
+            egress_put_status: None,
         }
     }
 }
@@ -118,6 +133,12 @@ struct MockState {
     apps: Mutex<HashMap<String, String>>,
     forced_412: AtomicBool,
     forced_template_412: AtomicBool,
+    forced_egress_412: AtomicBool,
+    egress_revision: Mutex<u64>,
+    egress_default: Mutex<Option<String>>,
+    egress_apps: Mutex<Vec<(String, String)>>,
+    egress_proxies: Mutex<Vec<Value>>,
+    egress_last_put: Mutex<Option<Value>>,
 }
 
 /// 运行中的 Mock 设备。
@@ -149,6 +170,7 @@ impl MockDevice {
             .collect();
         let forced_412 = options.force_first_412;
         let forced_template_412 = options.force_template_412_once;
+        let forced_egress_412 = options.force_egress_412_once;
         let state = Arc::new(MockState {
             options: Mutex::new(options),
             revision: Mutex::new(1),
@@ -156,6 +178,12 @@ impl MockDevice {
             apps: Mutex::new(apps),
             forced_412: AtomicBool::new(forced_412),
             forced_template_412: AtomicBool::new(forced_template_412),
+            forced_egress_412: AtomicBool::new(forced_egress_412),
+            egress_revision: Mutex::new(1),
+            egress_default: Mutex::new(None),
+            egress_apps: Mutex::new(Vec::new()),
+            egress_proxies: Mutex::new(Vec::new()),
+            egress_last_put: Mutex::new(None),
         });
 
         let app = Router::new()
@@ -168,6 +196,11 @@ impl MockDevice {
             )
             .route("/api/v1/apps/{pkg}", put(put_app))
             .route("/api/v1/apps/{pkg}/restart", post(restart_app))
+            .route(
+                "/api/v1/egress",
+                get(get_egress).put(put_egress).delete(delete_egress),
+            )
+            .route("/api/v1/egress/probe", post(egress_probe))
             .route("/api/v1/echo", any(echo))
             .with_state(state.clone());
 
@@ -239,6 +272,50 @@ impl MockDevice {
     /// 停止服务，后续请求按连接失败处理。
     pub fn stop(&self) {
         self.handle.abort();
+    }
+
+    /// 设备端当前 egress default（代理名）。
+    pub fn egress_default(&self) -> Option<String> {
+        self.state
+            .egress_default
+            .lock()
+            .expect("Mock egress 锁")
+            .clone()
+    }
+
+    /// 设备端当前应用级 egress 覆盖。
+    pub fn egress_apps(&self) -> Vec<(String, String)> {
+        self.state
+            .egress_apps
+            .lock()
+            .expect("Mock egress 锁")
+            .clone()
+    }
+
+    /// 设备端当前代理定义（脱敏后的原样存根）。
+    pub fn egress_proxies(&self) -> Vec<Value> {
+        self.state
+            .egress_proxies
+            .lock()
+            .expect("Mock egress 锁")
+            .clone()
+    }
+
+    /// 最后一次 PUT /api/v1/egress 的请求体（断言凭据轮换 / 解除绑定用）。
+    pub fn egress_last_put_body(&self) -> Option<Value> {
+        self.state
+            .egress_last_put
+            .lock()
+            .expect("Mock egress 锁")
+            .clone()
+    }
+
+    /// 设备端当前 egress revision。
+    pub fn egress_revision(&self) -> String {
+        format!(
+            "egress-{}",
+            self.state.egress_revision.lock().expect("Mock egress 锁")
+        )
     }
 
     fn options_mut(&self, apply: impl FnOnce(&mut MockOptions)) {
@@ -505,6 +582,307 @@ async fn restart_app(
     .into_response()
 }
 
+async fn get_egress(State(state): State<Arc<MockState>>, headers: HeaderMap) -> Response {
+    let options = snapshot(&state);
+    if let Some(response) = common_guard(&options, &headers).await {
+        return response;
+    }
+    if !options.egress_supported {
+        return error_response(
+            404,
+            "not_found",
+            "mock device has no /egress",
+            json!({ "resource": "path", "name": "/api/v1/egress" }),
+        );
+    }
+    if let Some(status) = options.egress_put_status {
+        return error_response(
+            status,
+            "egress.not_configured",
+            "mock egress not configured",
+            json!({ "scope": "device" }),
+        );
+    }
+
+    let egress_revision = format!(
+        "egress-{}",
+        state.egress_revision.lock().expect("Mock egress 锁")
+    );
+    let default = state.egress_default.lock().expect("Mock egress 锁").clone();
+    let apps = state.egress_apps.lock().expect("Mock egress 锁").clone();
+    let proxies = state.egress_proxies.lock().expect("Mock egress 锁").clone();
+
+    Json(json!({
+        "revision": egress_revision,
+        "configRevision": current_revision(&state),
+        "configured": default.is_some() || !apps.is_empty(),
+        "mode": if default.is_some() { "proxy" } else { "direct" },
+        "effectiveMode": if default.is_some() { "proxy" } else { "direct" },
+        "default": default,
+        "failOpen": true,
+        "probeUrl": "http://checkip.amazonaws.com/",
+        "probeTimeoutSeconds": 5,
+        "exclusionList": [],
+        "upstream": null,
+        "proxies": proxies,
+        "apps": apps
+            .iter()
+            .map(|(package, egress)| json!({
+                "package": package,
+                "egress": egress,
+                "effective": if egress == "__DIRECT__" { "direct" } else { "proxy" },
+                "proxy": if egress == "__DIRECT__" { Value::Null } else { json!(egress) },
+            }))
+            .collect::<Vec<_>>(),
+        "applied": true,
+        "readback": {
+            "settingsValue": null,
+            "dumpsysGlobalProxy": null,
+            "matches": true,
+            "at": "2026-11-24T12:00:00Z",
+        },
+        "health": { "degraded": false, "degradedSince": null, "degradedReason": null, "lastProbe": null },
+        "egressFile": { "exists": true, "size": 128, "mtime": "2026-11-24T11:58:03Z" },
+        "warnings": [],
+    }))
+    .into_response()
+}
+
+/// 规范化一条代理定义（只保留脱敏字段，用于 changed 比较与 GET 回显）。
+fn normalize_egress_proxy(proxy: &Value) -> Value {
+    let has_username = proxy.get("username").is_some_and(|value| !value.is_null());
+    let has_password = proxy.get("password").is_some_and(|value| !value.is_null());
+    json!({
+        "name": proxy.get("name").cloned().unwrap_or(Value::Null),
+        "type": proxy.get("type").cloned().unwrap_or(Value::Null),
+        "host": proxy.get("host").cloned().unwrap_or(Value::Null),
+        "port": proxy.get("port").cloned().unwrap_or(Value::Null),
+        "hasCredentials": has_username || has_password,
+    })
+}
+
+/// 按契约 §1.4 合并代理定义：省略凭据 = 保留该条已存凭据，null = 清除。
+fn merge_proxy_list(proxies: &[Value], previous: &[Value]) -> Vec<Value> {
+    let mut merged: Vec<Value> = proxies
+        .iter()
+        .map(|proxy| {
+            let mut entry = normalize_egress_proxy(proxy);
+            // 省略 = 不改该条已存凭据（契约 §1.4）；显式 null 才清除。
+            let omitted_credentials =
+                proxy.get("username").is_none() && proxy.get("password").is_none();
+            if omitted_credentials {
+                let name = entry["name"].clone();
+                if let Some(existing) = previous.iter().find(|item| item["name"] == name) {
+                    entry["hasCredentials"] = existing["hasCredentials"].clone();
+                }
+            }
+            entry
+        })
+        .collect();
+    merged.sort_by(|left, right| {
+        left["name"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(right["name"].as_str().unwrap_or_default())
+    });
+    merged
+}
+
+fn normalize_app_list(apps: &[(String, String)]) -> Vec<(String, String)> {
+    let mut normalized = apps.to_vec();
+    normalized.sort();
+    normalized
+}
+
+async fn put_egress(
+    State(state): State<Arc<MockState>>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
+    let options = snapshot(&state);
+    if let Some(response) = common_guard(&options, &headers).await {
+        return response;
+    }
+    if !options.egress_supported {
+        return error_response(
+            404,
+            "not_found",
+            "mock device has no /egress",
+            json!({ "resource": "path", "name": "/api/v1/egress" }),
+        );
+    }
+    if let Some(status) = options.egress_put_status {
+        return error_response(
+            status,
+            "egress.not_configured",
+            "mock egress not configured",
+            json!({ "scope": "device" }),
+        );
+    }
+    if state.forced_egress_412.swap(false, Ordering::SeqCst) {
+        *state.egress_revision.lock().expect("Mock egress 锁") += 1;
+        return error_response(
+            412,
+            "config_revision_mismatch",
+            "forced egress 412",
+            json!({ "expected": "egress-stale", "actual": "egress-stale", "resource": "egress" }),
+        );
+    }
+
+    let current = format!(
+        "egress-{}",
+        state.egress_revision.lock().expect("Mock egress 锁")
+    );
+    let if_match = headers
+        .get(header::IF_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim_matches('"')
+        .trim_start_matches("sha256:")
+        .to_string();
+    if if_match != "*" && if_match != current {
+        return error_response(
+            412,
+            "config_revision_mismatch",
+            "egress revision mismatch",
+            json!({ "expected": current, "actual": if_match, "resource": "egress" }),
+        );
+    }
+
+    // changed 的口径跟真实设备一致：只有「落盘内容」变化才算改（这里用完整请求体比较，
+    // 因为 Manager 每次都发完整状态；凭据轮换同样会改变请求体）。
+    let previous_body = state
+        .egress_last_put
+        .lock()
+        .expect("Mock egress 锁")
+        .clone();
+    let changed = previous_body.as_ref() != Some(&body);
+
+    // 记录最后一次 PUT body，供「凭据轮换 / 解除绑定」类断言使用。
+    *state.egress_last_put.lock().expect("Mock egress 锁") = Some(body.clone());
+
+    let previous_default = state.egress_default.lock().expect("Mock egress 锁").clone();
+    let previous_apps = state.egress_apps.lock().expect("Mock egress 锁").clone();
+    let previous_proxies = state.egress_proxies.lock().expect("Mock egress 锁").clone();
+
+    // 真实合并语义（契约 §1.4）：省略 = 不改；default / apps 传 null = 清除；
+    // 给数组 = 整体替换该数组。
+    let next_default = match body.get("default") {
+        Some(value) => value.as_str().map(str::to_owned),
+        None => previous_default.clone(),
+    };
+    let next_apps: Vec<(String, String)> = match body.get("apps") {
+        Some(value) if value.is_null() => Vec::new(),
+        Some(value) => value
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|app| {
+                        Some((
+                            app.get("package")?.as_str()?.to_string(),
+                            app.get("egress")?.as_str()?.to_string(),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        None => previous_apps.clone(),
+    };
+    let next_proxies = match body.get("proxies").and_then(Value::as_array) {
+        Some(items) => merge_proxy_list(items, &previous_proxies),
+        None => previous_proxies.clone(),
+    };
+
+    if changed {
+        *state.egress_default.lock().expect("Mock egress 锁") = next_default;
+        *state.egress_apps.lock().expect("Mock egress 锁") = next_apps;
+        *state.egress_proxies.lock().expect("Mock egress 锁") = next_proxies;
+        *state.egress_revision.lock().expect("Mock egress 锁") += 1;
+    }
+    let revision = format!(
+        "egress-{}",
+        state.egress_revision.lock().expect("Mock egress 锁")
+    );
+
+    Json(json!({
+        "revision": revision,
+        "configRevision": current_revision(&state),
+        "dryRun": false,
+        "changed": changed,
+        "backupId": if changed { json!("backup_mock") } else { Value::Null },
+        "mode": "proxy",
+        "applied": true,
+        "warnings": [],
+    }))
+    .into_response()
+}
+
+async fn delete_egress(State(state): State<Arc<MockState>>, headers: HeaderMap) -> Response {
+    let options = snapshot(&state);
+    if let Some(response) = common_guard(&options, &headers).await {
+        return response;
+    }
+    if !options.egress_supported {
+        return error_response(
+            404,
+            "not_found",
+            "mock device has no /egress",
+            json!({ "resource": "path", "name": "/api/v1/egress" }),
+        );
+    }
+    *state.egress_default.lock().expect("Mock egress 锁") = None;
+    state.egress_apps.lock().expect("Mock egress 锁").clear();
+    state.egress_proxies.lock().expect("Mock egress 锁").clear();
+    let revision = {
+        let mut counter = state.egress_revision.lock().expect("Mock egress 锁");
+        *counter += 1;
+        format!("egress-{counter}")
+    };
+    Json(json!({ "revision": revision, "changed": true, "warnings": [] })).into_response()
+}
+
+async fn egress_probe(State(state): State<Arc<MockState>>, headers: HeaderMap) -> Response {
+    let options = snapshot(&state);
+    if let Some(response) = common_guard(&options, &headers).await {
+        return response;
+    }
+    if !options.egress_supported {
+        return error_response(
+            404,
+            "not_found",
+            "mock device has no /egress",
+            json!({ "resource": "path", "name": "/api/v1/egress/probe" }),
+        );
+    }
+    if let Some(status) = options.egress_probe_status {
+        return error_response(
+            status,
+            "egress.probe_failed",
+            "mock egress probe failed",
+            json!({
+                "url": "http://checkip.amazonaws.com/",
+                "reason": "connect",
+                "timeoutMs": 5000,
+            }),
+        );
+    }
+    Json(json!({
+        "ok": true,
+        "exitIp": options.egress_probe_exit_ip,
+        "latencyMs": 42,
+        "checkedAt": "2026-11-24T12:00:00Z",
+        "scope": "device",
+        "via": "proxy",
+        "proxy": "us_la_01",
+        "url": "http://checkip.amazonaws.com/",
+        "upstreamStatus": 200,
+        "approximate": false,
+        "warnings": [],
+    }))
+    .into_response()
+}
+
 async fn echo(State(state): State<Arc<MockState>>, request: Request) -> Response {
     let options = snapshot(&state);
     if let Some(response) = common_guard(&options, &request.headers().clone()).await {
@@ -546,6 +924,89 @@ async fn echo(State(state): State<Arc<MockState>>, request: Request) -> Response
         "body": body_json,
     }))
     .into_response()
+}
+
+/// 极简 HTTP 正向代理：收到绝对 URI 请求后直接回固定出口 IP（不真的转发）。
+///
+/// 用于 Manager 侧 egress 探测测试：只要证明请求确实经过代理、且凭据以 Basic 头发出即可。
+pub struct MockProxy {
+    pub base_url: String,
+    pub host: String,
+    pub port: u16,
+    requests: Arc<Mutex<Vec<Value>>>,
+    handle: JoinHandle<()>,
+}
+
+impl MockProxy {
+    pub async fn start(exit_ip: &str) -> Self {
+        let requests: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&requests);
+        let body = exit_ip.to_string();
+        let app = Router::new().fallback(move |request: Request| {
+            let recorded = Arc::clone(&recorded);
+            let body = body.clone();
+            async move {
+                let method = request.method().as_str().to_string();
+                let uri = request.uri().to_string();
+                let authorization = request
+                    .headers()
+                    .get(header::AUTHORIZATION)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned);
+                let proxy_authorization = request
+                    .headers()
+                    .get("proxy-authorization")
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned);
+                recorded.lock().expect("Mock 代理锁").push(json!({
+                    "method": method,
+                    "uri": uri,
+                    "authorization": authorization,
+                    "proxyAuthorization": proxy_authorization,
+                }));
+                ([(header::CONTENT_TYPE, "text/plain")], format!("{body}\n")).into_response()
+            }
+        });
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("绑定 Mock 代理");
+        let address = listener.local_addr().expect("Mock 代理地址");
+        let handle = tokio::spawn(async move {
+            let _ = axum::serve(listener, app).await;
+        });
+
+        Self {
+            base_url: format!("http://{address}"),
+            host: address.ip().to_string(),
+            port: address.port(),
+            requests,
+            handle,
+        }
+    }
+
+    /// 代理收到的请求（method / uri / authorization）。
+    pub fn requests(&self) -> Vec<Value> {
+        self.requests.lock().expect("Mock 代理锁").clone()
+    }
+
+    pub fn stop(&self) {
+        self.handle.abort();
+    }
+}
+
+impl Drop for MockProxy {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+/// 取一个「刚刚还被占用、现在已经关闭」的本地端口（用于不可达代理测试）。
+pub fn closed_port() -> u16 {
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("绑定临时端口");
+    let port = listener.local_addr().expect("临时端口").port();
+    drop(listener);
+    port
 }
 
 fn snapshot(state: &Arc<MockState>) -> MockOptions {

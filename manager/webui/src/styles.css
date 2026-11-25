@@ -2084,3 +2084,148 @@ code,
   background: #f3f4f9;
   color: #4b5563;
 }
+
+/* ------------------------------------------------------------ egress（出口代理） */
+
+.egress-table {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.egress-table .el-table__header th {
+  background: #f8f9fd !important;
+}
+
+.egress-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.egress-addr {
+  font-family: 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.probe-ip {
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.probe-ip.is-bad {
+  color: var(--red);
+}
+
+.probe-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.egress-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 9px;
+}
+
+.egress-actions .el-button {
+  margin-left: 0;
+}
+
+.egress-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+.egress-form-grid .el-form-item {
+  margin-bottom: 14px;
+}
+
+.egress-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.egress-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.egress-line-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.egress-exit {
+  font-family: 'SFMono-Regular', Menlo, monospace;
+  font-size: 10px;
+  color: var(--ink-2);
+}
+
+.egress-time {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  color: #9a9fb2;
+}
+
+/* 批量绑定弹窗的空态：说清「为什么一台都选不到」并给出下一步 */
+.bind-empty {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: #fbfbfe;
+}
+
+.bind-empty-icon {
+  color: var(--accent);
+}
+
+.bind-empty strong {
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.bind-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.bind-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.bind-empty-actions .el-button {
+  margin-left: 0;
+}
+
+

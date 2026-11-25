@@ -1,0 +1,64 @@
+===== 把 aarch64 单测二进制推到真机执行（macOS 无法编译该 crate，故改为设备侧执行）=====
+target/aarch64-linux-android/debug/deps/zygisk-bc0205ffb7c5105a: 1 file pushed, 0 skipped. 160.1 MB/s (53893464 bytes in 0.321s)
+--- 运行（--test-threads=1，避免亚稳态）---
+
+running 30 tests
+test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
+test egress::tests::armed_outcome_keeps_module_mapped_and_logs_nothing ... ok
+test egress::tests::commit_failure_degrades_with_the_expected_log ... ok
+test egress::tests::debug_output_redacts_password ... ok
+test egress::tests::debug_switch_outcome_is_logged_and_does_not_keep_the_module ... ok
+test egress::tests::direct_plan_sets_no_proxy_property_at_all ... ok
+test egress::tests::direct_section_round_trips ... ok
+test egress::tests::divergences_detect_framework_overwrite ... ok
+test egress::tests::empty_string_counts_as_absent ... ok
+test egress::tests::http_credentials_are_unsupported_and_never_planned_into_properties ... ok
+test egress::tests::http_plan_replay_expectations_are_the_four_proxy_props_plus_clears ... ok
+test egress::tests::http_plan_sets_both_http_and_https_properties ... ok
+test egress::tests::incomplete_plan_is_rejected ... ok
+test egress::tests::missing_libandroid_runtime_degrades_with_the_expected_log ... ok
+test egress::tests::no_egress_configuration_means_no_injection ... ok
+test egress::tests::only_explicit_app_level_egress_is_injected ... ok
+test egress::tests::proxy_table_parsing_validates_port_and_type ... ok
+test egress::tests::replay_loop_keeps_watching_after_the_first_repair ... ok
+test egress::tests::replay_loop_repairs_http_overwrite_at_95ms ... ok
+test egress::tests::replay_loop_restores_direct_after_framework_writes_device_proxy ... ok
+test egress::tests::replay_loop_without_overwrite_stays_clean ... ok
+test egress::tests::replay_schedule_is_sorted_dense_early_and_covers_window ... ok
+test egress::tests::secret_divergence_never_prints_the_value ... ok
+test egress::tests::socks_credentials_go_through_socks_properties ... ok
+test egress::tests::socks_plan_expectations_mark_credentials_as_secret ... ok
+test egress::tests::socks_plan_sets_only_socks_properties ... ok
+test egress::tests::spec_document_with_apps_and_egress_round_trips ... ok
+test egress::tests::spec_section_round_trips_through_toml ... ok
+test egress::tests::spec_without_section_means_unconfigured ... ok
+test egress::tests::undefined_proxy_name_is_not_injected ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+RUN_EXIT=0
+--- 只看 arm plan 相关用例 ---
+
+running 1 test
+test egress::tests::arm_plan_honours_the_debug_guardrail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+
+running 1 test
+test egress::tests::missing_libandroid_runtime_degrades_with_the_expected_log ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+
+running 1 test
+test egress::tests::commit_failure_degrades_with_the_expected_log ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+
+
+running 1 test
+test egress::tests::debug_switch_outcome_is_logged_and_does_not_keep_the_module ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+

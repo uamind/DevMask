@@ -38,9 +38,11 @@
         <el-radio-button value="online">在线</el-radio-button>
         <el-radio-button value="offline">离线</el-radio-button>
       </el-radio-group>
+      <el-checkbox v-model="noEgressOnly">未配代理</el-checkbox>
       <span class="spacer"></span>
       <span class="toolbar-count">
-        {{ filteredDevices.length }} 台设备 · {{ manager.onlineCount }} 台在线
+        {{ filteredDevices.length }} 台设备 · {{ manager.onlineCount }} 台在线 ·
+        {{ manager.devicesWithoutEgress.length }} 台未配代理
       </span>
     </div>
 
@@ -104,6 +106,24 @@
         </div>
 
         <div class="fingerprint-line">{{ device.fingerprint ?? '尚无指纹（未同步）' }}</div>
+
+        <div class="egress-line">
+          <span class="egress-line-label">出口代理</span>
+          <template v-if="device.egress?.mode === 'proxy' && device.egress.proxyName">
+            <span class="tag accent">{{ device.egress.proxyName }}</span>
+            <span v-if="device.egress.exitIp" class="egress-exit">出口 {{ device.egress.exitIp }}</span>
+            <span class="egress-time">{{ relativeTime(device.egress.checkedAt) }}</span>
+          </template>
+          <span v-else-if="device.egress?.mode === 'direct'" class="text-muted">整机直连</span>
+          <span v-else class="text-muted">未配代理</span>
+          <span
+            v-if="device.egress?.ok === false"
+            class="tag warn"
+            :title="device.egress.errorCode ?? '探测失败'"
+          >
+            探测失败
+          </span>
+        </div>
 
         <div class="mini-stats">
           <div class="mini-stat">
@@ -292,6 +312,111 @@
               </div>
             </div>
 
+            <div class="drawer-section">
+              <h3>出口代理</h3>
+              <div class="info-grid">
+                <div class="info-box">
+                  <span>设备级代理</span>
+                  <strong>{{ egressProxyLabel }}</strong>
+                </div>
+                <div class="info-box">
+                  <span>出口 IP</span>
+                  <strong>{{ selectedDevice.egress?.exitIp ?? '--' }}</strong>
+                </div>
+                <div class="info-box">
+                  <span>最近探测</span>
+                  <strong>
+                    {{ selectedDevice.egress?.checkedAt ? relativeTime(selectedDevice.egress.checkedAt) : '--' }}
+                  </strong>
+                </div>
+                <div class="info-box">
+                  <span>egress revision</span>
+                  <strong style="font-size: 11px">{{ egressRevision ? truncate(egressRevision, 16) : '--' }}</strong>
+                </div>
+              </div>
+
+              <div v-if="egressLoading" class="inline-alert is-muted" style="margin-top: 10px">
+                <el-icon class="is-loading"><Loading /></el-icon>
+                <span>正在加载 GET /devices/{{ selectedDevice.id }}/egress…</span>
+              </div>
+              <div v-else-if="egressError" class="inline-alert is-error" style="margin-top: 10px">
+                <el-icon><WarningFilled /></el-icon>
+                <span>{{ egressError }}</span>
+                <el-button link type="primary" @click="reloadEgress">重试</el-button>
+              </div>
+              <template v-else>
+                <div
+                  v-if="egressBindings.length"
+                  class="target-list"
+                  style="grid-template-columns: 1fr; margin-top: 10px"
+                >
+                  <div
+                    v-for="binding in egressBindings"
+                    :key="binding.app || '__device__'"
+                    class="info-box"
+                  >
+                    <span>{{ binding.app || '整机（方案 A）' }}</span>
+                    <strong>
+                      {{ binding.mode === 'direct' ? '强制直连' : (binding.proxyName ?? '代理已不存在') }}
+                    </strong>
+                  </div>
+                </div>
+                <div v-else class="inline-alert is-muted" style="margin-top: 10px">
+                  <el-icon><InfoFilled /></el-icon>
+                  <span>这台设备没有任何出口绑定：整机与全部应用都走物理网络。</span>
+                </div>
+
+                <div
+                  v-if="egressState"
+                  class="target-list"
+                  style="grid-template-columns: repeat(4, 1fr); margin-top: 10px"
+                >
+                  <div class="info-box">
+                    <span>设备端模式</span>
+                    <strong>{{ egressState.effectiveMode ?? egressState.mode ?? '--' }}</strong>
+                  </div>
+                  <div class="info-box">
+                    <span>已生效</span>
+                    <strong>{{ egressState.applied ? '是' : '否' }}</strong>
+                  </div>
+                  <div class="info-box">
+                    <span>读回一致</span>
+                    <strong>
+                      {{ egressReadback?.matches === true ? '一致' : egressReadback?.matches === false ? '不一致' : '--' }}
+                    </strong>
+                  </div>
+                  <div class="info-box">
+                    <span>fail-open</span>
+                    <strong>{{ egressHealth?.degraded ? '已降级直连' : '正常' }}</strong>
+                  </div>
+                </div>
+
+                <div v-if="egressReadback?.settingsValue" class="code-panel" style="margin-top: 10px">
+                  settings get global http_proxy → {{ egressReadback.settingsValue }}
+                </div>
+
+                <div v-if="egressHealth?.lastProbe" class="inline-alert is-muted" style="margin-top: 10px">
+                  <el-icon><CircleCheck /></el-icon>
+                  <span>
+                    最近设备探测：
+                    {{ egressHealth.lastProbe.ok ? (egressHealth.lastProbe.exitIp ?? '--') : (egressHealth.lastProbe.errorCode ?? '失败') }}
+                    · {{ egressHealth.lastProbe.latencyMs ?? '--' }} ms ·
+                    {{ relativeTime(egressHealth.lastProbe.checkedAt) }}
+                  </span>
+                </div>
+
+                <div v-if="egressWarnings.length" class="inline-alert is-warn" style="margin-top: 10px">
+                  <el-icon><Warning /></el-icon>
+                  <span>{{ egressWarnings.join('；') }}</span>
+                </div>
+              </template>
+
+              <el-button size="small" plain style="margin-top: 12px" @click="openProxies">
+                <el-icon style="margin-right: 4px"><Connection /></el-icon>
+                打开代理池
+              </el-button>
+            </div>
+
             <div v-if="selectedTemplates.length" class="drawer-section">
               <h3>设备上的模板</h3>
               <div class="target-list" style="grid-template-columns: 1fr 1fr">
@@ -388,8 +513,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowRight,
   CircleCheck,
+  Connection,
   Delete,
   Grid,
+  InfoFilled,
   Iphone,
   Link,
   Loading,
@@ -401,12 +528,18 @@ import {
   Warning,
   WarningFilled,
 } from '@element-plus/icons-vue'
-import { describeError } from '../api/client'
-import type { DeviceAppSummary, DeviceDetail, TemplateSummary, Warning as ApiWarning } from '../api/types'
+import { describeError, egressRevisionFor } from '../api/client'
+import type {
+  DeviceAppSummary,
+  DeviceDetail,
+  DeviceEgressResponse,
+  TemplateSummary,
+  Warning as ApiWarning,
+} from '../api/types'
 import { appDefFor } from '../appCatalog'
 import { useManagerStore } from '../stores/manager'
 import { copyText } from '../utils/clipboard'
-import { relativeTime } from '../utils/format'
+import { relativeTime, truncate } from '../utils/format'
 import type { AppDef } from '../types'
 
 const route = useRoute()
@@ -415,6 +548,8 @@ const manager = useManagerStore()
 
 const keyword = ref('')
 const statusFilter = ref<'all' | 'online' | 'offline'>('all')
+/** 「未配代理」筛选：设备级没有 proxy 绑定（只有应用级绑定也算未配）。 */
+const noEgressOnly = ref(false)
 const addVisible = ref(false)
 const adding = ref(false)
 const addError = ref('')
@@ -440,6 +575,7 @@ const filteredDevices = computed(() => {
   return manager.devices.filter((device) => {
     if (statusFilter.value === 'online' && !device.online) return false
     if (statusFilter.value === 'offline' && device.online) return false
+    if (noEgressOnly.value && manager.hasDeviceEgress(device)) return false
     if (!query) return true
     return [
       device.name,
@@ -490,6 +626,57 @@ const selectedDriftCount = computed(() => {
   return manager.driftRows.filter((row) => row.cells[selectedDevice.value?.id ?? '']).length
 })
 
+// ---- 出口代理（egress）视图状态（契约 §6.8 / §6.9）----------------------
+const egressLoading = ref(false)
+const egressError = ref('')
+const deviceEgress = ref<DeviceEgressResponse | null>(null)
+
+const egressProxyLabel = computed(() => {
+  const summary = selectedDevice.value?.egress
+  if (!summary) return '未配置'
+  if (summary.mode === 'proxy') return summary.proxyName ?? '代理已不存在'
+  if (summary.mode === 'direct') return '整机直连'
+  return '未配置'
+})
+
+const egressBindings = computed(() => deviceEgress.value?.bindings ?? [])
+const egressState = computed(() => deviceEgress.value?.deviceState ?? null)
+const egressReadback = computed(() => egressState.value?.readback ?? null)
+const egressHealth = computed(() => egressState.value?.health ?? null)
+const egressWarnings = computed(() =>
+  (deviceEgress.value?.warnings ?? []).map((warning) => warning.message || warning.code)
+)
+
+/**
+ * egress revision：只用 X-DF-Egress-Revision（client.ts 采集）或响应体的 revision。
+ * 绝不读 X-DF-Revision / ETag —— 那是 config revision，混用会让 PUT /config 永远 412。
+ */
+const egressRevision = computed<string | null>(() => {
+  const id = selectedId.value
+  if (id) {
+    const fromHeader = egressRevisionFor(id)
+    if (fromHeader) return fromHeader
+  }
+  return egressState.value?.revision ?? null
+})
+
+async function loadEgress(id: string): Promise<void> {
+  egressLoading.value = true
+  egressError.value = ''
+  try {
+    deviceEgress.value = await manager.loadDeviceEgress(id)
+  } catch (cause) {
+    deviceEgress.value = null
+    egressError.value = describeError(cause, '加载设备出口状态失败')
+  } finally {
+    egressLoading.value = false
+  }
+}
+
+function reloadEgress(): void {
+  if (selectedId.value) void loadEgress(selectedId.value)
+}
+
 function openAdd(): void {
   addVisible.value = true
 }
@@ -507,6 +694,8 @@ function handleDrawerClosed(): void {
   selectedId.value = ''
   detail.value = null
   detailError.value = ''
+  deviceEgress.value = null
+  egressError.value = ''
 }
 
 function resetForm(): void {
@@ -590,12 +779,18 @@ function openDevice(id: string): void {
   selectedId.value = id
   detailTab.value = 'overview'
   detail.value = null
+  deviceEgress.value = null
   drawerVisible.value = true
   void loadDetail(id)
+  void loadEgress(id)
 }
 
 function openWebUI(baseUrl: string): void {
   window.open(baseUrl, '_blank', 'noopener')
+}
+
+function openProxies(): void {
+  router.push('/proxies')
 }
 
 async function syncSelected(): Promise<void> {
@@ -604,6 +799,7 @@ async function syncSelected(): Promise<void> {
   try {
     const result = await manager.syncDevice(id)
     await loadDetail(id)
+    void loadEgress(id)
     if (result.online) {
       ElMessage.success('配置已同步')
     } else {

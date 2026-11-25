@@ -1,0 +1,35 @@
+=== 准备：写入一条带凭据的代理 + 设备级 default + 一个指向死端口的应用代理 ===
+[PASS] 设备级写入落盘（503 = settings 缺失，符合 host 预期） status=503
+[PASS] config.toml 有 [egress].default 
+[PASS] egress.toml 有明文密码（前置条件） 
+
+=== 1) B-1：只改 probeUrl 的 dry_run（评审给的复现方式，密码只出现在上下文行） ===
+[PASS] dry_run 返回 200 status=200
+[PASS] 响应不含既有密码 s3cret 
+[PASS] 响应不含用户名 alice 
+[PASS] 上下文里的凭据行被替换为 <redacted> 
+[PASS] diff 仍保留 egress.toml 段与 probeUrl 变更 
+[PASS] 只改 probeUrl 时没有 config.toml 段 
+
+=== 2) B-1 变体：dry_run 同时改 config（default）+ egress（probeUrl） ===
+[PASS] dry_run 返回 200 status=200
+[PASS] config.toml 段仍在 
+[PASS] config 段保留了 default 的删除行 
+[PASS] egress 段仍在且脱敏 
+[PASS] 响应不含 s3cret / alice 
+
+=== 3) B-1 变体：轮换密码（dry_run + diff） ===
+[PASS] dry_run 返回 200 status=200
+[PASS] 响应不含旧密码 s3cret 
+[PASS] 响应不含新密码 n3wpass 
+[PASS] diff 有两条脱敏的 password 行（- 与 +） count=2
+
+=== 4) H-1：应用级探测失败 → 502 + scope=app + warning，且不动设备级 default ===
+[PASS] 探测失败返回 502 status=502
+[PASS] details.scope == app scope=app
+[PASS] details.warnings 带 egress_probe_scope_app [{"code": "egress_probe_scope_app", "details": {"proxy": "dead", "reason": "connect", "scope": "app"}, "message": "应用级探测失败不会触发 fail-open（设备级系统代理保持不变）"}]
+[PASS] 设备级 default 未被应用级失败清掉 default=us_la_01
+[PASS] health.degraded == false（应用级失败不降级） 
+[PASS] effectiveMode 仍为 proxy effectiveMode=proxy
+
+RESULT: PASS（B-1 与 H-1 的真实二进制复验全部通过）

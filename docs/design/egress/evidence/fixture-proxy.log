@@ -1,0 +1,113 @@
+2026-11-24T21:16:27+0800 proto=start http=18080 socks=18081 virtual_ip=198.51.100.7 http_auth=0 socks_auth=1
+2026-11-24T21:16:29+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:16:29+0800 proto=socks5 auth user_ok=1 pass_ok=1 (values never logged)
+2026-11-24T21:16:29+0800 proto=socks5 CONNECT probe.fixture:80
+2026-11-24T21:16:29+0800 proto=socks5 tunnel-request probe.fixture 76 bytes
+2026-11-24T21:16:45+0800 proto=http CONNECT digitalassetlinks.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:16:45+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:16:46+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:16:46+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:16:58+0800 proto=start http=18080 socks=18081 virtual_ip=198.51.100.7 http_auth=0 socks_auth=1
+2026-11-24T21:16:59+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:17:04+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:17:09+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:10+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:10+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:10+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:37+0800 proto=http GET http://connectivitycheck.gstatic.com/generate_204 host=connectivitycheck.gstatic.com auth=0 auth_ok=1
+2026-11-24T21:17:48+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:48+0800 proto=http CONNECT phonedeviceverification-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:51+0800 proto=http CONNECT clienttracing-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:51+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:51+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:51+0800 proto=http CONNECT clienttracing-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:51+0800 proto=http CONNECT userlocation.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:52+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:52+0800 proto=http CONNECT meetings.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:53+0800 proto=http CONNECT notifications-ueeshp-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:53+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:58+0800 proto=http CONNECT play-fe.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:59+0800 proto=http CONNECT connectivitycheck.gstatic.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:59+0800 proto=http CONNECT connectivitycheck.gstatic.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:59+0800 proto=http CONNECT infinitedata-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:17:59+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:01+0800 proto=http CONNECT cryptauthenrollment.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:01+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:02+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:02+0800 proto=http CONNECT notes-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:02+0800 proto=http CONNECT tasks-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:03+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:03+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:03+0800 proto=http CONNECT people-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:03+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:04+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:05+0800 proto=http CONNECT tasks-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:05+0800 proto=http CONNECT tasks-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:05+0800 proto=http CONNECT notifications-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:11+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:12+0800 proto=http CONNECT peoplestack-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:12+0800 proto=http CONNECT taskassist-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:12+0800 proto=http CONNECT appsgrowthpromo-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT peoplestack-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT appsgrowthpromo-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT taskassist-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT appsgenaiserver-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT people-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:13+0800 proto=http CONNECT appsgenaiserver-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:15+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:17+0800 proto=http CONNECT geller-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:18+0800 proto=http CONNECT spot-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:18+0800 proto=http CONNECT geller-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:19+0800 proto=http CONNECT spot-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:20+0800 proto=http CONNECT locationhistoryaggregates-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:18:37+0800 proto=http GET http://connectivitycheck.gstatic.com/generate_204 host=connectivitycheck.gstatic.com auth=0 auth_ok=1
+2026-11-24T21:18:58+0800 proto=http GET http://connectivitycheck.gstatic.com/generate_204 host=connectivitycheck.gstatic.com auth=0 auth_ok=1
+2026-11-24T21:19:03+0800 proto=start http=18080 socks=18081 virtual_ip=198.51.100.7 http_auth=0 socks_auth=1
+2026-11-24T21:19:05+0800 proto=http CONNECT play-fe.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:05+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:06+0800 proto=http GET http://198.51.100.7/ host=198.51.100.7 auth=0 auth_ok=1
+2026-11-24T21:19:06+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:19:06+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:06+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:06+0800 proto=http CONNECT www.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT clienttracing-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT clienttracing-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT userlocation.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT notes-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http CONNECT cryptauthenrollment.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http GET http://198.51.100.7/ host=198.51.100.7 auth=0 auth_ok=1
+2026-11-24T21:19:07+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:19:08+0800 proto=http CONNECT proactivebackend-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:08+0800 proto=http CONNECT proactivebackend-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:08+0800 proto=http CONNECT pixelweatherhub-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:08+0800 proto=http CONNECT pixelweatherhub-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:09+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:11+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:14+0800 proto=http GET http://198.51.100.7/ host=198.51.100.7 auth=0 auth_ok=1
+2026-11-24T21:19:14+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:19:15+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:17+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:19+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:20+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:19:31+0800 proto=http CONNECT play.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:21:17+0800 proto=http GET http://198.51.100.7/ host=198.51.100.7 auth=0 auth_ok=1
+2026-11-24T21:21:17+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:22:59+0800 proto=http GET http://198.51.100.7/ host=198.51.100.7 auth=0 auth_ok=1
+2026-11-24T21:22:59+0800 proto=http GET http://probe.fixture/ host=probe.fixture auth=0 auth_ok=1
+2026-11-24T21:23:00+0800 proto=http GET http://connectivitycheck.gstatic.com/generate_204 host=connectivitycheck.gstatic.com auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT vod-settings.volcvod.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT api-access.pangolin-sdk-toutiao.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT data-collector.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT federatedcompute-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT prod-gradual-runtime.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT android.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT soul-bundles.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT soul-bundles.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT soul-bundles.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT soul-bundles.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:43+0800 proto=http CONNECT soul-bundles.soulapp.cn:443 auth=0 auth_ok=1
+2026-11-24T21:23:44+0800 proto=http CONNECT federatedcompute-pa.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:44+0800 proto=http CONNECT youtubei.googleapis.com:443 auth=0 auth_ok=1
+2026-11-24T21:23:46+0800 proto=http CONNECT androidattestationvalidation-pa.googleapis.com:443 auth=0 auth_ok=1

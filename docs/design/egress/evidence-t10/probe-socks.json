@@ -1,0 +1,1 @@
+{"error":{"code":"validation_failed","details":{"errors":[{"code":"unsupported_proxy_type","message":"Manager 侧探测只支持 HTTP 代理","path":"proxyId"}]},"message":"请求参数不合法","requestId":"req_15a2e5c51e8f452080203142bd29d833","retryable":false}}

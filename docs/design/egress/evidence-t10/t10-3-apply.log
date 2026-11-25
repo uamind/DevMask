@@ -1,0 +1,20 @@
+===== 3a) apply#1 逐设备结果（A 整机 + A 应用级 + B + C + D）=====
+  job.status=partial kind=egress total=5 succeeded=4 skipped=0 failed=1
+   - device=mock-a-ok      app=''               status=ok      code=None               attempts=1 steps=None:ok,None:ok,None:ok,None:ok
+   - device=mock-a-ok      app='com.xingin.xhs' status=ok      code=None               attempts=1 steps=None:ok,None:ok,None:ok,None:ok
+   - device=mock-b-ok      app=''               status=ok      code=egress_unchanged   attempts=1 steps=None:ok,None:skipped,None:ok
+   - device=mock-c-fail    app=''               status=failed  code=device_error       attempts=1 steps=None:failed
+   - device=mock-d-offline app=''               status=ok      code=egress_unchanged   attempts=1 steps=None:ok,None:skipped,None:ok
+
+===== 3b) 二次下发（同配置）→ 期望 egress_unchanged =====
+apply#2 HTTP=202
+  job.status=succeeded total=3 succeeded=3 skipped=0 failed=0
+   - device=mock-a-ok      app=''               status=ok      code=egress_unchanged
+   - device=mock-a-ok      app='com.xingin.xhs' status=ok      code=egress_unchanged
+   - device=mock-b-ok      app=''               status=ok      code=egress_unchanged
+
+===== 3c) 停掉 mock-d 后下发 → 期望 skipped/device_offline =====
+mock-d 探活: 000
+apply#3 HTTP=202
+  job.status=partial total=1 succeeded=0 skipped=1 failed=0
+   - device=mock-d-offline app=''               status=skipped code=device_offline messages=连接失败

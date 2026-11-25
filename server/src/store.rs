@@ -62,6 +62,34 @@ pub fn read_snapshot(store: &ConfigStore) -> Result<Snapshot, StoreError> {
     })
 }
 
+/// 在调用方**已持有排他 flock** 时读取快照。
+///
+/// 不能再调用 [read_snapshot]：它会再取一次共享 flock，而 flock 绑定的是「打开的文件描述」，
+/// 同一进程内的两个 fd 之间也会互斥 → 自我死锁。跨文件事务（egress 的 config + egress.toml）
+/// 必须用这个函数读 config.toml。
+pub fn read_snapshot_locked(store: &ConfigStore) -> Result<Snapshot, StoreError> {
+    let (exists, text) = match fs::read_to_string(store.path()) {
+        Ok(text) => (true, text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (false, String::new()),
+        Err(error) => return Err(StoreError::Io(error)),
+    };
+    let (size, mtime) = if exists {
+        match fs::metadata(store.path()) {
+            Ok(metadata) => (metadata.len(), metadata.modified().ok().map(util::rfc3339)),
+            Err(_) => (0, None),
+        }
+    } else {
+        (0, None)
+    };
+    Ok(Snapshot {
+        exists,
+        revision: revision::revision_of(&text),
+        text,
+        size,
+        mtime,
+    })
+}
+
 /// If-Match 的两种形态。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Precondition {
@@ -228,8 +256,8 @@ where
 
     let mut document =
         edit::parse_document(&text).map_err(|error| TxError::InvalidCurrent(format!("{error}")))?;
-    let config =
-        Config::from_toml(&text).map_err(|error| TxError::InvalidCurrent(format!("{error:#}")))?;
+    let config = Config::from_toml(&text)
+        .map_err(|error| TxError::InvalidCurrent(crate::util::parse_error_message(&error)))?;
 
     let value = apply(&mut document, &config)?;
     let new_text = document.to_string();
@@ -252,8 +280,13 @@ where
     if !report.is_ok() {
         return Err(TxError::Validation(report));
     }
+    // [egress] 里出现凭据键 → 422 unknown_field（core 只报 warning，这里升级）
+    let section_errors = crate::dto::egress_section_issues(&document);
+    if !section_errors.is_empty() {
+        return Err(TxError::ValidationErrors(section_errors));
+    }
     let parsed = Config::from_toml(&new_text)
-        .map_err(|error| TxError::InvalidCurrent(format!("{error:#}")))?;
+        .map_err(|error| TxError::InvalidCurrent(crate::util::parse_error_message(&error)))?;
     let limit_errors = crate::dto::limit_issues(&parsed);
     if !limit_errors.is_empty() {
         return Err(TxError::ValidationErrors(limit_errors));
@@ -302,10 +335,14 @@ pub fn transact_text(
     if !report.is_ok() {
         return Err(TxError::Validation(report));
     }
+    let section_errors = crate::dto::egress_section_issues(&document);
+    if !section_errors.is_empty() {
+        return Err(TxError::ValidationErrors(section_errors));
+    }
     // core 把「同一 package 多条 [[apps]]」定为 warning；契约（API.md 6.3）要求 422
     // duplicate_app_record，因此整写路径在这里补一条硬错误。
     let parsed = Config::from_toml(&new_text)
-        .map_err(|error| TxError::InvalidCurrent(format!("{error:#}")))?;
+        .map_err(|error| TxError::InvalidCurrent(crate::util::parse_error_message(&error)))?;
     let limit_errors = crate::dto::limit_issues(&parsed);
     if !limit_errors.is_empty() {
         return Err(TxError::ValidationErrors(limit_errors));

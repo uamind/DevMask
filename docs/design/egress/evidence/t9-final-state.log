@@ -1,0 +1,90 @@
+===== 清理 1：DELETE /egress 清空配置并恢复直连 =====
+DELETE HTTP 200
+{
+  "changed": true,
+  "mode": "direct",
+  "default": null,
+  "applied": true,
+  "readback": {
+    "settingsValue": ":0",
+    "dumpsysGlobalProxy": "Global proxy: none",
+    "matches": true,
+    "at": "2026-11-24T13:23:58Z"
+  }
+}
+--- 可用备份（用于恢复原始 config.toml）---
+total 146
+drwx------ 2 root root 3452 2026-11-24 21:23 .
+drwxr-xr-x 3 root root 3452 2026-11-24 21:23 ..
+-rw------- 1 root root 9452 2026-11-24 21:19 config.toml.20261124T131911.280728703Z-506994cc.bak
+-rw------- 1 root root 9453 2026-11-24 21:19 config.toml.20261124T131933.893090816Z-78919160.bak
+-rw------- 1 root root 9422 2026-11-24 21:19 config.toml.20261124T131935.416767778Z-2b338dbe.bak
+-rw------- 1 root root 9421 2026-11-24 21:19 config.toml.20261124T131945.427323691Z-77c8b0d6.bak
+-rw------- 1 root root 9422 2026-11-24 21:19 config.toml.20261124T131955.386729173Z-2b338dbe.bak
+-rw------- 1 root root 9423 2026-11-24 21:21 config.toml.20261124T132113.590534793Z-3f50ea62.bak
+-rw------- 1 root root 9453 2026-11-24 21:21 config.toml.20261124T132120.933531664Z-48b4b7e5.bak
+-rw------- 1 root root 9435 2026-11-24 21:22 config.toml.20261124T132245.599053881Z-343c3e2a.bak
+-rw------- 1 root root 9435 2026-11-24 21:22 config.toml.20261124T132255.792695936Z-aa06146d.bak
+-rw------- 1 root root 9467 2026-11-24 21:23 config.toml.20261124T132356.886694989Z-58555db6.bak
+-rw------- 1 root root  282 2026-11-24 21:16 egress.toml.20261124T131659.996470501Z-00268ca5.bak
+-rw------- 1 root root  348 2026-11-24 21:17 egress.toml.20261124T131712.407739428Z-a73343ec.bak
+===== 清理 2：恢复 server.toml（移除临时 QA Token）=====
+0
+t9-qa token removed
+root         14955 14950   10981300   7152 futex_wait_queue    0 S device_faker_server
+2026-11-24 21:24:26 [service.sh] device_faker_server 已启动（pid=14955，bind 见 /data/adb/device_faker/config/server.toml）
+[2m2026-11-24T13:24:26.128981Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T13:24:26.639322Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+===== 清理 3：卸载探针应用、删除临时文件 =====
+Success
+(probe app removed)
+00-bootspoof.sh
+1357d2e3.0
+99-selhide.sh
+CertBridge_v5.1.2_arm64.zip
+CustomCACert.log
+XiaoCaiYe
+bc-fake
+bc_new.txt
+boot_a.img
+boot_b.img
+bootspoof.sh
+c8750f0d.0
+cacerts
+cert
+cl2
+clogs
+dalvik-cache
+device_faker-v1.8.0.zip
+device_faker-v1.9.0.zip
+frida-server-17.18.0-android-arm64
+===== 清理 4：停止 fixture 代理、撤销 adb 隧道 =====
+fixture killed: yes
+
+===== 最终状态校验 =====
+--- adb devices ---
+List of devices attached
+4A190DLAQ002QR	device
+
+--- settings list global | grep -i proxy ---
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+--- settings get global http_proxy ---
+:0
+--- dumpsys connectivity | grep -i proxy ---
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+--- egress.toml（仅剩 [probe]，无任何代理定义）---
+version = 1
+
+[probe]
+url = "http://probe.fixture/"
+timeout_seconds = 5
+fail_open = true
+--- config.toml 残留检查 ---
+(no egress/debug/egressprobe residue)

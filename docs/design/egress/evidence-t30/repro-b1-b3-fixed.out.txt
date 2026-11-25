@@ -1,0 +1,27 @@
+[PASS] 设备注册 status=201
+[PASS] 代理创建 status=201
+
+=== A) dryRun + assignments 不落库 ===
+[PASS] dryRun 200 + dryRun:true status=200
+[PASS] bindings 仍为空 []
+[PASS] 无新增 egress.bind 审计 0 -> 0
+[PASS] 无新建 egress.apply 0 -> 0
+
+=== B) 轮换凭据后 apply 必须再发 PUT ===
+[PASS] 首次下发成功 [{"deviceId": "t30-mock", "deviceName": "t30-mock", "app": "", "status": "ok", "code": null, "httpStatus": 200, "revision": "dd5b3f56dddebe7848558cf8c76d85bf9d187682a62b8e56f3346de822d65553", "attempts": 1, "durationMs": 1, "steps": [{"code": null, "durationMs": 0, "httpStatus": 200, "status": "ok", "step": "egress_get"}, {"code": null, "durationMs": 0, "httpStatus": 200, "status": "ok", "step": "egress_put"}], "restart": null, "warnings": [], "error": null}]
+[PASS] 首次下发有 PUT puts=1
+[PASS] PATCH 轮换 200 status=200
+[PASS] 轮换后 apply 成功 
+[PASS] 轮换后再发了一次 PUT（旧实现会 egress_unchanged 跳过） 1 -> 2
+[PASS] 结果码不是 egress_unchanged [{"deviceId": "t30-mock", "deviceName": "t30-mock", "app": "", "status": "ok", "code": null, "httpStatus": 200, "revision": "27a7b53009a62f57b7c1cd955164a1891b817804b2dfdade8429f031d2db3129", "attempts": 1, "durationMs": 1, "steps": [{"code": null, "durationMs": 0, "httpStatus": 200, "status": "ok", "step": "egress_get"}, {"code": null, "durationMs": 0, "httpStatus": 200, "status": "ok", "step": "egress_put"}], "restart": null, "warnings": [], "error": null}]
+
+=== C) 解绑全部后 apply：设备侧归零 ===
+[PASS] 解绑后 apply 成功 
+[PASS] 设备 default 归零 default=None
+[PASS] 设备 apps 归零 []
+[PASS] 设备 proxies 归零 []
+
+=== D) 非法 Idempotency-Key 在写之前被拒 ===
+[PASS] 非法 key → 422 status=422
+
+RESULT: PASS（B-1/B-2/B-3 与 M-1 端到端全部成立）

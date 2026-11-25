@@ -3,7 +3,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Device Faker HTTP API
   summary: 模块自带 Web 服务的 /api/v1 契约（第一增量）
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Device Faker 原生服务（device_faker_server）的 HTTP 契约，第一增量冻结版本。
 
@@ -14,6 +14,7 @@ info:
     - 所有写操作必须带 If-Match（当前配置 revision）；不匹配返回 412，不自动合并。
     - 错误统一信封 error.code / error.message / error.details / error.retryable / error.requestId。
     - 本增量不含 MCP、plan/apply、备份管理、审计查询、Token 管理、应用名与图标。
+    - egress（出口代理）自 v1.10.0 起提供：设备级 HTTP 代理 + 应用级 SOCKS5 注入 + 出口 IP 探测；egress 端点用独立的 egress revision（响应头 X-DF-Egress-Revision），不返回 X-DF-Revision / ETag。
   termsOfService: https://github.com/Seyud/device_faker
   contact:
     name: Device Faker
@@ -41,6 +42,8 @@ tags:
     description: 已安装包元数据
   - name: Device
     description: 设备信息、getprop 白名单、用户列表
+  - name: Egress
+    description: 出口代理（设备级 HTTP 代理、应用级 SOCKS5 注入、出口 IP 探测、代理定义列表）
 paths:
   /api/v1/healthz:
     get:
@@ -62,7 +65,7 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
               example:
                 status: ok
-                version: 1.9.0
+                version: 1.10.0
                 uptimeSec: 3600
         '500':
           $ref: '#/components/responses/InternalError'
@@ -88,9 +91,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/StatusResponse'
               example:
-                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+                module: {id: device_faker, version: v1.10.0, versionCode: 20261201}
                 device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+                server: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
                 config:
                   revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
                   mtime: '2026-11-24T03:00:00Z'
@@ -99,7 +102,7 @@ paths:
                   templates: 26
                   apps: 27
                   conflicts: 0
-                capabilities: [config, templates, apps, packages, device, validate, overview]
+                capabilities: [config, templates, apps, packages, device, validate, overview, egress]
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -130,10 +133,10 @@ paths:
                 $ref: '#/components/schemas/OverviewResponse'
               example:
                 revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
-                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+                module: {id: device_faker, version: v1.10.0, versionCode: 20261201}
                 device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
                 root: {manager: kernelsu, version: 1.0.7}
-                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+                server: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
                 config: {revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5', mtime: '2026-11-24T03:00:00Z', size: 9361, exists: true, templates: 2, apps: 1, conflicts: 1}
                 templates:
                   - name: pixel_9
@@ -1205,7 +1208,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DeviceResponse'
               example:
-                module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+                module: {id: device_faker, version: v1.10.0, versionCode: 20261201}
                 device:
                   manufacturer: Google
                   brand: google
@@ -1215,7 +1218,7 @@ paths:
                   sdk: 37
                   abi: arm64-v8a
                   fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'
-                server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+                server: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
                 root: {manager: kernelsu, version: 1.0.7}
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1293,6 +1296,245 @@ paths:
           $ref: '#/components/responses/ForbiddenScope'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/egress:
+    get:
+      tags: [Egress]
+      operationId: getEgress
+      summary: 出口代理状态
+      description: |
+        一次拿到「期望模式 + 实际模式 + 设备上真实读回的生效值 + 脱敏上游 + 各应用覆盖 + 最近探测」。
+        响应头是 X-DF-Egress-Revision（egress revision）：本端点**不**返回 X-DF-Revision / ETag，
+        否则会污染 WebUI 缓存的 config revision。写端点的 If-Match 也用它。
+      responses:
+        '200':
+          description: 当前出口状态
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EgressResponse'}
+              example:
+                revision: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
+                configRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                configured: true
+                mode: proxy
+                effectiveMode: proxy
+                default: office_http
+                failOpen: true
+                probeUrl: 'http://checkip.example.com/'
+                probeTimeoutSeconds: 5
+                exclusionList: ['10.0.0.0/8']
+                upstream: {name: office_http, type: http, host: 198.51.100.10, port: 8080, hasCredentials: false}
+                proxies:
+                  - {name: office_http, type: http, host: 198.51.100.10, port: 8080, hasCredentials: false}
+                  - {name: lab_socks, type: socks5, host: 198.51.100.20, port: 1080, hasCredentials: true}
+                apps:
+                  - {package: com.example.a, egress: lab_socks, effective: proxy, proxy: lab_socks}
+                  - {package: com.example.b, egress: __DIRECT__, effective: direct, proxy: null}
+                applied: true
+                readback:
+                  settingsValue: '198.51.100.10:8080'
+                  dumpsysGlobalProxy: 'Global proxy: [198.51.100.10] port: 8080'
+                  matches: true
+                  at: '2026-12-01T03:00:00Z'
+                health:
+                  degraded: false
+                  degradedSince: null
+                  degradedReason: null
+                  lastProbe:
+                    ok: true
+                    exitIp: 198.51.100.77
+                    latencyMs: 412
+                    checkedAt: '2026-12-01T02:59:12Z'
+                    scope: device
+                    via: proxy
+                    proxy: office_http
+                    upstreamStatus: 200
+                    errorCode: null
+                egressFile: {exists: true, size: 412, mtime: '2026-12-01T02:58:03Z'}
+                warnings: []
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/ForbiddenScope'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    put:
+      tags: [Egress]
+      operationId: putEgress
+      summary: 写入代理定义与出口策略（并应用设备级 HTTP 代理）
+      description: |
+        省略 = 不改；null = 清空；给数组 = 整体替换该数组。proxies 省略时已存定义与密码原样保留。
+        期望状态与当前一致时不写盘、不备份、不动 mtime，返回 changed=false 且 revision 不变（幂等）。
+        写入顺序：先 egress.toml、再 config.toml，最后应用 settings global http_proxy；
+        应用失败不回滚文件（差异由 applied / readback 暴露）。本端点不自动探测。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/DryRun'
+        - $ref: '#/components/parameters/Diff'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EgressUpdateRequest'}
+            example:
+              default: office_http
+              failOpen: true
+              probeUrl: 'http://checkip.example.com/'
+              probeTimeoutSeconds: 5
+              exclusionList: ['10.0.0.0/8']
+              proxies:
+                - {name: office_http, type: http, host: 198.51.100.10, port: 8080}
+                - {name: lab_socks, type: socks5, host: 198.51.100.20, port: 1080, username: user, password: '<PASSWORD>'}
+              apps:
+                - {package: com.example.a, egress: lab_socks}
+                - {package: com.example.b, egress: __DIRECT__}
+      responses:
+        '200':
+          description: 写入结果（含写入后的真实状态）
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EgressWriteResult'}
+              example:
+                revision: '8c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f'
+                previousRevision: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
+                configRevision: '77aabbccddeeff00112233445566778899aabbccddeeff001122334455667788'
+                dryRun: false
+                changed: true
+                backupId: 20261201T030000Z-5b1f
+                diffTruncated: false
+                configured: true
+                mode: proxy
+                effectiveMode: proxy
+                default: office_http
+                applied: true
+                warnings: []
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/ForbiddenScope'}
+        '412': {$ref: '#/components/responses/EgressRevisionMismatch'}
+        '413': {$ref: '#/components/responses/BodyTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/UpstreamUnavailable'}
+    delete:
+      tags: [Egress]
+      operationId: deleteEgress
+      summary: 恢复直连（清空定义与系统代理）
+      description: |
+        清除 [proxies.*]、[egress].default、所有 [[apps]].egress 与 global_http_proxy_exclusion_list，
+        并执行 settings put global http_proxy :0（settings delete 在 Android 17 上清不掉）。
+        [probe] 段保留。已经是直连且无定义时返回 changed=false。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Confirm'
+      responses:
+        '200':
+          description: 已恢复直连
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EgressWriteResult'}
+              example:
+                revision: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
+                previousRevision: '8c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f'
+                configRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                dryRun: false
+                changed: true
+                backupId: 20261201T031500Z-8c1d
+                diffTruncated: false
+                configured: false
+                mode: direct
+                effectiveMode: direct
+                default: null
+                applied: true
+                warnings: []
+        '400': {$ref: '#/components/responses/ConfirmationRequired'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/ForbiddenScope'}
+        '412': {$ref: '#/components/responses/EgressRevisionMismatch'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '503': {$ref: '#/components/responses/UpstreamUnavailable'}
+  /api/v1/egress/probe:
+    post:
+      tags: [Egress]
+      operationId: probeEgress
+      summary: 经当前生效链路探测出口 IP
+      description: |
+        用当前链路请求 probe URL（默认 http://checkip.amazonaws.com/，只接受 http://），5 秒超时，
+        返回出口 IP / 延迟 / 时间。失败走错误信封（409 egress.not_configured / 502 egress.probe_failed），
+        不用 200 包 ok:false。探测本身不回落；fail-open 只影响流量链路。
+        scope=app 时 approximate 恒为 true（探测在服务进程内完成，不代表目标进程真实链路）。
+        不需要 If-Match，也不支持 Idempotency-Key。
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EgressProbeRequest'}
+            example: {package: null, url: 'http://checkip.example.com/'}
+      responses:
+        '200':
+          description: 探测成功
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EgressProbeResponse'}
+              example:
+                ok: true
+                exitIp: 198.51.100.77
+                latencyMs: 412
+                checkedAt: '2026-12-01T03:00:00Z'
+                scope: device
+                via: proxy
+                proxy: office_http
+                url: 'http://checkip.example.com/'
+                upstreamStatus: 200
+                approximate: false
+                warnings: []
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/ForbiddenScope'}
+        '409': {$ref: '#/components/responses/EgressNotConfigured'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+        '502': {$ref: '#/components/responses/EgressProbeFailed'}
+        '503': {$ref: '#/components/responses/UpstreamUnavailable'}
+  /api/v1/egress/proxies:
+    get:
+      tags: [Egress]
+      operationId: listEgressProxies
+      summary: 代理定义列表（脱敏）
+      description: |
+        返回全部代理定义的脱敏摘要与引用关系（usedAsDefault / apps），永远不含 username / password，
+        唯一凭据信号是 hasCredentials。不分页（定义上限 64 条）。
+      responses:
+        '200':
+          description: 代理定义列表
+          headers:
+            X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+            X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EgressProxiesResponse'}
+              example:
+                revision: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
+                configRevision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
+                total: 2
+                egressFile: {exists: true, size: 412, mtime: '2026-12-01T02:58:03Z'}
+                items:
+                  - {name: office_http, type: http, host: 198.51.100.10, port: 8080, hasCredentials: false, usedAsDefault: true, apps: []}
+                  - {name: lab_socks, type: socks5, host: 198.51.100.20, port: 1080, hasCredentials: true, usedAsDefault: false, apps: [com.example.a]}
+                warnings: []
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/ForbiddenScope'}
+        '500': {$ref: '#/components/responses/InternalError'}
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1320,6 +1562,12 @@ components:
       schema:
         type: string
         example: '"9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"'
+    XDFEgressRevision:
+      description: 当前 egress revision（不带引号；不是 config revision）。egress 端点只回这个头，不回 X-DF-Revision / ETag
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{64}$'
+        example: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
     RetryAfter:
       description: 建议重试等待秒数
       schema:
@@ -1642,6 +1890,52 @@ components:
               details: null
               retryable: true
               requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    EgressRevisionMismatch:
+      description: egress 的 If-Match 与当前 egress revision 不一致（client 应重新 GET /api/v1/egress）
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+        X-DF-Egress-Revision: {$ref: '#/components/headers/XDFEgressRevision'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: config_revision_mismatch
+              message: egress 已被其他客户端修改
+              details:
+                expected: '5b1f0c9e8d7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c'
+                actual: '8c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f'
+                resource: egress
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    EgressNotConfigured:
+      description: 没有任何可用出口（设备级无 default 且无代理定义，或该应用既无覆盖也无设备级默认）
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: egress.not_configured
+              message: 没有可用的出口代理
+              details: {scope: device, package: null}
+              retryable: false
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
+    EgressProbeFailed:
+      description: 出口探测失败（连接 / DNS / 超时 / TLS / 非 2xx / 响应不是 IP）
+      headers:
+        X-Request-Id: {$ref: '#/components/headers/XRequestId'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+          example:
+            error:
+              code: egress.probe_failed
+              message: 出口探测超时
+              details: {url: 'http://checkip.example.com/', reason: timeout, timeoutMs: 5000, upstreamStatus: null}
+              retryable: true
+              requestId: req_01JC7Z6Q3M8V2S9K4T1B0A
     UpstreamUnavailable:
       description: 系统命令（pm / am / getprop）不可用或超时
       headers:
@@ -1781,7 +2075,7 @@ components:
           minimum: 0
           description: 服务已运行秒数
           example: 3600
-      example: {status: ok, version: 1.9.0, uptimeSec: 3600}
+      example: {status: ok, version: 1.10.0, uptimeSec: 3600}
     ModuleInfo:
       type: object
       description: 模块信息，来自 module.prop
@@ -1800,7 +2094,7 @@ components:
           type: integer
           description: 模块版本号
           example: 20261109
-      example: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+      example: {id: device_faker, version: v1.10.0, versionCode: 20261201}
     DeviceSummary:
       type: object
       description: 设备 Build 摘要
@@ -1834,7 +2128,7 @@ components:
         uptimeSec: {type: integer, minimum: 0, description: 已运行秒数, example: 3600}
         startedAt: {type: string, format: date-time, description: 启动时间（UTC）, example: '2026-11-24T03:00:00Z'}
         pid: {type: integer, description: 进程 pid, example: 4321}
-      example: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
+      example: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z', pid: 4321}
     ConfigStatus:
       type: object
       description: 配置文件的 revision 与统计；配置文件不存在（exists=false）时 mtime 为 null、size 为 0、revision 为空内容字节的 SHA-256
@@ -1881,9 +2175,9 @@ components:
             enum: [config, templates, apps, packages, device, validate, overview]
           example: [config, templates, apps, packages, device, validate, overview]
       example:
-        module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+        module: {id: device_faker, version: v1.10.0, versionCode: 20261201}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a}
-        server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
+        server: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, startedAt: '2026-11-24T03:00:00Z'}
         config:
           revision: '9f2c5d1e8a7b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5'
           mtime: '2026-11-24T03:00:00Z'
@@ -1892,7 +2186,7 @@ components:
           templates: 26
           apps: 27
           conflicts: 0
-        capabilities: [config, templates, apps, packages, device, validate, overview]
+        capabilities: [config, templates, apps, packages, device, validate, overview, egress]
     OverviewResponse:
       type: object
       description: 设备、模板与每个已配置应用的有效配置汇总
@@ -2540,9 +2834,9 @@ components:
         root:
           $ref: '#/components/schemas/RootInfo'
       example:
-        module: {id: device_faker, version: v1.9.0, versionCode: 20261125}
+        module: {id: device_faker, version: v1.10.0, versionCode: 20261201}
         device: {manufacturer: Google, brand: google, model: Pixel 9, device: tokay, android: '17', sdk: 37, abi: arm64-v8a, fingerprint: 'google/tokay/tokay:17/BP2A.250605.031/13000000:user/release-keys'}
-        server: {version: 1.9.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
+        server: {version: 1.10.0, bind: '127.0.0.1:8686', uptimeSec: 3600, pid: 4321}
         root: {manager: kernelsu, version: 1.0.7}
     DevicePropsResponse:
       type: object
@@ -2625,3 +2919,180 @@ components:
             title: NumberSetting
           DeviceTemplate: {description: 机型模板, type: object}
           AppConfig: {required: [package], type: object}
+
+    EgressProxySummary:
+      type: object
+      description: 脱敏代理摘要（固定 5 个键；永远不含 username / password）
+      required: [name, type, host, port, hasCredentials]
+      properties:
+        name: {type: string, pattern: '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$', example: office_http}
+        type: {type: string, enum: [http, socks5], description: 协议（TOML 键同名 type）, example: http}
+        host: {type: string, maxLength: 253, description: 主机名或 IPv4，不含 scheme / 端口 / 路径, example: 198.51.100.10}
+        port: {type: integer, minimum: 1, maximum: 65535, example: 8080}
+        hasCredentials: {type: boolean, description: '唯一的凭据信号：username 或 password 任一有值即 true', example: false}
+    EgressAppView:
+      type: object
+      description: 应用级 egress 视图（只列显式写了 [[apps]].egress 的记录）
+      required: [package, egress, effective, proxy]
+      properties:
+        package: {type: string, description: 包名（可带 @userId）, example: com.example.a}
+        egress: {type: string, description: 配置值：代理名或 __DIRECT__, example: lab_socks}
+        effective: {type: string, enum: [proxy, direct], example: proxy}
+        proxy: {type: [string, 'null'], description: 生效代理名；直连或定义缺失时为 null, example: lab_socks}
+    EgressReadback:
+      type: object
+      description: 设备侧真实读回值（方案 A 的生效证据）
+      required: [matches, at]
+      properties:
+        settingsValue: {type: [string, 'null'], description: 'settings get global http_proxy 原文：null / :0 / host:port', example: '198.51.100.10:8080'}
+        dumpsysGlobalProxy: {type: [string, 'null'], description: dumpsys connectivity 的 Global proxy 行原文, example: 'Global proxy: [198.51.100.10] port: 8080'}
+        matches: {type: boolean, description: 读回值是否等于期望值, example: true}
+        at: {type: string, format: date-time, example: '2026-12-01T03:00:00Z'}
+    EgressLastProbe:
+      type: object
+      description: 最近一次探测（内存态，服务重启后为 null）
+      required: [ok, latencyMs, checkedAt, scope, via]
+      properties:
+        ok: {type: boolean, example: true}
+        exitIp: {type: [string, 'null'], example: 198.51.100.77}
+        latencyMs: {type: integer, minimum: 0, example: 412}
+        checkedAt: {type: string, format: date-time, example: '2026-12-01T02:59:12Z'}
+        scope: {type: string, enum: [device, app], example: device}
+        via: {type: string, enum: [proxy, direct], example: proxy}
+        proxy: {type: [string, 'null'], example: office_http}
+        upstreamStatus: {type: [integer, 'null'], minimum: 100, maximum: 599, example: 200}
+        errorCode: {type: [string, 'null'], description: 失败时的稳定错误码, example: null}
+    EgressHealth:
+      type: object
+      description: fail-open 状态（判定只在显式探测失败 / 写入后读回不一致 / 启动自愈不一致三个时点发生）
+      required: [degraded]
+      properties:
+        degraded: {type: boolean, example: false}
+        degradedSince: {type: [string, 'null'], format: date-time, example: null}
+        degradedReason: {type: [string, 'null'], enum: [probe_failed, settings_mismatch, null], example: null}
+        lastProbe: {oneOf: [{$ref: '#/components/schemas/EgressLastProbe'}, {type: 'null'}]}
+    EgressFileMeta:
+      type: object
+      description: egress.toml 元数据（只给存在性 / 大小 / 时间，不给内容）
+      required: [exists, size]
+      properties:
+        exists: {type: boolean, example: true}
+        size: {type: integer, minimum: 0, example: 412}
+        mtime: {type: [string, 'null'], format: date-time, example: '2026-12-01T02:58:03Z'}
+    EgressState:
+      type: object
+      description: GET / PUT / DELETE /api/v1/egress 共用的状态块（全部 lowerCamelCase）
+      required: [configured, mode, effectiveMode, failOpen, probeUrl, probeTimeoutSeconds, exclusionList, proxies, apps, applied, readback, health, egressFile, warnings]
+      properties:
+        configured: {type: boolean, description: 至少一条定义 / 设备级 default / 任一应用覆盖, example: true}
+        mode: {type: string, enum: [proxy, direct], description: 期望模式（default 非空即 proxy）, example: proxy}
+        effectiveMode: {type: string, enum: [proxy, direct], description: 计入 fail-open 后的实际模式, example: proxy}
+        default: {type: [string, 'null'], description: '设备级代理名（[egress].default）', example: office_http}
+        failOpen: {type: boolean, description: '代理不可用时是否放行直连（[probe].fail_open）', example: true}
+        probeUrl: {type: string, format: uri, pattern: '^http://', example: 'http://checkip.example.com/'}
+        probeTimeoutSeconds: {type: integer, minimum: 1, maximum: 30, example: 5}
+        exclusionList: {type: array, items: {type: string, maxLength: 64}, maxItems: 32, example: ['10.0.0.0/8']}
+        upstream: {oneOf: [{$ref: '#/components/schemas/EgressProxySummary'}, {type: 'null'}]}
+        proxies: {type: array, maxItems: 64, items: {$ref: '#/components/schemas/EgressProxySummary'}}
+        apps: {type: array, items: {$ref: '#/components/schemas/EgressAppView'}}
+        applied: {type: boolean, description: 只描述方案 A：读回值与期望值是否一致, example: true}
+        readback: {$ref: '#/components/schemas/EgressReadback'}
+        health: {$ref: '#/components/schemas/EgressHealth'}
+        egressFile: {$ref: '#/components/schemas/EgressFileMeta'}
+        warnings:
+          type: array
+          items: {$ref: '#/components/schemas/Warning'}
+    EgressResponse:
+      allOf:
+        - $ref: '#/components/schemas/EgressState'
+        - type: object
+          required: [revision, configRevision]
+          properties:
+            revision: {type: string, pattern: '^[0-9a-f]{64}$', description: egress revision（写端点的 If-Match）}
+            configRevision: {type: string, pattern: '^[0-9a-f]{64}$', description: config.toml 的 revision（仅排障 / 展示）}
+    EgressWriteResult:
+      allOf:
+        - $ref: '#/components/schemas/EgressState'
+        - type: object
+          required: [revision, configRevision, dryRun, changed, diffTruncated, warnings]
+          properties:
+            revision: {type: string, pattern: '^[0-9a-f]{64}$', description: 写入后的 egress revision（dryRun 时为当前值）}
+            previousRevision: {type: [string, 'null'], description: 写入前的 egress revision}
+            configRevision: {type: string, pattern: '^[0-9a-f]{64}$'}
+            dryRun: {type: boolean, example: false}
+            changed: {type: boolean, description: 是否真的落盘（false = 幂等短路）, example: true}
+            backupId: {type: [string, 'null'], example: 20261201T030000Z-5b1f}
+            diff: {type: string, description: 仅 diff=true 或 dry_run=true 时出现}
+            diffTruncated: {type: boolean, example: false}
+    EgressProxyInput:
+      type: object
+      description: PUT /egress 的代理定义（凭据只写不读）
+      required: [name, type, host, port]
+      additionalProperties: false
+      properties:
+        name: {type: string, pattern: '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}$', example: office_http}
+        type: {type: string, enum: [http, socks5], example: http}
+        host: {type: string, maxLength: 253, example: 198.51.100.10}
+        port: {type: integer, minimum: 1, maximum: 65535, example: 8080}
+        username: {type: [string, 'null'], maxLength: 128, description: 省略 = 保留已存值；null = 清除}
+        password: {type: [string, 'null'], maxLength: 256, description: 省略 = 保留已存值；null = 清除}
+    EgressAppInput:
+      type: object
+      description: PUT /egress 的应用级覆盖（只改 egress 字段，不做整记录替换）
+      required: [package, egress]
+      additionalProperties: false
+      properties:
+        package: {type: string, example: com.example.a}
+        egress: {type: [string, 'null'], description: '代理名 / __DIRECT__ / null（清除该应用覆盖）', example: lab_socks}
+    EgressUpdateRequest:
+      type: object
+      description: PUT /egress 请求体：省略 = 不改，null = 清空，数组 = 整体替换
+      additionalProperties: false
+      properties:
+        default: {type: [string, 'null'], description: 设备级代理名；null 清除；不接受 __DIRECT__}
+        failOpen: {type: boolean}
+        probeUrl: {type: [string, 'null'], format: uri, pattern: '^http://', maxLength: 512}
+        probeTimeoutSeconds: {type: integer, minimum: 1, maximum: 30}
+        exclusionList: {type: [array, 'null'], items: {type: string, maxLength: 64}, maxItems: 32}
+        proxies: {type: array, maxItems: 64, items: {$ref: '#/components/schemas/EgressProxyInput'}, description: 整体替换；省略时已存定义与密码保持不变}
+        apps: {type: [array, 'null'], items: {$ref: '#/components/schemas/EgressAppInput'}, description: 'null = 清除所有应用覆盖；省略 = 不改'}
+    EgressProbeRequest:
+      type: object
+      description: POST /egress/probe 请求体（可省略）
+      additionalProperties: false
+      properties:
+        package: {type: [string, 'null'], description: 'null = 设备级链路；给定包名 = 用该应用的生效代理定义', example: null}
+        url: {type: [string, 'null'], format: uri, pattern: '^http://', maxLength: 512}
+    EgressProbeResponse:
+      type: object
+      required: [ok, exitIp, latencyMs, checkedAt, scope, via, url, approximate, warnings]
+      properties:
+        ok: {type: boolean, description: 成功时恒 true（失败走错误信封）, example: true}
+        exitIp: {type: string, description: 出口 IP 字面量（IPv4 / IPv6）, example: 198.51.100.77}
+        latencyMs: {type: integer, minimum: 0, example: 412}
+        checkedAt: {type: string, format: date-time, example: '2026-12-01T03:00:00Z'}
+        scope: {type: string, enum: [device, app], example: device}
+        via: {type: string, enum: [proxy, direct], example: proxy}
+        proxy: {type: [string, 'null'], example: office_http}
+        url: {type: string, format: uri, example: 'http://checkip.example.com/'}
+        upstreamStatus: {type: [integer, 'null'], minimum: 100, maximum: 599, example: 200}
+        approximate: {type: boolean, description: scope=app 时恒 true（探测在服务进程内完成）, example: false}
+        warnings: {type: array, items: {$ref: '#/components/schemas/Warning'}}
+    EgressProxyListItem:
+      allOf:
+        - $ref: '#/components/schemas/EgressProxySummary'
+        - type: object
+          required: [usedAsDefault, apps]
+          properties:
+            usedAsDefault: {type: boolean, description: '是否为 [egress].default 指向的定义', example: true}
+            apps: {type: array, items: {type: string}, description: 引用该定义的包名, example: []}
+    EgressProxiesResponse:
+      type: object
+      required: [revision, configRevision, total, egressFile, items, warnings]
+      properties:
+        revision: {type: string, pattern: '^[0-9a-f]{64}$'}
+        configRevision: {type: string, pattern: '^[0-9a-f]{64}$'}
+        total: {type: integer, minimum: 0, maximum: 64, example: 2}
+        egressFile: {$ref: '#/components/schemas/EgressFileMeta'}
+        items: {type: array, items: {$ref: '#/components/schemas/EgressProxyListItem'}}
+        warnings: {type: array, items: {$ref: '#/components/schemas/Warning'}}

@@ -1,0 +1,20 @@
+===== A 应用级 HTTP（设备级 mac_http:18080 + 应用级 mac_http2:18082）=====
+PUT HTTP 200
+{"changed": true, "mode": "proxy", "default": "mac_http", "apps": [{"package": "io.df.egressprobe", "egress": "mac_http2", "effective": "proxy", "proxy": "mac_http2"}]}
+11-24 22:39:13.944 10435 10435 I EGRESSPROBE: http.proxyHost=127.0.0.1
+11-24 22:39:13.944 10435 10435 I EGRESSPROBE: http.proxyPort=18082
+11-24 22:39:13.944 10435 10435 I EGRESSPROBE: selector.app.fixture=HTTP @ 127.0.0.1/<unresolved>:18082
+11-24 22:39:13.944 10435 10435 I EGRESSPROBE: fetch.app=status=200 body=198.51.100.8
+11-24 22:39:13.944 10435 10435 I EGRESSPROBE: fetch.ip=status=200 body=198.51.100.7
+--- fixture（listener 归因）---
+2026-11-24T22:39:09+0800 proto=http listener=18082 GET http://app.fixture/ host=app.fixture auth=0
+2026-11-24T22:39:09+0800 proto=http listener=18082 GET http://198.51.100.7/ host=198.51.100.7 auth=0
+2026-11-24T22:39:12+0800 proto=http listener=18080 CONNECT phonedeviceverification-pa.googleapis.com:443 auth=0
+2026-11-24T22:39:17+0800 proto=http listener=18080 CONNECT digitalassetlinks.googleapis.com:443 auth=0
+--- DeviceFaker logcat ---
+11-24 22:39:07.958 10435 10435 I DeviceFaker: [egress] replay hook armed package=io.df.egressprobe
+11-24 22:39:07.979 10435 10435 I DeviceFaker: [egress] replay hook fired symbol=setpriority
+11-24 22:39:07.979 10435 10435 I DeviceFaker: [egress] replay start package=io.df.egressprobe trigger=post_zygote_setpriority
+11-24 22:39:09.980 10435 10439 W DeviceFaker: [egress] replay package=io.df.egressprobe t=32ms reason=framework_overwrite applied=6/6 changed=[http.proxyPort=18080->18082, https.proxyPort=18080->18082]
+11-24 22:39:09.981 10435 10439 I DeviceFaker: [egress] replay done package=io.df.egressprobe probes=118 replays=1 divergences=1 state=match elapsed=2000ms
+11-24 22:39:16.165  1406  1406 I adbd    : adbd service requested 'shell,v2,TERM=dumb,raw:logcat -d | grep -a DeviceFaker | tail -6'

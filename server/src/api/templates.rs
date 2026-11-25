@@ -70,8 +70,12 @@ pub async fn list(
 
     let snapshot = store::read_snapshot(state.store())
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error}")))?;
-    let config = Config::from_toml(&snapshot.text)
-        .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
+    let config = Config::from_toml(&snapshot.text).map_err(|error| {
+        ApiError::internal_error(
+            request_id.as_str(),
+            crate::util::parse_error_message(&error),
+        )
+    })?;
 
     let items: Vec<TemplateListItem> = config
         .templates
@@ -112,8 +116,12 @@ pub async fn get(
 ) -> Result<Response, ApiError> {
     let snapshot = store::read_snapshot(state.store())
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error}")))?;
-    let config = Config::from_toml(&snapshot.text)
-        .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
+    let config = Config::from_toml(&snapshot.text).map_err(|error| {
+        ApiError::internal_error(
+            request_id.as_str(),
+            crate::util::parse_error_message(&error),
+        )
+    })?;
     let Some((position, _, template)) = config.templates.get_full(&name) else {
         return Err(ApiError::not_found(request_id.as_str(), "template", &name));
     };
@@ -509,7 +517,10 @@ fn candidate_config(
     request_id: &str,
 ) -> Result<Config, TxError> {
     Config::from_toml(&document.to_string()).map_err(|error| {
-        TxError::Domain(ApiError::internal_error(request_id, format!("{error:#}")))
+        TxError::Domain(ApiError::internal_error(
+            request_id,
+            crate::util::parse_error_message(&error),
+        ))
     })
 }
 

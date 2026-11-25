@@ -1,0 +1,24 @@
+===== T5f-1 设备级直连 + 应用级 SOCKS5（debug 日志 + 进程内属性） =====
+PUT HTTP 200
+[2026-11-24 21:22:22.238] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=http host=127.0.0.1 port=18082 creds=0 ok=6 failed=1
+[2026-11-24 21:22:47.899] [WARN] zygisk::hooks - [egress] inject failed package=io.df.egressprobe step=proxy_selector error=Method not found: of (Ljava/net/Proxy;)Ljava/net/ProxySelector;
+[2026-11-24 21:22:47.899] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=socks5 host=127.0.0.1 port=18081 creds=1 ok=8 failed=1
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: http.proxyHost=<null>
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: socksProxyHost=127.0.0.1
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: socksProxyPort=18081
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: java.net.socks.username=dfsocks
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: java.net.socks.password=<set:true>
+11-24 21:22:51.021 14267 14267 I EGRESSPROBE: selector.probe.fixture=SOCKS @ 127.0.0.1/<unresolved>:18081
+
+===== T5f-2 设备级 HTTP 代理打开 + 应用级 __DIRECT__（验证能否拉回直连） =====
+PUT HTTP 200
+{"mode": "proxy", "default": "mac_http", "apps": [{"package": "io.df.egressprobe", "egress": "__DIRECT__", "effective": "direct", "proxy": null}]}
+127.0.0.1:18080
+[2026-11-24 21:22:47.899] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=socks5 host=127.0.0.1 port=18081 creds=1 ok=8 failed=1
+[2026-11-24 21:22:58.454] [WARN] zygisk::hooks - [egress] inject failed package=io.df.egressprobe step=proxy_selector error=Method not found: of (Ljava/net/Proxy;)Ljava/net/ProxySelector;
+[2026-11-24 21:22:58.454] [INFO] zygisk::hooks - [egress] injected package=io.df.egressprobe type=direct host=- port=- creds=0 ok=6 failed=1
+11-24 21:22:58.549 14390 14390 I EGRESSPROBE: http.proxyHost=127.0.0.1
+11-24 21:22:58.549 14390 14390 I EGRESSPROBE: http.proxyPort=18080
+11-24 21:22:58.549 14390 14390 I EGRESSPROBE: socksProxyHost=<null>
+11-24 21:22:58.549 14390 14390 I EGRESSPROBE: socksProxyPort=<null>
+11-24 21:22:58.549 14390 14390 I EGRESSPROBE: selector.probe.fixture=HTTP @ 127.0.0.1/<unresolved>:18080

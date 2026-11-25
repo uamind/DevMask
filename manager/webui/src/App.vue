@@ -46,6 +46,12 @@
           >
             {{ manager.onlineCount }}/{{ manager.deviceCount }}
           </span>
+          <span
+            v-else-if="item.key === 'proxies' && manager.egressProxyTotal"
+            class="nav-badge"
+          >
+            {{ manager.egressProxyTotal }}
+          </span>
         </router-link>
       </nav>
 
@@ -140,17 +146,22 @@
       title="Manager Token"
       width="520px"
       :close-on-click-modal="false"
+      data-testid="manager-token-dialog"
     >
       <p class="hint" style="margin-top: 0">
         Relay 用 <code>Authorization: Bearer &lt;manager-token&gt;</code> 鉴权。Token 来自
         <code>--token</code> / <code>DFM_TOKEN</code> / <code>&lt;data-dir&gt;/manager.token</code>，
-        首次启动默认 <code>admin123</code>。Token 只保存在本浏览器的 localStorage.
+        首次启动默认 <code>admin123</code>。保存后写入本浏览器 <code>localStorage.dfm_token</code>，
+        界面不会回显明文。
       </p>
       <el-input
+        ref="tokenInputRef"
         v-model="tokenInput"
         type="password"
         show-password
+        autocomplete="off"
         placeholder="dfm_... 或 admin123"
+        data-testid="manager-token-input"
         @keyup.enter="submitToken"
       />
       <p v-if="manager.authRequired" class="hint" style="margin-bottom: 0; color: #b45309">
@@ -161,7 +172,12 @@
           <el-button link type="primary" @click="router.push('/relay')">去轮换 Token</el-button>
           <span style="flex: 1"></span>
           <el-button @click="tokenDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="tokenSubmitting" @click="submitToken">
+          <el-button
+            type="primary"
+            :loading="tokenSubmitting"
+            data-testid="manager-token-submit"
+            @click="submitToken"
+          >
             保存并重试
           </el-button>
         </div>
@@ -188,9 +204,10 @@ import {
   Plus,
   Refresh,
   Search,
+  Share,
   WarningFilled,
 } from '@element-plus/icons-vue'
-import { DEFAULT_TOKEN, describeError } from './api/client'
+import { DEFAULT_TOKEN, describeError, getStoredToken } from './api/client'
 import { useManagerStore } from './stores/manager'
 
 const route = useRoute()
@@ -199,12 +216,20 @@ const manager = useManagerStore()
 const search = ref('')
 
 const tokenDialogVisible = ref(false)
-const tokenInput = ref(manager.token || DEFAULT_TOKEN)
+const tokenInput = ref(DEFAULT_TOKEN)
 const tokenSubmitting = ref(false)
+/**
+ * Token 输入框（受控组件）的实例。
+ *
+ * 保存时**以 DOM 里的当前值为准**：自动化/第三方脚本可能只改了 input.value 而没有派发
+ * input 事件，只读 v-model 会拿到旧值（填了真 Token 却存下 admin123）。见 readTokenInputValue。
+ */
+const tokenInputRef = ref<unknown>(null)
 
 const navItems = [
   { key: 'dashboard', path: '/', label: '总览', icon: Odometer },
   { key: 'devices', path: '/devices', label: '设备', icon: Monitor },
+  { key: 'proxies', path: '/proxies', label: '代理池', icon: Share },
   { key: 'apps', path: '/apps', label: '应用矩阵', icon: Grid },
   { key: 'batch', path: '/batch', label: '批量配置', icon: MagicStick },
   { key: 'relay', path: '/relay', label: '接入 AI', icon: Connection },
@@ -226,6 +251,8 @@ watch(
 onMounted(async () => {
   await manager.load()
   await manager.refreshHealth()
+  // 代理池数量给侧边栏角标用；静默失败（旧版 manager 没有 /egress-proxies 也不会弹横幅）
+  await manager.reloadEgressProxiesQuiet()
   if (manager.authRequired) openTokenDialog()
 })
 
@@ -238,23 +265,68 @@ function goAddDevice(): void {
   router.push({ path: '/devices', query: { add: '1' } })
 }
 
+/**
+ * 读取用户在对话框里实际输入的 Token。
+ *
+ * 优先读真实 DOM：受控组件（el-input）只有在 input 事件触发时才更新 v-model，
+ * 自动化脚本/书签直接写 .value 会绕过这一步，只读 v-model 就会把「屏幕上的新 Token」
+ * 丢成旧值。保存动作必须以界面上的当前内容为准。
+ */
+function readTokenInputValue(): string {
+  const instance = tokenInputRef.value as { input?: HTMLInputElement | null } | null
+  const fromInstance = instance?.input
+  if (fromInstance instanceof HTMLInputElement) return fromInstance.value
+  if (typeof document !== 'undefined') {
+    const target = document.querySelector('[data-testid="manager-token-input"]')
+    if (target instanceof HTMLInputElement) return target.value
+    const nested = target?.querySelector('input')
+    if (nested instanceof HTMLInputElement) return nested.value
+  }
+  return tokenInput.value
+}
+
 function openTokenDialog(): void {
-  tokenInput.value = manager.token || DEFAULT_TOKEN
+  // 不回显已保存的 Token：只有从未设置过时才预填内置默认值（admin123 不是秘密）
+  tokenInput.value = manager.token ? '' : DEFAULT_TOKEN
   tokenDialogVisible.value = true
 }
 
 async function submitToken(): Promise<void> {
-  if (!tokenInput.value.trim()) {
+  const value = readTokenInputValue().trim()
+  if (!value) {
+    // 没有新输入但手里已有 Token：按「保持当前凭据重试」处理，避免用户卡在对话框
+    if (manager.token) {
+      tokenSubmitting.value = true
+      try {
+        await retryLoad()
+        if (manager.authRequired) {
+          ElMessage.error('当前 Token 仍然无效：请输入新 Token')
+          return
+        }
+        tokenDialogVisible.value = false
+        ElMessage.success('已使用当前 Token 重新加载')
+      } finally {
+        tokenSubmitting.value = false
+      }
+      return
+    }
     ElMessage.warning('请输入 Manager Token')
     return
   }
+
   tokenSubmitting.value = true
   try {
-    await manager.applyToken(tokenInput.value)
+    await manager.applyToken(value)
+    // 落盘断言：隐私模式 / 配额不足时 setItem 会失败，必须显式报错而不是假装成功
+    if (getStoredToken() !== value) {
+      ElMessage.error('Token 未能写入本地存储（localStorage 不可用？），请检查浏览器隐私设置')
+      return
+    }
     if (manager.authRequired) {
       ElMessage.error('Token 仍然无效：请检查服务端 --token / DFM_TOKEN / manager.token')
       return
     }
+    tokenInput.value = '' // 不在 DOM 里留下明文
     tokenDialogVisible.value = false
     ElMessage.success('Token 已保存，已使用新凭据重新加载')
     await manager.refreshHealth()

@@ -1,0 +1,14 @@
+===== D-1 继承零注入（设备级 default=mac_http 开启，未配置应用 com.reqable.android）=====
+settings=127.0.0.1:18080
+config 命中 com.reqable.android=0
+module log 行数 before=4282 after=4282 delta=0
+该包 [egress] 行=0
+该进程 DeviceFaker logcat 行=1
+pid=11132 maps 命中 device_faker|arm64-v8a|zygisk=0
+
+===== D-2 未配置零注入（设备级 :0 直连）=====
+PUT default=null HTTP 200
+settings=:0
+module log 行数 before=4283 after=4283 delta=0
+该包 [egress] 行=0
+pid=11358 maps 命中=0

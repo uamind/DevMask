@@ -1,0 +1,72 @@
+===== T4-0 重新配置默认代理 =====
+PUT HTTP 200
+{
+  "changed": true,
+  "mode": "proxy",
+  "default": "mac_http",
+  "applied": true,
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T13:17:24Z"
+  }
+}
+
+===== T4-1 脏状态 A：settings delete global http_proxy =====
+Deleted 1 rows
+--- after delete ---
+null
+global_http_proxy_exclusion_list=
+global_http_proxy_host=127.0.0.1
+global_http_proxy_port=18080
+global_proxy_pac_url=
+--- dumpsys（应显示 none，但 host/port 仍残留 = 历史坑）---
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: [127.0.0.1] 18080 xl=
+  Default proxy: none
+===== T4-2 重启服务，观察启动 reconcile 自愈 =====
+[2m2026-11-24T13:13:00.382356Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+[2m2026-11-24T13:16:01.906030Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+[2m2026-11-24T13:17:29.092738Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mtrue [3meffective_mode[0m[2m=[0m"from_config"
+--- settings after restart ---
+127.0.0.1:18080
+global_http_proxy_exclusion_list=
+global_http_proxy_host=127.0.0.1
+global_http_proxy_port=18080
+global_proxy_pac_url=
+http_proxy=127.0.0.1:18080
+--- dumpsys after restart ---
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: [127.0.0.1] 18080 xl=
+  Default proxy: none
+===== T4-3 脏状态 B：settings put global http_proxy 10.9.9.9:1（错值） =====
+10.9.9.9:1
+[2m2026-11-24T13:17:29.092738Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mtrue [3meffective_mode[0m[2m=[0m"from_config"
+[2m2026-11-24T13:17:40.372598Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mtrue [3meffective_mode[0m[2m=[0m"from_config"
+127.0.0.1:18080
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: [127.0.0.1] 18080 xl=
+  Default proxy: none
+--- GET /egress 自愈后状态 ---
+{
+  "mode": "proxy",
+  "effectiveMode": "proxy",
+  "default": "mac_http",
+  "applied": true,
+  "readback": {
+    "settingsValue": "127.0.0.1:18080",
+    "dumpsysGlobalProxy": "Global proxy: [127.0.0.1] 18080 xl=",
+    "matches": true,
+    "at": "2026-11-24T13:17:48Z"
+  },
+  "health": {
+    "degraded": false,
+    "degradedSince": null,
+    "degradedReason": null,
+    "lastProbe": null
+  }
+}

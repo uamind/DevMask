@@ -1,0 +1,20 @@
+===== B-2 SOCKS5 要求用户名密码时 libcore 是否消费 java.net.socks.* =====
+--- 重启 fixture 为 require-userpass 模式 ---
+PUT HTTP 200
+--- 探针进程内 ---
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: socksProxyHost=127.0.0.1
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: socksProxyPort=18081
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: java.net.socks.username=dfsocks
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: java.net.socks.password=<set:true>
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: selector.app.fixture=SOCKS @ 127.0.0.1/<unresolved>:18081
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: fetch.app=error=UnknownHostException
+11-24 22:10:06.186 12067 12067 I EGRESSPROBE: fetch.ip=error=SocketTimeoutException
+--- fixture 日志（认证模式与匹配结果，值永不记录）---
+2026-11-24T22:09:56+0800 proto=start http_ports=18080,18082 socks=18081 virtual=198.51.100.7 app=198.51.100.8 raw=198.51.100.9 socks_auth=1
+2026-11-24T22:10:00+0800 proto=socks5 listener=18081 methods=0002 auth user_ok=0 pass_ok=0 (values never logged)
+2026-11-24T22:10:00+0800 proto=socks5 listener=18081 method=auth-failed rejected
+2026-11-24T22:10:00+0800 proto=socks5 listener=18081 methods=0002 auth user_ok=0 pass_ok=0 (values never logged)
+2026-11-24T22:10:00+0800 proto=socks5 listener=18081 method=auth-failed rejected
+2026-11-24T22:10:08+0800 proto=http listener=18080 CONNECT www.googleapis.com:443 auth=0
+2026-11-24T22:10:08+0800 proto=http listener=18080 CONNECT cryptauthenrollment.googleapis.com:443 auth=0
+--- 判定：socks 属性已注入；链路是否可通看 fixture 是否 auth-failed ---

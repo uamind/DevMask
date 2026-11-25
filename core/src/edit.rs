@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use toml_edit::{Array, ArrayOfTables, DocumentMut, InlineTable, Item, Table, Value};
 
-use crate::config::{AppConfig, DELETE_MARKER, DeviceTemplate, NumberSetting};
+use crate::config::{AppConfig, DELETE_MARKER, DeviceTemplate, EgressSection, NumberSetting};
 
 /// 编辑失败原因。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,6 +292,55 @@ pub fn delete_app(document: &mut DocumentMut, package: &str) -> Result<bool, Edi
     Ok(removed)
 }
 
+/// 创建或整体更新顶层 `[egress]` 段（契约 §2.3 / §2.7）。
+///
+/// - `default` 为 `Some(非空代理名)`：写入 `[egress] default = "…"`（表不存在时新建）；
+/// - `None` 或空串：删除 `default` 键；表因此变空时整段删除（删除整段等价于直连）；
+/// - `[egress]` 里的未知键与注释原样保留（未知键会让表不再为空，故整段不会被删）。
+///
+/// 幂等：文档已与模型一致时返回 `false`，调用方据此跳过落盘。
+pub fn set_egress(document: &mut DocumentMut, section: &EgressSection) -> Result<bool, EditError> {
+    let before = document.to_string();
+    let value = non_empty(section.default.as_deref());
+
+    if document.as_table().get("egress").is_none() {
+        if let Some(value) = value {
+            let mut table = Table::new();
+            // 已有内容时让新段与上文空一行，符合项目配置的书写风格。
+            if !document.as_table().is_empty() {
+                table.decor_mut().set_prefix("\n");
+            }
+            set_string(&mut table, "default", value);
+            document.as_table_mut().insert("egress", Item::Table(table));
+        }
+        return Ok(document.to_string() != before);
+    }
+
+    let mut remove_table = false;
+    match document.as_table_mut().get_mut("egress") {
+        Some(Item::Table(table)) => match value {
+            Some(value) => set_string(table, "default", value),
+            None => {
+                table.remove("default");
+                remove_table = table.is_empty();
+            }
+        },
+        Some(other) => {
+            return Err(EditError::Structure {
+                path: "egress".to_owned(),
+                expected: "table",
+                found: item_kind(other),
+            });
+        }
+        None => unreachable!("egress checked above"),
+    }
+    if remove_table {
+        document.as_table_mut().remove("egress");
+    }
+
+    Ok(document.to_string() != before)
+}
+
 // ── 内部实现 ────────────────────────────────────────────────────────────────
 
 fn item_kind(item: &Item) -> &'static str {
@@ -450,6 +499,13 @@ fn apply_app_fields(table: &mut Table, app: &AppConfig) {
         Some(values) => set_string_array(table, "hide_maps", values),
     }
     set_opt_bool(table, "companion_resetprop", app.companion_resetprop);
+    // 空串在 egress 语义里等价于「未设置」（契约 §2.4），按删键处理以保持幂等。
+    set_opt_string(table, "egress", non_empty(app.egress.as_deref()));
+}
+
+/// egress 语义里空串等于「未设置」：写文档时按删除处理。
+fn non_empty(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| !value.is_empty())
 }
 
 fn string_value(value: &str, decor_source: Option<&Value>) -> Value {

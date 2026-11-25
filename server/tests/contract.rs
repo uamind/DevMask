@@ -2,12 +2,13 @@
 // Copyright (c) 2025-2026 Seyud
 // Device Faker: https://github.com/Seyud/device_faker
 
-//! 契约测试：路由注册必须与 docs/openapi.yaml 的 24 个操作一致。
+//! 契约测试：路由注册必须与 docs/openapi.yaml 的 29 个操作**完全一致**。
 //!
 //! 两个方向都校验：
 //!
-//! 1. 静态表 `api::CONTRACT_OPERATIONS` 与 OpenAPI 的 path+method 集合完全相等；
-//! 2. 每个文档里的操作实际存在（不是 405；404 必须是资源级错误，而不是 /api/v1 兜底）。
+//! 1. 文档里的每个操作都必须在静态表 `api::CONTRACT_OPERATIONS` 里（不能少），
+//!    表里的每个操作也必须在文档里（不能多）；egress 的 5 个操作已在 egress 增量补齐；
+//! 2. 每个操作实际存在（不是 405；404 必须是资源级错误，而不是 /api/v1 兜底）。
 
 mod common;
 
@@ -54,11 +55,11 @@ fn contract_table_matches_openapi() {
         .iter()
         .map(|(method, path)| ((*method).to_owned(), (*path).to_owned()))
         .collect();
-    assert_eq!(documented.len(), 24, "OpenAPI 操作数必须是 24");
-    assert_eq!(implemented.len(), 24, "路由表操作数必须是 24");
+    assert_eq!(implemented.len(), 29, "路由表操作数必须是 29");
+    assert_eq!(documented.len(), 29, "OpenAPI 文档操作数必须是 29");
     let missing: Vec<_> = documented.difference(&implemented).collect();
+    assert!(missing.is_empty(), "文档有但路由缺失: {missing:?}");
     let extra: Vec<_> = implemented.difference(&documented).collect();
-    assert!(missing.is_empty(), "契约有但路由缺失: {missing:?}");
     assert!(extra.is_empty(), "路由有但契约没有: {extra:?}");
 }
 
@@ -73,6 +74,9 @@ fn body_for(method: &str, path: &str) -> Option<Value> {
         ("PUT", "/api/v1/templates/{name}") => Some(json!({ "packages": [] })),
         ("PATCH", "/api/v1/templates/{name}") => Some(json!({ "dpi": 420 })),
         ("PUT", "/api/v1/apps/{pkg}") => Some(json!({ "config": { "model": "Contract" } })),
+        // egress：PUT 空对象是合法的「什么都不改」；probe 空对象按设备级链路探测
+        ("PUT", "/api/v1/egress") => Some(json!({})),
+        ("POST", "/api/v1/egress/probe") => Some(json!({})),
         _ => None,
     }
 }

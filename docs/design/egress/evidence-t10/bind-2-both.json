@@ -1,0 +1,1 @@
+{"deviceId":"mock-a-ok","changed":true,"bindings":[{"app":"","mode":"proxy","proxyId":"egp_b663eb1e23c04887ba66bf1e0405d00c","proxyName":"t10-http","updatedAt":"2026-11-24T14:48:49Z"},{"app":"com.xingin.xhs","mode":"proxy","proxyId":"egp_72c062155fd44860930fdf59c8170aec","proxyName":"t10-socks","updatedAt":"2026-11-24T14:48:49Z"}],"pendingApply":true,"warnings":[]}

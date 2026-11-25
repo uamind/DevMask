@@ -1,0 +1,110 @@
+===== 收尾 1：DELETE /egress 清空配置（再确认 :0 与无残留）=====
+DELETE HTTP 200
+{
+  "changed": true,
+  "mode": "direct",
+  "default": null,
+  "applied": true,
+  "readback": {
+    "settingsValue": ":0",
+    "dumpsysGlobalProxy": "Global proxy: none",
+    "matches": true,
+    "at": "2026-11-24T14:10:22Z"
+  }
+}
+===== 收尾 2：恢复 config.toml（去掉测试期 egress 记录）=====
+0
+0
+===== 收尾 3：恢复 server.toml（移除临时 t15 Token）=====
+0
+t15 token removed
+[2m2026-11-24T14:10:25.629694Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:10:26.143002Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+===== 收尾 4：卸载探针应用、删临时文件 =====
+Success
+(probe app removed)
+(tmp artifacts removed)
+===== 收尾 5：删除测试期 egress.toml、停 fixture、撤销 adb 隧道 =====
+backups
+config.toml
+config.toml.lock
+server.toml
+server.toml.bak-v1.8.0
+fixture alive: no
+adb reverse list:
+
+[2m2026-11-24T14:10:36.324208Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:10:36.806713Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+===== 最终状态 =====
+--- adb devices ---
+List of devices attached
+4A190DLAQ002QR	device
+
+--- settings list global | grep -i proxy ---
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+--- settings get global http_proxy ---
+:0
+--- dumpsys connectivity | grep -i proxy ---
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+--- config 残留检查（应全为 0 / 无）---
+0
+0
+0
+0
+ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+===== F 组：降级分支在装机二进制里是否存在（strings 校验）=====
+--- 宿主机 target 产物 ---
+681:"[egress] replay hook fired symbol=
+853:[egress] replay done package=
+959:<[egress] replay hook unavailable reason=commit_failed error=
+1370:WARNcmdGetSpecpayloadApplyRestorestatusbackupsu64 value was too largestruct ResetpropSessionRequest with 7 elementsstruct SpecRequest with 1 elementstruct RestoreRequest with 1 elementstruct CompanionResponse with 4 elementsstruct WriteLogRequest with 1 elementalways called after `serialize_key`MapAccess::next_value called before next_keyunclassified parse error/data/adb/device_faker/config/config.tomlcompanion write log failed/dev/__properties__/zygisk::fg_observerFailed to get field IDFailed to set field>[egress] proxy_selector degraded reason=of_method_missing sdk=
+1396:/data/adb/device_faker/config/egress.toml/data/adb/device_faker/config/data/adb/device_faker/data/adbinotify_add_watch failed, config hot reload disabledDeviceFakersetpriority[egress] replay hook unavailable reason=libandroid_runtime_not_foundmatchappliedfailed
+--- 设备上实际加载的 .so ---
+681:"[egress] replay hook fired symbol=
+853:[egress] replay done package=
+959:<[egress] replay hook unavailable reason=commit_failed error=
+1370:WARNcmdGetSpecpayloadApplyRestorestatusbackupsu64 value was too largestruct ResetpropSessionRequest with 7 elementsstruct SpecRequest with 1 elementstruct RestoreRequest with 1 elementstruct CompanionResponse with 4 elementsstruct WriteLogRequest with 1 elementalways called after `serialize_key`MapAccess::next_value called before next_keyunclassified parse error/data/adb/device_faker/config/config.tomlcompanion write log failed/dev/__properties__/zygisk::fg_observerFailed to get field IDFailed to set field>[egress] proxy_selector degraded reason=of_method_missing sdk=
+1396:/data/adb/device_faker/config/egress.toml/data/adb/device_faker/config/data/adb/device_faker/data/adbinotify_add_watch failed, config hot reload disabledDeviceFakersetpriority[egress] replay hook unavailable reason=libandroid_runtime_not_foundmatchappliedfailed
+--- 结论：两条降级日志（libandroid_runtime_not_found / commit_failed）都在装机二进制内，但本机无法制造触发条件 ---
+
+===== 收尾（第二轮）：DELETE /egress、恢复配置/token、卸载探针、停 fixture、撤隧道 =====
+DELETE HTTP 200
+{"changed": true, "mode": "direct", "default": null, "applied": true, "readback": {"settingsValue": ":0", "dumpsysGlobalProxy": "Global proxy: none", "matches": true, "at": "2026-11-24T14:17:33Z"}}
+1
+0
+t15b token removed
+Success
+(probe app removed)
+fixture alive: no
+[2m2026-11-24T14:17:37.967615Z[0m [32m INFO[0m device_faker_server 已启动 [3mbind[0m[2m=[0m127.0.0.1:8686 [3mstatic_dir[0m[2m=[0m/data/adb/modules/device_faker/webroot [3mconfig[0m[2m=[0m/data/adb/device_faker/config/config.toml [3mserver_config[0m[2m=[0m/data/adb/device_faker/config/server.toml [3mtokens[0m[2m=[0m1
+[2m2026-11-24T14:17:38.482454Z[0m [32m INFO[0m egress reconcile 完成（读回与期望一致） [3mwrote[0m[2m=[0mfalse [3meffective_mode[0m[2m=[0m"from_config"
+--- 残留检查 ---
+1
+0
+0
+ls: /data/adb/device_faker/config/egress.toml: No such file or directory
+0
+--- 最终状态 ---
+List of devices attached
+4A190DLAQ002QR	device
+
+global_http_proxy_exclusion_list=
+global_http_proxy_host=
+global_http_proxy_port=0
+global_proxy_pac_url=
+http_proxy=:0
+:0
+mMultiProxyEnabled: false
+ProxyTracker:
+  Global proxy: none
+  Default proxy: none
+
+(reverse list end)
+Physical size: 1080x2424

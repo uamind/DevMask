@@ -1,0 +1,51 @@
+=== cargo build -p device_faker_manager ===
+   Compiling device_faker_manager v0.2.0 (/Users/crymang/Works/device_faker/manager)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.27s
+BUILD_EXIT=0
+-rwxr-xr-x 1 crymang staff 47685816 Nov 24 22:46 target/debug/device_faker_manager
+
+=== cargo test -p device_faker_manager ===
+running 15 tests
+test low_proxy_preserves_encoded_question_mark_as_path ... ok
+test r3_concurrent_idempotency_keys_share_one_job ... ok
+test r5_malformed_rotate_bodies_never_rotate ... ok
+test r4_every_api_response_is_no_store ... ok
+test r6_chunked_proxy_response_over_limit_is_too_large ... ok
+test r2_object_template_binds_in_one_attempt ... ok
+test low_template_put_412_retries_once ... ok
+test r2_forced_412_retries_bind_exactly_once ... ok
+test r3_expired_idempotency_key_replays_same_job ... ok
+test low_bind_404_template_is_skipped ... ok
+test r8_audit_since_offset_equals_utc ... ok
+test r6_chunked_overview_over_limit_aborts_before_full_read ... ok
+test r9_templates_device_filter_returns_that_device_config ... ok
+test r1_object_template_keeps_other_bindings_and_packages ... ok
+test r6_oversized_device_reads_are_rejected ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+   Doc-tests device_faker_manager
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+TEST_EXIT=0
+dist/assets/overlay-nMeWFwpl.js         17.39 kB │ gzip:  6.36 kB
+dist/assets/validator-B54t2RXW.js       25.02 kB │ gzip:  9.12 kB
+dist/assets/form-DmwAh-UG.js            26.49 kB │ gzip:  9.11 kB
+dist/assets/ProxiesPage-C_unXBd8.js     30.57 kB │ gzip: 11.13 kB
+dist/assets/select-BpZWHUoI.js          32.62 kB │ gzip: 11.10 kB
+dist/assets/index-D2icLi4F.js           45.52 kB │ gzip: 17.89 kB
+dist/assets/tooltip-CjCcZLBI.js         49.03 kB │ gzip: 17.52 kB
+dist/assets/DevicesPage-B3npNmmp.js     54.61 kB │ gzip: 19.15 kB
+dist/assets/table-BNCxymTk.js           76.32 kB │ gzip: 26.10 kB
+dist/assets/manager-D802wtt0.js        193.07 kB │ gzip: 71.57 kB
+
+✓ built in 350ms
+WEBUI_BUILD_EXIT=0
+total 4
+drwxr-xr-x  4 crymang staff 128 Nov 24 22:47 .
+drwxr-xr-x 12 crymang staff 384 Nov 24 18:27 ..
+drwxr-xr-x 22 crymang staff 704 Nov 24 22:47 assets
+-rw-r--r--  1 crymang staff 847 Nov 24 22:47 index.html

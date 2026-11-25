@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 
 const X_REQUEST_ID: HeaderName = HeaderName::from_static("x-request-id");
 
-/// 契约冻结的 14 个错误码（docs/API.md 7.2）。
+/// 契约冻结的错误码（docs/API.md 7.2；egress 增量 +2，docs/plans/egress-contract.md §1.8）。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ErrorCode {
     Unauthorized,
@@ -38,11 +38,13 @@ pub enum ErrorCode {
     RateLimited,
     InternalError,
     UpstreamUnavailable,
+    EgressNotConfigured,
+    EgressProbeFailed,
 }
 
 impl ErrorCode {
     /// 全部错误码：用于契约自检（错误码表与实现必须一致）。
-    pub const ALL: [ErrorCode; 14] = [
+    pub const ALL: [ErrorCode; 16] = [
         ErrorCode::Unauthorized,
         ErrorCode::ForbiddenScope,
         ErrorCode::NotFound,
@@ -57,6 +59,8 @@ impl ErrorCode {
         ErrorCode::RateLimited,
         ErrorCode::InternalError,
         ErrorCode::UpstreamUnavailable,
+        ErrorCode::EgressNotConfigured,
+        ErrorCode::EgressProbeFailed,
     ];
 
     /// 稳定的线上错误码。
@@ -76,6 +80,9 @@ impl ErrorCode {
             ErrorCode::RateLimited => "rate_limited",
             ErrorCode::InternalError => "internal_error",
             ErrorCode::UpstreamUnavailable => "upstream_unavailable",
+            // egress 领域用点分命名空间（刻意与既有扁平码不同，见契约「阅读约定」）
+            ErrorCode::EgressNotConfigured => "egress.not_configured",
+            ErrorCode::EgressProbeFailed => "egress.probe_failed",
         }
     }
 
@@ -96,6 +103,8 @@ impl ErrorCode {
             ErrorCode::RateLimited => StatusCode::TOO_MANY_REQUESTS,
             ErrorCode::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             ErrorCode::UpstreamUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            ErrorCode::EgressNotConfigured => StatusCode::CONFLICT,
+            ErrorCode::EgressProbeFailed => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -103,7 +112,10 @@ impl ErrorCode {
     pub const fn retryable(self) -> bool {
         matches!(
             self,
-            ErrorCode::RateLimited | ErrorCode::InternalError | ErrorCode::UpstreamUnavailable
+            ErrorCode::RateLimited
+                | ErrorCode::InternalError
+                | ErrorCode::UpstreamUnavailable
+                | ErrorCode::EgressProbeFailed
         )
     }
 }
@@ -261,6 +273,62 @@ impl ApiError {
         .with_details(json!({ "component": component }))
     }
 
+    /// 409：没有任何可用出口（egress.not_configured，契约 §1.8）。
+    pub fn egress_not_configured(request_id: &str, scope: &str, package: Option<&str>) -> Self {
+        let mut details = json!({ "scope": scope });
+        if let Some(package) = package {
+            details["package"] = json!(package);
+        }
+        Self::new(
+            request_id,
+            ErrorCode::EgressNotConfigured,
+            "没有任何可用的出口代理，无法按当前链路探测",
+        )
+        .with_details(details)
+    }
+
+    /// 502：探测失败（egress.probe_failed）。details 固定四个键（契约 §4.4）。
+    pub fn egress_probe_failed(
+        request_id: &str,
+        url: &str,
+        reason: &str,
+        timeout_ms: u64,
+        upstream_status: Option<u16>,
+    ) -> Self {
+        Self::new(
+            request_id,
+            ErrorCode::EgressProbeFailed,
+            format!("出口探测失败（{reason}）"),
+        )
+        .with_details(json!({
+            "url": url,
+            "reason": reason,
+            "timeoutMs": timeout_ms,
+            "upstreamStatus": upstream_status,
+        }))
+    }
+
+    /// 412：egress revision 不匹配。
+    ///
+    /// 复用既有 config_revision_mismatch（Manager 的「412 重试一次」逻辑无需分支），
+    /// details 追加 resource="egress" 让客户端能区分是哪个 revision 过期。
+    pub fn egress_revision_mismatch(
+        request_id: &str,
+        expected: &str,
+        actual: Option<&str>,
+    ) -> Self {
+        Self::new(
+            request_id,
+            ErrorCode::ConfigRevisionMismatch,
+            "egress 已被其他客户端修改",
+        )
+        .with_details(json!({
+            "expected": expected,
+            "actual": actual,
+            "resource": "egress",
+        }))
+    }
+
     /// 错误码。
     pub fn code(&self) -> ErrorCode {
         self.code
@@ -331,6 +399,8 @@ mod tests {
                 "rate_limited",
                 "internal_error",
                 "upstream_unavailable",
+                "egress.not_configured",
+                "egress.probe_failed",
             ]
         );
         for code in ErrorCode::ALL {
@@ -339,14 +409,38 @@ mod tests {
     }
 
     #[test]
-    fn retryable_codes_are_only_429_500_503() {
+    fn retryable_codes_are_only_429_500_502_503() {
         for code in ErrorCode::ALL {
             let expected = matches!(
                 code.as_str(),
-                "rate_limited" | "internal_error" | "upstream_unavailable"
+                "rate_limited" | "internal_error" | "upstream_unavailable" | "egress.probe_failed"
             );
             assert_eq!(code.retryable(), expected, "{}", code.as_str());
         }
+    }
+
+    #[test]
+    fn egress_error_shapes_match_contract() {
+        let not_configured =
+            ApiError::egress_not_configured("req_egress", "app", Some("com.example.a"));
+        assert_eq!(not_configured.code().status(), StatusCode::CONFLICT);
+        let response = not_configured.into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let mismatch = ApiError::egress_revision_mismatch("req_egress", "abc", Some("def"));
+        assert_eq!(mismatch.code().as_str(), "config_revision_mismatch");
+        assert_eq!(mismatch.code().status(), StatusCode::PRECONDITION_FAILED);
+
+        let failed = ApiError::egress_probe_failed(
+            "req_egress",
+            "http://checkip.amazonaws.com/",
+            "connect",
+            5000,
+            None,
+        );
+        assert_eq!(failed.code().as_str(), "egress.probe_failed");
+        assert_eq!(failed.code().status(), StatusCode::BAD_GATEWAY);
+        assert!(failed.code().retryable());
     }
 
     #[test]

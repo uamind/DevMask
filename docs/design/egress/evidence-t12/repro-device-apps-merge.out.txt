@@ -1,0 +1,16 @@
+0) 初始 revision=38acb15d02d5… apps=[]
+
+1) 绑定一个应用级 __DIRECT__（模拟 Manager 下发一次 apps=[{com.example.a}]）
+   PUT apps=[com.example.a] -> HTTP 503（host 无 settings 命令，503/200 都可，重点看文件）
+   写入后: config.toml apps 里的 egress 行 = ['egress = "__DIRECT__"']
+
+2) Manager 删掉这条绑定 → 下发 apps=[]（契约 §1.4：整体替换 = 清空）
+   PUT apps=[] -> HTTP 503 changed=None
+   写入后: config.toml apps 里的 egress 行 = ['egress = "__DIRECT__"']
+   GET /egress apps = [{'package': 'com.example.a', 'egress': '__DIRECT__', 'effective': 'direct', 'proxy': None}]
+   >>> 结论: apps=[] 之后仍残留 1 行 → 契约「整体替换」未实现
+
+3) 对照：显式 apps=null（device 端唯一能清空的写法）
+   PUT apps=null -> HTTP 503
+   写入后: config.toml apps 里的 egress 行 = []
+   GET /egress apps = []

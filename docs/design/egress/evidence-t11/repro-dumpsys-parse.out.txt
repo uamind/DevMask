@@ -1,0 +1,11 @@
+契约 §3.3 示例（测试里用的假格式）
+  input  = Global proxy: [203.0.113.10] port: 1080
+  parsed = Proxy { host: "203.0.113.10", port: 1080 }
+Pixel 9 / Android 17 真机（evidence/t1-put-http-proxy.log:75）
+  input  = Global proxy: [127.0.0.1] 18080 xl=
+  parsed = Unknown
+直连（真机）
+  input  = Global proxy: none
+  parsed = Unset
+
+matches(Expected::Direct) = true   // 真代理仍在生效，却判为「已直连」

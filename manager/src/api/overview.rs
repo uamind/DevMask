@@ -130,7 +130,14 @@ pub async fn overview(
         })
         .collect();
 
-    let devices: Vec<DeviceSummary> = records.into_iter().map(DeviceSummary::from).collect();
+    let egress = crate::api::egress::device_egress_summaries(&state).await?;
+    let devices: Vec<DeviceSummary> = records
+        .into_iter()
+        .map(|record| {
+            let id = record.id.clone();
+            DeviceSummary::with_egress(record, egress.get(&id).cloned())
+        })
+        .collect();
     let recent_jobs: Vec<JobSummaryResponse> = recent_jobs
         .into_iter()
         .map(JobSummaryResponse::from)

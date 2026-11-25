@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- t9 验收用临时探针应用：把进程内的 java.net 代理属性打印到 logcat 与文件。 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.df.egressprobe">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="EgressProbe"
+        android:debuggable="true"
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

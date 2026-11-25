@@ -31,7 +31,7 @@ async fn healthz_is_public_and_reports_ok() {
     assert_eq!(body["status"], "ok");
     assert_eq!(body["apiVersion"], "v1");
     assert_eq!(body["db"]["status"], "ok");
-    assert_eq!(body["db"]["schemaVersion"], 1);
+    assert_eq!(body["db"]["schemaVersion"], 2);
     assert_eq!(body["devices"]["total"], 0);
     assert_eq!(body["devices"]["online"], 0);
     assert_eq!(body["devices"]["offline"], 0);

@@ -84,6 +84,281 @@
       </div>
     </div>
 
+    <div class="settings-section glass-effect">
+      <h2 class="section-title">{{ t('settings.egress.title') }}</h2>
+      <p class="server-hint server-hint--lead">{{ t('settings.egress.desc') }}</p>
+      <div class="server-banner">{{ t('settings.egress.runtime.' + egress.runtime) }}</div>
+
+      <template v-if="egress.supported">
+        <div class="setting-item setting-item-horizontal">
+          <div class="setting-info">
+            <div class="setting-icon">
+              <Route :size="24" />
+            </div>
+            <div class="setting-text">
+              <h3 class="setting-name">{{ t('settings.egress.enable.label') }}</h3>
+              <p class="setting-desc">{{ t('settings.egress.enable.desc') }}</p>
+            </div>
+          </div>
+          <el-switch v-model="egress.form.enabled" class="setting-control-switch" />
+        </div>
+
+        <el-form label-position="top" class="egress-form">
+          <div class="egress-grid">
+            <el-form-item :label="t('settings.egress.fields.name.label')">
+              <el-input
+                v-model="egress.form.name"
+                :placeholder="t('settings.egress.fields.name.placeholder')"
+              />
+              <p class="form-tip">{{ t('settings.egress.fields.name.desc') }}</p>
+              <p v-if="egress.fieldErrors.name" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.name }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.fields.type.label')">
+              <BaseSelect
+                v-model="egress.form.type"
+                :options="egressTypeOptions"
+                :aria-label="t('settings.egress.fields.type.label')"
+              />
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.fields.host.label')">
+              <el-input
+                v-model="egress.form.host"
+                :placeholder="t('settings.egress.fields.host.placeholder')"
+              />
+              <p v-if="egress.fieldErrors.host" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.host }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.fields.port.label')">
+              <el-input-number
+                v-model="egress.form.port"
+                :min="1"
+                :max="65535"
+                :step="1"
+                step-strictly
+                controls-position="right"
+              />
+              <p v-if="egress.fieldErrors.port" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.port }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.fields.username.label')">
+              <el-input
+                v-model="egress.form.username"
+                autocomplete="off"
+                :placeholder="t('settings.egress.fields.username.placeholder')"
+              />
+              <p v-if="egress.fieldErrors.username" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.username }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.fields.password.label')">
+              <el-input
+                v-model="egress.form.password"
+                type="password"
+                show-password
+                autocomplete="new-password"
+                :placeholder="passwordPlaceholder"
+              />
+              <p class="form-tip">{{ credentialsLabel }}</p>
+              <p v-if="egress.fieldErrors.password" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.password }}
+              </p>
+            </el-form-item>
+          </div>
+
+          <div class="egress-inline">
+            <el-checkbox v-model="egress.form.clearCredentials" :disabled="!egress.hasCredentials">
+              {{ t('settings.egress.fields.clear_credentials.label') }}
+            </el-checkbox>
+            <span class="form-tip">{{ t('settings.egress.fields.clear_credentials.desc') }}</span>
+          </div>
+
+          <div class="egress-inline">
+            <el-button link type="primary" @click="toggleAdvanced">
+              {{ t('settings.egress.advanced.toggle') }}
+            </el-button>
+          </div>
+
+          <div v-if="egress.advancedOpen" class="egress-grid">
+            <el-form-item :label="t('settings.egress.advanced.probe_url.label')">
+              <el-input
+                v-model="egress.form.probeUrl"
+                placeholder="http://checkip.amazonaws.com/"
+              />
+              <p class="form-tip">{{ t('settings.egress.advanced.probe_url.desc') }}</p>
+              <p v-if="egress.fieldErrors.probeUrl" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.probeUrl }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.advanced.timeout.label')">
+              <el-input-number
+                v-model="egress.form.probeTimeoutSeconds"
+                :min="1"
+                :max="30"
+                :step="1"
+                step-strictly
+                controls-position="right"
+              />
+              <p v-if="egress.fieldErrors.probeTimeoutSeconds" class="form-tip form-tip--error">
+                {{ egress.fieldErrors.probeTimeoutSeconds }}
+              </p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.advanced.fail_open.label')">
+              <el-switch v-model="egress.form.failOpen" />
+              <p class="form-tip">{{ t('settings.egress.advanced.fail_open.desc') }}</p>
+            </el-form-item>
+            <el-form-item :label="t('settings.egress.advanced.probe_target.label')">
+              <BaseSelect
+                v-model="egress.probeTarget"
+                :options="probeTargetOptions"
+                :aria-label="t('settings.egress.advanced.probe_target.label')"
+              />
+              <p class="form-tip">{{ t('settings.egress.advanced.probe_target.desc') }}</p>
+            </el-form-item>
+          </div>
+        </el-form>
+
+        <h3 class="setting-name egress-status-title">{{ t('settings.egress.status.title') }}</h3>
+        <div class="server-rows">
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.mode') }}</span>
+            <span class="server-value">{{ egress.modeLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.effective_mode') }}</span>
+            <span class="server-value">{{ egress.effectiveModeLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.applied') }}</span>
+            <span class="server-value">{{ egress.appliedLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.readback') }}</span>
+            <span class="server-value server-value--mono">{{ readbackLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.revision') }}</span>
+            <span class="server-value server-value--mono">{{ egress.revisionLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.credentials') }}</span>
+            <span class="server-value">{{ credentialsLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.egress_file') }}</span>
+            <span class="server-value">{{ egressFileLabel }}</span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.degraded') }}</span>
+            <span class="server-value">
+              {{
+                egress.degraded
+                  ? t('settings.egress.status.degraded_yes')
+                  : t('settings.egress.status.degraded_no')
+              }}
+            </span>
+          </div>
+          <div class="server-row">
+            <span class="server-label">{{ t('settings.egress.status.last_probe') }}</span>
+            <span class="server-value">{{ lastProbeLabel }}</span>
+          </div>
+        </div>
+
+        <p
+          v-for="(text, index) in egress.warningTexts"
+          :key="index"
+          class="server-hint server-hint--warn"
+        >
+          {{ text }}
+        </p>
+
+        <p v-if="egress.error" class="server-hint server-hint--error">
+          {{ egress.error }}
+          <span v-if="egress.errorCode" class="egress-code">[{{ egress.errorCode }}]</span>
+          <span v-if="egress.errorMessage"> · {{ egress.errorMessage }}</span>
+          <span v-if="egress.errorDetail"> · {{ egress.errorDetail }}</span>
+        </p>
+
+        <div v-if="egress.probeResult" class="egress-probe">
+          <div class="egress-probe-head">
+            <h3 class="setting-name">{{ t('settings.egress.probe.title') }}</h3>
+            <span v-if="egress.probeApproximate" class="egress-badge">
+              {{ t('settings.egress.probe.approximate') }}
+            </span>
+          </div>
+          <div class="server-rows">
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.exit_ip') }}</span>
+              <span class="server-value server-value--mono">{{ egress.probeResult.exitIp }}</span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.latency') }}</span>
+              <span class="server-value">{{ egress.probeResult.latencyMs }} ms</span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.via') }}</span>
+              <span class="server-value">
+                {{
+                  egress.probeResult.via === 'proxy'
+                    ? t('settings.egress.modes.proxy')
+                    : t('settings.egress.modes.direct')
+                }}
+                <template v-if="egress.probeResult.proxy">
+                  · {{ egress.probeResult.proxy }}</template
+                >
+              </span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.checked_at') }}</span>
+              <span class="server-value">{{ egress.probeResult.checkedAt }}</span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.upstream') }}</span>
+              <span class="server-value">{{ egress.probeResult.upstreamStatus ?? '—' }}</span>
+            </div>
+            <div class="server-row">
+              <span class="server-label">{{ t('settings.egress.probe.scope') }}</span>
+              <span class="server-value">
+                {{
+                  egress.probeResult.scope === 'app'
+                    ? t('settings.egress.probe.scope_app')
+                    : t('settings.egress.probe.scope_device')
+                }}
+              </span>
+            </div>
+          </div>
+          <p v-if="egress.probeApproximate" class="form-tip">
+            {{ t('settings.egress.probe.approximate_hint') }}
+          </p>
+        </div>
+
+        <div class="server-actions">
+          <el-button type="primary" :loading="egress.saving" @click="saveEgress">
+            {{ t('settings.egress.actions.save') }}
+          </el-button>
+          <el-button
+            :loading="egress.probing"
+            :disabled="!egress.probeSupported"
+            @click="probeEgress"
+          >
+            {{ t('settings.egress.actions.probe') }}
+          </el-button>
+          <el-button :loading="egress.clearing" @click="clearEgress">
+            {{ t('settings.egress.actions.clear') }}
+          </el-button>
+          <el-button :loading="egress.loading" @click="loadEgress">
+            {{ t('settings.egress.actions.refresh') }}
+          </el-button>
+        </div>
+        <p v-if="!egress.probeSupported" class="form-tip">
+          {{ t('settings.egress.actions.probe_unavailable') }} ·
+          {{ t('settings.egress.errors.probe_unsupported') }}
+        </p>
+      </template>
+    </div>
     <div v-if="serverAccess.supported" class="settings-section glass-effect">
       <h2 class="section-title">{{ t('settings.serverAccess.title') }}</h2>
       <p class="server-hint server-hint--lead">{{ t('settings.serverAccess.desc') }}</p>
@@ -315,8 +590,9 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onActivated, onMounted } from 'vue'
-import { Moon, Globe, Bug, FileUp, KeyRound, Network, Wifi } from '@lucide/vue'
+import { Moon, Globe, Bug, FileUp, KeyRound, Network, Route, Wifi } from '@lucide/vue'
 import { useConfigStore } from '../stores/config'
+import { useEgressStore } from '../stores/egress'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../utils/i18n'
 import { useServerStore } from '../stores/server'
@@ -332,6 +608,7 @@ const configStore = useConfigStore()
 const settingsStore = useSettingsStore()
 const serverStore = useServerStore()
 const serverAccess = useServerAccessStore()
+const egress = useEgressStore()
 const { t } = useI18n()
 
 /** revision 太长，界面只展示前 12 位（完整值仍可从服务端取）。 */
@@ -504,12 +781,82 @@ watch(
   }
 )
 
+// ---- 出口代理（egress）----
+
+const egressTypeOptions = computed(() => [
+  { value: 'http', label: t('settings.egress.fields.type.http') },
+  { value: 'socks5', label: t('settings.egress.fields.type.socks5') },
+])
+
+/** 探测目标：设备级 + 已配置的应用级覆盖。 */
+const probeTargetOptions = computed(() => [
+  { value: '', label: t('settings.egress.advanced.probe_target.device') },
+  ...egress.apps.map((app) => ({ value: app.package, label: app.package })),
+])
+
+/** 密码输入框占位：只说「是否已设置」，永不回显。 */
+const passwordPlaceholder = computed(() =>
+  egress.hasCredentials
+    ? t('settings.egress.fields.password.placeholder_set')
+    : t('settings.egress.fields.password.placeholder_unset')
+)
+
+const credentialsLabel = computed(() =>
+  egress.hasCredentials
+    ? t('settings.egress.status.credentials_set')
+    : t('settings.egress.status.credentials_unset')
+)
+
+const readbackLabel = computed(() => {
+  if (!egress.snapshot) return '--'
+  if (!egress.readbackAvailable) return t('settings.egress.status.applied_unknown')
+  const value = egress.snapshot.readback.settingsValue
+  return value && value.trim() ? value : t('settings.egress.status.readback_none')
+})
+
+const egressFileLabel = computed(() => {
+  const info = egress.snapshot?.egressFile
+  if (!info) return '--'
+  if (!info.exists) return t('settings.egress.status.egress_file_missing')
+  return `${info.size} B${info.mtime ? ` · ${info.mtime}` : ''}`
+})
+
+const lastProbeLabel = computed(() => {
+  const probe = egress.lastProbe
+  if (!probe) return t('settings.egress.status.never')
+  const result = probe.ok
+    ? (probe.exitIp ?? '--')
+    : (probe.errorCode ?? t('settings.egress.errors.probe_failed'))
+  return `${result} · ${probe.latencyMs ?? 0} ms · ${probe.checkedAt}`
+})
+
+function toggleAdvanced() {
+  egress.advancedOpen = !egress.advancedOpen
+}
+
+async function saveEgress() {
+  await egress.save()
+}
+
+async function probeEgress() {
+  await egress.probe()
+}
+
+async function clearEgress() {
+  await egress.clear()
+}
+
+async function loadEgress() {
+  await egress.load()
+}
+
 // 首次挂载时读一次服务状态（onActivated 只在 KeepAlive 场景触发，不能只靠它）
 onMounted(() => {
   void serverStore.ensureReady()
   if (serverAccess.supported) {
     void serverAccess.load()
   }
+  void egress.load()
 })
 
 // KeepAlive 激活时同步最新配置
@@ -518,6 +865,7 @@ onActivated(() => {
   currentLanguage.value = settingsStore.language
   debugMode.value = configStore.config.debug || false
   void serverStore.ensureReady()
+  void egress.load()
 })
 </script>
 
@@ -685,6 +1033,68 @@ onActivated(() => {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 1rem;
+}
+
+.egress-form {
+  margin-top: 0.75rem;
+}
+
+.egress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.25rem 1rem;
+}
+
+.egress-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.egress-status-title {
+  margin: 1rem 0 0.5rem;
+}
+
+.egress-probe {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+}
+
+.egress-probe-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.egress-badge {
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.4rem;
+  background: rgba(234, 179, 8, 0.16);
+  color: #b45309;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.egress-code {
+  font-family: monospace;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.server-hint--warn {
+  color: #b45309;
+}
+
+.form-tip--error {
+  color: #dc2626;
 }
 
 .setting-item-horizontal {

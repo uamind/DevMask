@@ -57,6 +57,12 @@ export interface Template extends DeviceInfo {
 // 应用配置接口
 export interface AppConfig extends DeviceInfo {
   package: string
+  /**
+   * 应用级出口（代理名 / "__DIRECT__" / 非法值由服务端拒）。
+   * 只作为「保留字段」存在：设置页的出口卡片不编辑它，但保存配置时必须原样带回，
+   * 否则一次模板编辑就会把 Manager 下发的应用级出口冲掉（契约 §2.4）。
+   */
+  egress?: string
 }
 
 export interface TemplateMeta {
@@ -130,6 +136,8 @@ export interface Config {
   debug?: boolean
   templates?: Record<string, Template>
   apps?: AppConfig[]
+  /** 设备级出口引用（只有 default 一个键，契约 §2.3）；保存时原样带回。 */
+  egress?: { default?: string }
 }
 
 // 已安装应用接口

@@ -1,0 +1,20 @@
+===== 旁路开关：装机二进制里所有属性名字面量（应为空，只有那一个 debug 开关）=====
+--- 含 debug. / device_faker. 前缀的字符串 ---
+debug.device_faker.egress.disable_replay
+ro.build.
+ro.build.productU
+ro.product.
+ro.product.boarda
+ro.product.modela
+ro.productro.vendorro.vendor.build.fingerprintpersistpersist.sys.timezonerobuild_propbuild_odm_propbuild_vendor_propdefault_propproperties_serial mapping not foundzygisk::cow_props::inplace
+--- 含 egress 的字符串（确认没有 disable/skip/bypass 之外的开关）---
+ [egress] replay skipped package=
+, is not supported; app-level egress disabled
+); app-level egress disabled
+)] is malformed; app-level egress disabled
+*] has no usable host/port; egress disabled
+/data/adb/device_faker/config/egress.toml/data/adb/device_faker/config/data/adb/device_faker/data/adbinotify_add_watch failed, config hot reload disabledDeviceFakersetprioritypending_lock_poisonedmatchappliedfailed
+/proc/self/maps unreadablelibandroid_runtime_not_foundcommit_failed[egress] replay hook unavailable reason=debug_disable_replay (debug.device_faker.egress.disable_replay is set; one-shot injection only)zygiskBuild fields faked successfully[egress] module kept mapped for the replay window
+debug.device_faker.egress.disable_replay
+--- 环境变量读取（宿主源码 + 二进制双重）---
+(source: none)

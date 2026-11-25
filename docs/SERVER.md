@@ -10,6 +10,8 @@
 1. **托管 WebUI**：直接读 `module/webroot`，手机浏览器打开 `http://127.0.0.1:8686` 就能管理，不再依赖管理器 WebView；
 2. **提供 `/api/v1`**：给脚本、AI 与自动化用的版本化 REST 接口（配置 / 模板 / 应用读写 + 状态查询）。
 
+从 v1.10.0 起它还负责**出口代理（egress）**：把整机的 HTTP 代理写进 Android 全局设置、管理 `egress.toml` 里的代理定义与密码，并提供出口 IP 探测（见 §10）。
+
 它与 Zygisk 共用同一条生效链路：写配置仍然落到 `/data/adb/device_faker/config/config.toml`，companion 靠 mtime 变化重新渲染，**没有第二套配置来源**。
 
 本增量（P0/P1/P2 核心）不做：MCP、plan/apply、备份管理界面、审计查询、Token 管理界面、图标与应用名伪装、TLS、`/intents`。未实现的路径按契约返回 404 错误信封。
@@ -25,6 +27,8 @@
 | `/data/adb/device_faker/config/config.toml` | 唯一事实来源（Zygisk 也读它） | `0644` |
 | `/data/adb/device_faker/config/server.toml` | 服务设置 + **Token 的 sha256** | `0600` |
 | `/data/adb/device_faker/config/backups/` | 写配置前的备份（保留 10 份） | `0700` |
+| `/data/adb/device_faker/config/egress.toml` | 代理定义与探测策略（**含密码**，不进导出、不进任何 API 明文） | `0600` |
+| `/data/adb/device_faker/config/backups/egress.toml.<stamp>-<rev8>.bak` | egress 写入前的备份（保留 10 份，同样含密码；`stamp` = `YYYYMMDDTHHMMSS.nnnnnnnnnZ`） | `0600` |
 | `/data/adb/device_faker/logs/server.log` | 服务日志（含首次启动的 Token 明文横幅） | `0600` |
 | `/data/adb/device_faker/logs/server.log.1` | 轮转后的上一份日志 | `0600` |
 | `/data/adb/device_faker/server.pid` | server 进程 pid | `0644` |
@@ -221,7 +225,7 @@ python3 pack_module.py --no-server  # 只出 WebUI + 脚本（不带服务）
 | 现象 | 排查 |
 | --- | --- |
 | `curl` 连不上 | `su -c "sh /data/adb/modules/device_faker/service.sh status"`；再看 `logs/server.log` 最后 50 行 |
-| 日志里 `绑定 ... 失败` | 端口被占用。`su -c "cat /proc/net/tcp | grep :21EE"`（`8686 = 0x21EE`）或改 `server.toml` 的 `bind` |
+| 日志里 `绑定 ... 失败` | 端口被占用。`su -c "cat /proc/net/tcp \| grep :21EE"`（`8686 = 0x21EE`）或改 `server.toml` 的 `bind` |
 | 日志里 `allow_lan` 报错 | 把 `bind` 改成非 loopback 时必须 `allow_lan = true` 且配 Token |
 | `/healthz` 200 但页面 404 | `static_dir` 不对，或 `module/webroot` 没打进模块（`python3 webui/build_webui.py` 后重新打包） |
 | 401 | 没带 `Authorization: Bearer <token>`，或 Token 不对（`server.toml` 只存 sha256，没法反查） |
@@ -230,7 +234,7 @@ python3 pack_module.py --no-server  # 只出 WebUI + 脚本（不带服务）
 | Token 明文丢了 | 删 `server.toml` 里的 `[[tokens]]` 块 → `service.sh restart` → 重新 grep `initial token` |
 | 二进制无法执行 | `ls -l .../bin/device_faker_server` 必须是 `0755`；不对就 `chmod 755` 或重装模块 |
 | 外部访问卡片看不到 | 只在管理器（ksu）模式显示；原生 HTTP / 只读模式不渲染。确认是从管理器 WebView 打开 |
-| 开关保存后 LAN 连不上 | 检查 `grep -E "^(bind|allow_lan)" server.toml`、`ss -ltn` 是否监听 `0.0.0.0`、路由器是否开 AP 隔离/防火墙；手机和电脑是否同一网段 |
+| 开关保存后 LAN 连不上 | 检查 `grep -E "^(bind\|allow_lan)" server.toml`、`ss -ltn` 是否监听 `0.0.0.0`、路由器是否开 AP 隔离/防火墙；手机和电脑是否同一网段 |
 | 改端口不生效 | 需要 Save 后 `service.sh restart`（卡片会自动重启）；检查旧端口是否仍被其它进程占用 |
 | Token 弹窗忘了保存 | 明文只显示一次；用 Reset token 重新生成，然后在浏览器重新登录 |
 | 构建报 `Could not find any NDK` | 先 `export ANDROID_NDK_HOME=/opt/homebrew/share/android-ndk`（或用 Android Studio 的 NDK 路径）再跑 xtask |
@@ -249,6 +253,101 @@ Magisk 与 KernelSU 的 SELinux 域不同，个别机型可能出现「能启动
 - 静态托管做了目录穿越防护（百分号解码后拒 `..`、反斜杠、NUL，`canonicalize` 后必须仍在 webroot 内）；
 - `/api/v1/*` 一律 `Cache-Control: no-store`。
 
-## 10. 许可
+## 10. 出口代理与设备网络（egress）
+
+服务是设备侧唯一会改「网络出口」的组件。两种粒度、两套机制：
+
+| 粒度 | 服务做什么 | 作用面 |
+| --- | --- | --- |
+| 设备级（方案 A） | 写 Android 全局代理：`settings put global http_proxy <host>:<port>`（可选 `global_http_proxy_exclusion_list`） | 整机尊重系统代理的应用；**仅 HTTP/HTTPS，不承载认证** |
+| 应用级（方案 B） | 通过 companion 把解析好的代理下发给 Zygisk，在目标进程内注入 `http/https/socksProxy` 与 `ProxySelector` | 只有目标应用；SOCKS5 可用，但**带认证的代理本期不可用**（见 §10.7）；**不动系统设置** |
+
+### 10.1 三条必须记住的命令规则
+
+| 目的 | 命令 | 备注 |
+| --- | --- | --- |
+| 设置 | `settings put global http_proxy 198.51.100.10:8080` | 立即生效，`dumpsys connectivity` 显示 `Global proxy: [host] port: N` |
+| 读回校验 | `settings get global http_proxy` | 返回 `host:port` / `:0` / `null`；服务再用 `dumpsys connectivity` 的 `Global proxy:` 行交叉验证 |
+| **清除** | `settings put global http_proxy :0` | **只能用这个**：`settings delete global http_proxy` 在 Android 17 上**清不掉**（`global_http_proxy_host/port` 残留、代理继续生效），Pixel 9 / Android 17 实测 |
+
+实测环境：Pixel 9（`4A190DLAQ002QR`）、Android 17 / SDK 37、KernelSU；服务进程 uid 0、域 `u:r:ksu:s0`，与 `settings` 所需权限一致。
+
+服务内部只有**一份**清除实现（`:0` + 排除列表写空串），`DELETE /api/v1/egress`、fail-open 降级、启动自愈、卸载脚本都复用它——手工操作时也请照做。
+
+### 10.2 生效、自愈与降级
+
+- **生效**：设备级立即生效（新连接即走代理，已建立的连接要应用重连）；应用级在目标应用**重启后**生效。
+- **启动自愈**：服务开始监听后异步按当前配置重算期望值，读回不一致就重写一次（失败只记 warn，不影响 `/healthz`）。
+- **fail-open**（`egress.toml` 的 `[probe].fail_open`，默认 `true`）：显式探测失败（`connect`/`dns`/`timeout`/`tls`）、写入后读回不一致、启动自愈读回不一致——三者任一发生时把系统代理切成直连并标记 `health.degraded`；配置本身不变，一次成功探测即恢复。`fail_open = false` 时判定照做但不动系统代理。
+- **幂等**：读回值已等于期望值时不再执行 `settings put`；`PUT /api/v1/egress` 在期望状态与现状一致时也不落盘（`changed:false`）。
+
+### 10.3 探测
+
+设备上没有 `curl` / `wget`（只有 `nc`、`ping`），所以出口 IP 探测是**服务自己发请求**：
+
+- `POST /api/v1/egress/probe`，URL 取 `egress.toml` 的 `[probe].url`（默认 `http://checkip.amazonaws.com/`，只接受 `http://`），超时 5 s（1–30 可配）。
+- 直连 / HTTP 代理（absolute-form）/ SOCKS5（含用户名密码认证）三条路径都由服务实现；响应体上限 4 KiB、不跟随重定向。
+- **探测链路 ≠ 应用链路**：服务自己的客户端在 SOCKS5 下可以发用户名密码认证，但应用进程里的 libcore（经方案 B 注入）不会发送凭据（§10.7）。所以带凭据的代理可能「探测成功、应用仍出不去」，别拿探测结果反推应用可用性。
+- 失败返回 `502 egress.probe_failed`（`reason` = `connect`/`dns`/`timeout`/`tls`/`http_status`/`invalid_response`）；未配置出口返回 `409 egress.not_configured`。
+- 探测**不回落**：失败就是失败；fail-open 只影响流量链路。
+
+### 10.4 凭据与文件权限
+
+- 代理定义与密码写在 `/data/adb/device_faker/config/egress.toml`，权限 **0600**（目录 0700，备份 0600）；`config.toml` 保持 0644，只放**代理名引用**（`[egress].default` / `[[apps]].egress`）。
+- 写文件走 `O_CREAT|O_EXCL` 一步 0600 + 临时文件 → `fsync` → `rename` → `fsync(dir)`，不会出现半截文件或「先 0644 后 chmod」的窗口。
+- 权限被改宽时读取会自愈回 0600（日志一行 `egress.toml 权限过宽，已自愈为 0600`，`path`/`mode` 字段）并给 `egress_perm_fixed` 警告。
+- 备份与 `backupId`：写入前备份到 `backups/egress.toml.<stamp>-<rev8>.bak`（0600），响应里的 `backupId` 就是 `<stamp>-<rev8>`（例如 `20261201T030000.987654321Z-5b1f2c3d`）。排查历史版本：
+  ```sh
+  adb shell su -c 'ls -lt /data/adb/device_faker/config/backups/egress.toml.*.bak'
+  adb shell su -c 'ls -lt /data/adb/device_faker/config/backups/config.toml.*.bak'
+  ```
+- 应用级注入的「后置重放」如果**一次都没命中** hook（`setpriority`/`__system_property_get` 都没触发），会记一行（logcat 标签 `DeviceFaker`，模块日志同文）：
+  `[egress] replay hook not fired within 2000ms (no replay started); module retained (code pages stay mapped for this process) package=… waited=2000ms`。
+  - **两个触发时机**：① 重放窗口（`REPLAY_WINDOW_MS`，默认 2000ms）到点的 `alarm` 定时器——到点仍未 spawn 就打，并**立刻**还原 `SIGALRM` 处置；② 进程在窗口内退出时由 `atexit` 兜底补一行（`waited=` 是实际等待毫秒数，定时器那条是窗口值）。两个时机共用「只报一次」的开关。
+  - **正常路径不打印**：hook 命中（通常 ~26ms）会 `alarm(0)` 撤销定时器、还原信号处置并压住退出兜底，所以日志与未加诊断前完全一致。
+  - **打印后模块代码页仍然保留**：`armed` 的进程本来就跳过 `dlclose`，而且这里不能卸载——重放线程与 hook 的代码都在 `.so` 里，卸载即崩（行文案的 `module retained (code pages stay mapped for this process)` 就是这件事；按名字扫 `/proc/<pid>/maps` 仍看不到，见 [CONFIG.md](CONFIG.md) 的「已知限制」）。
+  - **SIGKILL**（AMS 杀进程的主要方式）下两个时机都不执行，只能靠「logcat 里没有 `replay start`」判断。
+  - 它与 `replay hook armed`（武装成功）、`replay hook unavailable`（没挂上）、`replay hook fired`（命中了）一起构成诊断四行。
+- 任何 API 响应 / 日志 / 审计都**不含**密码与用户名，唯一信号是 `hasCredentials`；`egress.toml` 不进 `GET /config?format=toml` 导出。
+
+### 10.5 卸载与禁用清理
+
+`uninstall.sh` 的顺序是：停守护循环 → 停 server → **清系统代理（`settings put global http_proxy :0`）** → 删 `/data/adb/device_faker`。前两步顺序不能反（否则守护循环 5 秒后会把进程拉回来）。
+
+⚠️ **手动「禁用模块」（管理器里关掉开关）不会执行 `uninstall.sh`**：服务不启动，就没有进程替你清系统代理，设备会继续走那条可能已经失效的代理。禁用前请先执行一次 `DELETE /api/v1/egress`（WebUI 设置页「网络出口」开关等价），或者在禁用后用 root 手工清：
+
+```sh
+su -c 'settings put global http_proxy :0'
+su -c 'settings get global http_proxy'                              # :0 或 null
+su -c 'dumpsys connectivity | grep -i "global proxy"'                # Global proxy: none
+```
+
+### 10.6 排障速查
+
+| 现象 | 排查 |
+| --- | --- |
+| 设了代理但应用还是直连 | `settings get global http_proxy` 看是否写入；`dumpsys connectivity \| grep -i "global proxy"` 看框架是否认；应用是否走的 native 栈（设备级不覆盖） |
+| 清除后代理仍生效 | 用了 `settings delete`。改 `settings put global http_proxy :0` |
+| `GET /api/v1/egress` 返回 500 `egress_parse` | `egress.toml` 损坏；用 `PUT /api/v1/egress` + `If-Match: *` 重写修复 |
+| `applied:false` | 读回值与期望不一致（`readback` 里有原文）；`settings` 是否可用（503，`details.component="settings"`）、SELinux 是否放行 |
+| 探测 502 `egress.probe_failed` | 看 `details.reason`：`dns`/`connect` 多为代理不可达；`http_status` 是探测站点返回非 2xx；`invalid_response` 是响应不是 IP 字面量 |
+| 探测 409 `egress.not_configured` | 设备级没有 `default` 且没有定义；先 `PUT /api/v1/egress` |
+| 应用级配了但没效果 | 应用需**重启**；native 栈（cronet/QUIC）不覆盖；`__DIRECT__` 会主动覆盖系统代理，检查配置是否写反 |
+| `health.degraded=true` | fail-open 已把系统代理切直连；修好代理后跑一次 `POST /api/v1/egress/probe` 即恢复 |
+
+### 10.7 应用级注入的已知代价与限制（模块侧）
+
+服务只负责设备级（方案 A）。应用级（方案 B）由 Zygisk 在目标进程内完成，因此下面这些代价与限制不在服务日志里，而在 **logcat / 模块日志**里：
+
+| 代价 | 表现 | 观测 |
+| --- | --- | --- |
+| 显式配置 `egress` 的进程**保留模块代码页** | 进程内常驻模块代码（重放线程 + PLT hook 都在 `.so` 里，不能提前 `dlclose`），但**按名字扫 `/proc/<pid>/maps` 看不到**：Zygisk 用无名/匿名映射，实测 armed 进程 3170 行里 `libzygisk` 命中 0；只有 **companion 进程**的 maps 能看到 `…/zygisk/arm64-v8a.so`。真判断要比**匿名可执行段**（对比未配置进程的 `r-xp` 匿名段） | 未配置应用级出口的进程不受影响，照旧立即卸载 |
+| **带用户名/密码的代理本期不可用** | 应用流量不发认证：SOCKS5 的 `java.net.socks.username/password` 进程内可读，但 libcore 不发送（代理侧 `methods=0002 user_ok=0 pass_ok=0`、最终 `auth-failed`）；HTTP Basic 未实现（只注入 host/port） | `[egress] unsupported-auth package=… type=http`（HTTP）；SOCKS5 看代理自身的 `auth-failed` 日志。可用 **IP 白名单**授权，或等 P2「设备内本地认证中继」（尚未实现） |
+| **运行中修改设备级代理不重放** | 应用冷启动后的重放窗口只有 0–2000ms；跑起来之后再改 `[egress] default`，该进程不会跟着变 | 重启应用（或 `POST /api/v1/apps/{pkg}/restart`）后生效 |
+| **`setpriority` hook 未命中时退化为一次性注入** | 注入值写进去了，但可能被框架的 `updateHttpProxy` 覆盖：应用级 HTTP 出口不生效、`__DIRECT__` 拉不回直连 | `adb logcat -s DeviceFaker` 里的 `[egress] replay hook unavailable reason=...` |
+
+机制与重放时间表见 [CONFIG.md「应用级注入如何生效」](CONFIG.md#应用级注入如何生效后置重放)。
+
+## 11. 许可
 
 GPL-3.0-or-later，`Copyright (c) 2025-2026 Seyud`。分发模块 zip（含 `bin/device_faker_server`）时必须同时提供对应完整源码，详见 [README.md](README.md) 的「许可与二次分发」。

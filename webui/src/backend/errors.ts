@@ -34,6 +34,9 @@ export type ApiErrorCode =
   | 'rate_limited'
   | 'internal_error'
   | 'upstream_unavailable'
+  // 出口代理（契约 §1.8）：命名带点，与其它码不同，是刻意的
+  | 'egress.not_configured'
+  | 'egress.probe_failed'
 
 /** 契约 §6.7 的单条字段级错误。 */
 export interface ValidationErrorItem {

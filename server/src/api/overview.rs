@@ -93,8 +93,12 @@ pub async fn get_overview(
 ) -> Result<Response, ApiError> {
     let snapshot = store::read_snapshot(state.store())
         .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error}")))?;
-    let config = Config::from_toml(&snapshot.text)
-        .map_err(|error| ApiError::internal_error(request_id.as_str(), format!("{error:#}")))?;
+    let config = Config::from_toml(&snapshot.text).map_err(|error| {
+        ApiError::internal_error(
+            request_id.as_str(),
+            crate::util::parse_error_message(&error),
+        )
+    })?;
     let config_status = crate::api::config_status_for(&snapshot, &config);
 
     let fingerprint = match state.commands().run("getprop", &["ro.build.fingerprint"]) {

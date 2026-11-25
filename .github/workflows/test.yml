@@ -1,0 +1,91 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2025-2026 Seyud
+# Device Faker: https://github.com/Seyud/device_faker
+#
+# 宿主机侧测试门禁：只跑「能在 ubuntu 上编译」的 crate。
+#
+# 为什么 --exclude device_faker：
+#   根 crate device_faker 是 Zygisk 模块（cdylib，依赖 prop-rs-android / rsbinder /
+#   jni / zygisk-api 等 Android-only crate），在 ubuntu 上必然编不过。它的构建与
+#   模块形态由 .github/workflows/build.yml（NDK + nightly + cargo ndk）负责。
+#   但注意其「纯逻辑」部分（src/egress.rs 的注入计划、重放调度、降级分支）已被
+#   module-tests 用 #[path] 编进 device_faker_module_tests，因此仍受本工作流覆盖。
+#
+# 覆盖范围：core / server / manager / module-tests + xtask（clippy --workspace）。
+# 本地等价命令与 macOS/ubuntu 差异都写在下面的步骤注释里；本工作流不依赖
+# 任何外部服务（测试内的 mock 设备只 bind 127.0.0.1:0），也不需要 adb。
+
+name: Test (host crates)
+
+on:
+  push:
+    paths:
+      - 'core/**'
+      - 'server/**'
+      - 'manager/**'
+      - 'module-tests/**'
+      - 'src/**'
+      - 'xtask/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'server/**'
+      - 'manager/**'
+      - 'module-tests/**'
+      - 'src/**'
+      - 'xtask/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+
+# 同一分支重复推送只保留最新一次，避免排队烧 runner。
+concurrency:
+  group: host-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  host-tests:
+    name: fmt / clippy / test (host crates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # rusqlite 用 bundled feature（manager），会现场编译 SQLite 的 C 源码；
+      # ubuntu-latest 自带 gcc，不需要额外 apt；这里只缓存 ~/.cargo 与 target。
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: host-tests
+
+      - name: Show toolchain
+        run: |
+          rustc -V
+          cargo -V
+          rustfmt --version
+          cargo clippy -V
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      - name: cargo clippy (host crates, -D warnings)
+        run: cargo clippy --workspace --exclude device_faker --all-targets -- -D warnings
+
+      # --workspace --exclude device_faker 等价于「core / server / manager /
+      # module-tests + xtask」；xtask 也是纯宿主 crate，顺手一起测（2 个用例）。
+      - name: cargo test (device_faker_core / device_faker_server / device_faker_manager / device_faker_module_tests)
+        run: cargo test --workspace --exclude device_faker
