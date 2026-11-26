@@ -90,7 +90,7 @@ WebUI 采用纯 KernelSU WebUI API 实现，支持 KernelSU、WeaveMask 和 APat
 
 WebUI 内置在线模板源，可以从社区模板仓库筛选后一键导入：
 
-- 仓库地址：[uamind/devmask-config](https://github.com/uamind/devmask-config)（DevMask 维护）
+- 仓库地址：[uamind/devmask-config](https://github.com/uamind/devmask-config)（DevMask 维护）· [Gitee 镜像](https://gitee.com/cutebabylab/devmask-config)
 - 打开后先显示数据源与详情拉取进度，支持刷新与失败重试
 - 分类胶囊（全部 / 通用设备 / 游戏设备 / 破限设备）与品牌胶囊叠加筛选
 - 支持按品牌、型号、模板名或**模板描述**搜索；多个关键词以空白分隔，需全部命中

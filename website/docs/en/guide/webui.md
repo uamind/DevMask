@@ -90,7 +90,7 @@ When several templates declare the same package, only the one written **first** 
 
 The WebUI has a built-in online template source. Filter community templates, then import them in one click:
 
-- Repository: [uamind/devmask-config](https://github.com/uamind/devmask-config) (maintained by DevMask)
+- Repository: [uamind/devmask-config](https://github.com/uamind/devmask-config) (maintained by DevMask) · [Gitee mirror](https://gitee.com/cutebabylab/devmask-config)
 - The library first shows the data source and detail-fetch progress, with refresh and retry for failed items
 - Category chips (All / Common / Gaming / Transcend) combine with brand chips
 - Search by brand, model, template name or **template description**; space-separated keywords must all match

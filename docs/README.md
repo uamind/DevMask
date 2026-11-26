@@ -20,7 +20,7 @@ DevMask 是**独立维护的项目**，不是上游仓库的分支镜像。早�
 | --- | --- |
 | 主仓库 | [uamind/DevMask](https://github.com/uamind/DevMask) |
 | 下载 / 更新 | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../Update.json) |
-| 机型模板库（我们维护） | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
+| 机型模板库（我们维护） | [GitHub](https://github.com/uamind/devmask-config) · [Gitee 镜像](https://gitee.com/cutebabylab/devmask-config) |
 | 文档站 | [uamind.github.io/DevMask](https://uamind.github.io/DevMask/) |
 | 问题反馈 | [Issues](https://github.com/uamind/DevMask/issues) |
 

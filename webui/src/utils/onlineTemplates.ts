@@ -40,10 +40,11 @@ interface TemplateSourceConfig {
  */
 const SOURCE_CONFIGS = {
   gitee: {
-    owner: 'uamind',
+    // Gitee 镜像仓（推送账号 cutebabylab），与 GitHub 仓内容一致
+    owner: 'cutebabylab',
     repo: 'devmask-config',
     apiBase: 'https://gitee.com/api/v5',
-    rawBase: 'https://gitee.com/uamind/devmask-config/raw/main',
+    rawBase: 'https://gitee.com/cutebabylab/devmask-config/raw/main',
     cdnBase: 'https://cdn.jsdelivr.net/gh/uamind/devmask-config@main',
   },
   github: {

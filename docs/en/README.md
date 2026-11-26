@@ -16,7 +16,7 @@ DevMask is an **independently maintained project**, not a mirror or fork of the 
 | --- | --- |
 | Repository | [uamind/DevMask](https://github.com/uamind/DevMask) |
 | Downloads / updates | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../../Update.json) |
-| Device template repo (maintained by us) | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
+| Device template repo (maintained by us) | [GitHub](https://github.com/uamind/devmask-config) · [Gitee mirror](https://gitee.com/cutebabylab/devmask-config) |
 | Documentation site | [uamind.github.io/DevMask](https://uamind.github.io/DevMask/) |
 | Issues | [uamind/DevMask/issues](https://github.com/uamind/DevMask/issues) |
 
