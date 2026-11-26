@@ -15,34 +15,53 @@
 
       <div v-else key="template-list" class="template-home-view">
         <TemplateHeader
-          :locale="locale"
+          :count="allTemplates.length"
           @open-online="showOnlineLibrary"
           @open-create="showCreateDialog"
           @open-transfer="showTransferDialog"
           @search="handleSearch"
         />
 
-        <div v-if="conflictingPackages.length > 0" class="conflict-banner">
-          <div class="conflict-banner-head">
-            <strong>{{ t('templates.conflict.banner_title') }}</strong>
+        <!--
+          包名重复配置：多个模板声明同一包名时只有排在前面的生效。
+          默认收起成一行摘要，点开才展开逐条明细——告警要留，但不抢占整页注意力。
+        -->
+        <section v-if="conflictingPackages.length > 0" class="conflict">
+          <button
+            type="button"
+            class="conflict__head"
+            :aria-expanded="conflictExpanded"
+            @click="conflictExpanded = !conflictExpanded"
+          >
+            <TriangleAlert :size="14" class="conflict__icon" aria-hidden="true" />
+            <span class="conflict__title">{{ t('templates.conflict.banner_title') }}</span>
+            <span class="conflict__count dm-mono">{{ conflictingPackages.length }}</span>
+            <ChevronDown
+              :size="14"
+              :class="['conflict__chev', { 'is-open': conflictExpanded }]"
+              aria-hidden="true"
+            />
+          </button>
+
+          <div v-if="conflictExpanded" class="conflict__body">
+            <p class="conflict__desc">{{ t('templates.conflict.banner_desc') }}</p>
+            <ul class="conflict__list">
+              <li v-for="conflict in conflictingPackages" :key="conflict.packageName">
+                <span class="conflict__pkg dm-mono">{{ conflict.packageName }}</span>
+                <span class="conflict__eff">
+                  {{ t('templates.conflict.effective', { name: conflict.templates[0] }) }}
+                </span>
+                <span class="conflict__ign">
+                  {{
+                    t('templates.conflict.ignored', {
+                      names: conflict.templates.slice(1).join(', '),
+                    })
+                  }}
+                </span>
+              </li>
+            </ul>
           </div>
-          <p class="conflict-banner-desc">{{ t('templates.conflict.banner_desc') }}</p>
-          <ul class="conflict-list">
-            <li v-for="conflict in conflictingPackages" :key="conflict.packageName">
-              <code class="conflict-pkg">{{ conflict.packageName }}</code>
-              <span class="conflict-effective">
-                {{ t('templates.conflict.effective', { name: conflict.templates[0] }) }}
-              </span>
-              <span class="conflict-ignored">
-                {{
-                  t('templates.conflict.ignored', {
-                    names: conflict.templates.slice(1).join(', '),
-                  })
-                }}
-              </span>
-            </li>
-          </ul>
-        </div>
+        </section>
 
         <TemplateList
           :entries="filteredTemplates"
@@ -50,6 +69,8 @@
           @export="handleExport"
           @edit="handleEdit"
           @delete="deleteTemplateConfirm"
+          @create="showCreateDialog"
+          @online="showOnlineLibrary"
         />
 
         <TemplateDialog
@@ -70,6 +91,7 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onActivated, ref } from 'vue'
+import { ChevronDown, TriangleAlert } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import TemplateHeader from '../components/templates/TemplateHeader.vue'
 import TemplateList from '../components/templates/TemplateList.vue'
@@ -98,6 +120,7 @@ const { t, locale } = useI18n()
 const getMessageBox = useLazyMessageBox()
 
 const searchQuery = ref('')
+const conflictExpanded = ref(false)
 const viewTransitionName = ref<'template-library-forward' | 'template-library-back'>(
   'template-library-forward'
 )
@@ -251,77 +274,128 @@ onActivated(() => {
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  padding-top: 4px;
 }
 
 .template-home-view {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
   width: 100%;
 }
 
-/* 包名重复配置告警：多个模板声明同一包名时只有第一个生效 */
-.conflict-banner {
+/* —— 包名重复配置告警：一行摘要，展开后才看明细 —— */
+.conflict {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-tile);
+  background: var(--warn-soft);
+  overflow: hidden;
+}
+
+html.dark .conflict {
+  background: var(--surface);
+  border-color: var(--line);
+  border-left-color: var(--warn);
+}
+
+.conflict__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.conflict__icon {
+  flex: none;
+  color: var(--warn);
+}
+
+.conflict__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conflict__count {
+  flex: none;
+  font-size: 11px;
+  color: var(--warn);
+  opacity: 0.75;
+}
+
+.conflict__chev {
+  flex: none;
+  color: var(--warn);
+  opacity: 0.75;
+  transition: transform 0.18s ease;
+}
+
+.conflict__chev.is-open {
+  transform: rotate(180deg);
+}
+
+.conflict__body {
+  padding: 0 11px 10px;
+}
+
+.conflict__desc {
+  margin: 0 0 7px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--warn);
+  opacity: 0.82;
+}
+
+.conflict__list {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
-  padding: 0.75rem 0.875rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--el-text-color-primary, inherit);
-}
-
-.conflict-banner-head strong {
-  color: #b45309;
-}
-
-.conflict-banner-desc {
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  opacity: 0.85;
-}
-
-.conflict-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
+  gap: 6px;
   list-style: none;
 }
 
-.conflict-list li {
+.conflict__list li {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
+  gap: 6px;
+  font-size: 10.5px;
+  line-height: 1.45;
 }
 
-.conflict-pkg {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  padding: 0.0625rem 0.3125rem;
-  border-radius: 0.25rem;
-  background: rgba(127, 127, 127, 0.15);
+.conflict__pkg {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--ink);
 }
 
-.conflict-effective {
-  color: #b45309;
+.conflict__eff {
+  color: var(--ok);
+  font-weight: 600;
 }
 
-.conflict-ignored {
-  opacity: 0.7;
+.conflict__ign {
+  color: var(--muted);
   text-decoration: line-through;
+  text-decoration-color: var(--dim);
 }
 
-html.dark .conflict-banner-head strong,
-html.dark .conflict-effective {
-  color: #fbbf24;
-}
-
+/* —— 在线模板库 / 列表之间的横向转场 —— */
 .template-library-forward-enter-active,
 .template-library-forward-leave-active,
 .template-library-back-enter-active,
@@ -380,31 +454,5 @@ html.dark .conflict-effective {
   .template-library-back-leave-to {
     transform: none;
   }
-}
-</style>
-
-<style>
-.delete-confirm-modal {
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.15) !important;
-}
-
-.dark .delete-confirm-modal {
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.4) !important;
-}
-
-.delete-confirm-box {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(1.1) !important;
-  border: 1px solid rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
-}
-
-.dark .delete-confirm-box {
-  background: rgba(20, 20, 20, 0.6) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(0.9) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
 }
 </style>

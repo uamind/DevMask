@@ -16,95 +16,120 @@
     class="app-config-dialog"
     modal-class="app-config-modal"
   >
-    <!-- 配置类型标签页 -->
-    <div class="config-tabs">
-      <div
-        class="config-tab"
-        :class="{ active: activeTab === 'custom', configured: hasCustomConfig }"
-        @click="activeTab = 'custom'"
-      >
-        <el-checkbox
-          :model-value="hasCustomConfig"
-          @click.stop
-          @change="(val: boolean) => handleConfigToggle('custom', val)"
-        />
-        <span class="tab-label">{{ t('apps.dialog.mode_custom') }}</span>
+    <div class="dlg">
+      <!-- 配置类型：自定义 / 模板（白卡，点卡片切分组，勾选框启用该类配置） -->
+      <div class="dlg-modes" role="tablist">
+        <div
+          :class="['mode-card', { 'mode-card--active': activeTab === 'custom' }]"
+          role="tab"
+          tabindex="0"
+          :aria-selected="activeTab === 'custom'"
+          @click="activeTab = 'custom'"
+          @keydown.enter="activeTab = 'custom'"
+          @keydown.space.prevent="activeTab = 'custom'"
+        >
+          <el-checkbox
+            :model-value="hasCustomConfig"
+            @click.stop
+            @change="(val: boolean) => handleConfigToggle('custom', val)"
+          />
+          <span class="mode-card__label">{{ t('apps.dialog.mode_custom') }}</span>
+        </div>
+        <div
+          :class="['mode-card', { 'mode-card--active': activeTab === 'template' }]"
+          role="tab"
+          tabindex="0"
+          :aria-selected="activeTab === 'template'"
+          @click="activeTab = 'template'"
+          @keydown.enter="activeTab = 'template'"
+          @keydown.space.prevent="activeTab = 'template'"
+        >
+          <el-checkbox
+            :model-value="hasTemplateConfig"
+            @click.stop
+            @change="(val: boolean) => handleConfigToggle('template', val)"
+          />
+          <span class="mode-card__label">{{ t('apps.dialog.mode_template') }}</span>
+        </div>
       </div>
-      <div
-        class="config-tab"
-        :class="{
-          active: activeTab === 'template',
-          configured: hasTemplateConfig && !hasCustomConfig,
-        }"
-        @click="activeTab = 'template'"
-      >
-        <el-checkbox
-          :model-value="hasTemplateConfig"
-          @click.stop
-          @change="(val: boolean) => handleConfigToggle('template', val)"
-        />
-        <span class="tab-label">{{ t('apps.dialog.mode_template') }}</span>
-      </div>
-    </div>
 
-    <!-- 生效范围：明示命中的配置键作用到谁（仅主应用 / 主应用+分身回退 / 仅该分身） -->
-    <p v-if="scopeText" class="scope-hint">{{ scopeText }}</p>
+      <!-- 生效范围：明示命中的配置键作用到谁（仅主应用 / 主应用+分身回退 / 仅该分身） -->
+      <p v-if="scopeText" class="dlg-scope">{{ scopeText }}</p>
 
-    <!-- 继承提示：分身当前只是回退命中主应用的裸包名配置，本实例尚无自有条目 -->
-    <p v-if="inheritedHintVisible" class="inherited-hint">
-      {{ t('apps.dialog.inherited_hint', { base: inheritedBase }) }}
-    </p>
+      <!-- 继承提示：分身当前只是回退命中主应用的裸包名配置，本实例尚无自有条目 -->
+      <p v-if="inheritedHintVisible" class="dlg-note">
+        {{ t('apps.dialog.inherited_hint', { base: inheritedBase }) }}
+      </p>
 
-    <!-- 模板配置界面 -->
-    <div v-if="activeTab === 'template'" class="template-selector">
-      <el-input
-        v-model="templateSearch"
-        :placeholder="t('apps.dialog.search_template_placeholder')"
-        prefix-icon="Search"
-        clearable
-        class="template-search"
-      />
-      <el-select
-        v-model="selectedTemplate"
-        :placeholder="t('apps.dialog.select_template_placeholder')"
-        :no-data-text="templateNoDataText"
-        :no-match-text="templateNoMatchText"
-        filterable
-        style="width: 100%"
-      >
-        <el-option
-          v-for="option in filteredTemplateOptions"
-          :key="option.name"
-          :label="option.label"
-          :value="option.name"
-        />
-      </el-select>
+      <!-- 模板配置分组 -->
+      <section v-if="activeTab === 'template'" class="dlg-card">
+        <header class="dlg-card__head">
+          <h3 class="dlg-card__title">{{ t('apps.dialog.mode_template') }}</h3>
+        </header>
+        <div class="dlg-card__body">
+          <el-input
+            v-model="templateSearch"
+            :placeholder="t('apps.dialog.search_template_placeholder')"
+            prefix-icon="Search"
+            clearable
+            class="template-search"
+          />
+          <el-select
+            v-model="selectedTemplate"
+            :placeholder="t('apps.dialog.select_template_placeholder')"
+            :no-data-text="templateNoDataText"
+            :no-match-text="templateNoMatchText"
+            filterable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="option in filteredTemplateOptions"
+              :key="option.name"
+              :label="option.label"
+              :value="option.name"
+            />
+          </el-select>
 
-      <!-- 模板配置操作按钮 -->
-      <div class="config-actions">
-        <el-button v-if="hasTemplateConfig" type="danger" @click="removeTemplateConfig">
-          {{ t('apps.dialog.remove_template_config') }}
-        </el-button>
-      </div>
-    </div>
+          <el-button
+            v-if="hasTemplateConfig"
+            class="dlg-remove"
+            type="danger"
+            plain
+            @click="removeTemplateConfig"
+          >
+            {{ t('apps.dialog.remove_template_config') }}
+          </el-button>
+        </div>
+      </section>
 
-    <!-- 自定义配置界面 -->
-    <div v-if="activeTab === 'custom'" class="custom-config">
-      <el-form :model="formData" label-width="120px" label-position="top">
-        <DevMaskFormFields />
-      </el-form>
+      <!-- 自定义配置分组 -->
+      <section v-if="activeTab === 'custom'" class="dlg-card">
+        <header class="dlg-card__head">
+          <h3 class="dlg-card__title">{{ t('apps.dialog.mode_custom') }}</h3>
+        </header>
+        <div class="dlg-card__body">
+          <el-form :model="formData" label-position="top">
+            <DevMaskFormFields />
+          </el-form>
 
-      <!-- 自定义配置操作按钮 -->
-      <div class="config-actions">
-        <el-button v-if="hasCustomConfig" type="danger" @click="removeCustomConfig">
-          {{ t('apps.dialog.remove_custom_config') }}
-        </el-button>
-      </div>
+          <el-button
+            v-if="hasCustomConfig"
+            class="dlg-remove"
+            type="danger"
+            plain
+            @click="removeCustomConfig"
+          >
+            {{ t('apps.dialog.remove_custom_config') }}
+          </el-button>
+        </div>
+      </section>
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="saveAppConfig">{{ t('common.confirm') }}</el-button>
+      <div class="dlg-foot">
+        <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveAppConfig">{{ t('common.confirm') }}</el-button>
+      </div>
     </template>
   </el-dialog>
 </template>
@@ -514,164 +539,252 @@ watch(selectedTemplate, (val) => {
 })
 </script>
 
-<style scoped>
-.config-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.5rem;
-}
+<style>
+/* ───────────────────────────────────────────────────────────────────────────
+ * 应用配置弹窗：白卡分组、圆角 18、主按钮 brand；不再使用毛玻璃。
+ *
+ * 不加 scoped：el-dialog 的骨架（header/body/footer）由 Element Plus 的子组件
+ * 渲染，作用域选择器依赖 scope id，统一用 .app-config-dialog 前缀隔离更可靠。
+ * ─────────────────────────────────────────────────────────────────────────── */
 
-.config-tab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.config-tab:hover {
-  background: var(--hover);
-}
-
-.config-tab.active {
-  background: color-mix(in srgb, var(--primary-color, #409eff) 12%, transparent);
-}
-
-.config-tab.configured::after {
-  content: '';
-  position: absolute;
-  top: 0.3rem;
-  right: 0.3rem;
-  width: 0.4rem;
-  height: 0.4rem;
-  border-radius: 999px;
-  background: var(--success-color, #67c23a);
-}
-
-.tab-label {
-  font-size: 0.875rem;
-  color: var(--text);
-}
-
-.config-tab.active .tab-label {
-  color: var(--primary-color, #409eff);
-  font-weight: 600;
-}
-
-.inherited-hint {
-  margin: 0 0 1rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--primary-color, #409eff) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--primary-color, #409eff) 25%, transparent);
-}
-
-.scope-hint {
-  margin: 0 0 0.75rem;
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-}
-
-.template-selector,
-.custom-config {
-  margin-top: 1rem;
-}
-
-.template-search {
-  margin-bottom: 0.75rem;
-}
-
-.config-actions {
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-start;
-}
-
-.app-config-dialog :deep(.el-dialog) {
-  margin-top: 5vh !important;
-  margin-bottom: 80px !important;
-  max-height: calc(100vh - 80px - 10vh) !important;
+.el-dialog.app-config-dialog {
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.15) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(1.1);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 420px;
+  margin: 5vh auto 80px !important;
+  max-height: calc(100vh - 80px - 5vh) !important;
+  padding: 0 !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--shadow-2) !important;
+  overflow: hidden !important;
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-config-dialog :deep(.el-dialog) {
-    background: rgba(20, 20, 20, 0.6) !important;
-    backdrop-filter: blur(40px) saturate(150%) brightness(0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
+/* —— 头 —— */
+.el-dialog.app-config-dialog .el-dialog__header {
+  flex: none;
+  margin: 0;
+  padding: 15px 18px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
 
-.app-config-dialog :deep(.el-dialog__body) {
-  flex: 1;
+.el-dialog.app-config-dialog .el-dialog__header.show-close {
+  padding-right: 48px;
+}
+
+.el-dialog.app-config-dialog .el-dialog__title {
+  font-size: 15px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--ink) !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.el-dialog.app-config-dialog .el-dialog__headerbtn {
+  top: 2px;
+  right: 2px;
+  width: 42px;
+  height: 42px;
+}
+
+.el-dialog.app-config-dialog .el-dialog__close {
+  font-size: 15px;
+  color: var(--muted) !important;
+}
+
+/* —— 内容：页面底色 + 白卡分组 —— */
+.el-dialog.app-config-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  padding: 1.5rem;
-  padding-bottom: 2rem;
-  max-height: calc(100vh - 200px);
-  background: transparent;
+  padding: 14px 16px 18px;
+  background: var(--bg);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.app-config-dialog :deep(.el-dialog__body::-webkit-scrollbar) {
+.el-dialog.app-config-dialog .el-dialog__body::-webkit-scrollbar {
   display: none;
 }
 
-.app-config-dialog :deep(.el-dialog__header) {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+/* —— 底栏 —— */
+.el-dialog.app-config-dialog .el-dialog__footer {
+  flex: none;
+  padding: 12px 16px calc(12px + var(--safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-config-dialog :deep(.el-dialog__header) {
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
+.el-dialog.app-config-dialog .dlg-foot {
+  display: flex;
+  gap: 8px;
 }
 
-.app-config-dialog :deep(.el-dialog__footer) {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  flex-shrink: 0;
+.el-dialog.app-config-dialog .dlg-foot .el-button {
+  flex: 1 1 0;
+  height: 40px;
+  margin: 0 !important;
+  border-color: var(--line);
+  border-radius: var(--radius-btn) !important;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 560;
+  color: var(--ink);
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-config-dialog :deep(.el-dialog__footer) {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.3);
-  }
-}
-</style>
-
-<style>
-.app-config-modal {
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.25) !important;
+.el-dialog.app-config-dialog .dlg-foot .el-button--primary {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+  font-weight: 620;
 }
 
-@media (prefers-color-scheme: dark) {
-  .app-config-modal {
-    backdrop-filter: blur(12px) saturate(120%) !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-  }
+.el-dialog.app-config-dialog .dlg-foot .el-button--primary:hover {
+  filter: brightness(0.96);
+}
+
+/* —— 内容块 —— */
+.el-dialog.app-config-dialog .dlg {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.el-dialog.app-config-dialog .dlg-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.el-dialog.app-config-dialog .mode-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  box-shadow: var(--shadow-1);
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.dark .el-dialog.app-config-dialog .mode-card {
+  box-shadow: none;
+}
+
+.el-dialog.app-config-dialog .mode-card--active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.el-dialog.app-config-dialog .mode-card .el-checkbox {
+  flex: none;
+  height: auto;
+  margin-right: 0;
+}
+
+.el-dialog.app-config-dialog .mode-card__label {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.el-dialog.app-config-dialog .mode-card--active .mode-card__label {
+  color: var(--brand);
+  font-weight: 640;
+}
+
+.el-dialog.app-config-dialog .dlg-scope {
+  padding: 0 2px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.el-dialog.app-config-dialog .dlg-note {
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.el-dialog.app-config-dialog .dlg-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+html.dark .el-dialog.app-config-dialog .dlg-card {
+  box-shadow: none;
+}
+
+.el-dialog.app-config-dialog .dlg-card__head {
+  padding: 12px 14px 0;
+}
+
+.el-dialog.app-config-dialog .dlg-card__title {
+  font-size: 12.5px;
+  font-weight: 660;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+.el-dialog.app-config-dialog .dlg-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px 14px;
+}
+
+.el-dialog.app-config-dialog .dlg-card__body .el-form-item {
+  margin-bottom: 14px;
+}
+
+.el-dialog.app-config-dialog .dlg-card__body .el-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.el-dialog.app-config-dialog .dlg-card__body .el-form-item__label {
+  margin-bottom: 4px;
+  padding: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  /* 全局 style.css 用 !important 把 EP 表单标签锁成主文字色；弹窗内要弱化成说明文字 */
+  color: var(--muted) !important;
+}
+
+.el-dialog.app-config-dialog .dlg-remove {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+/* —— 遮罩：一层压暗，不做毛玻璃 —— */
+.el-overlay.app-config-modal {
+  background-color: rgba(8, 11, 18, 0.42) !important;
+}
+
+html.dark .el-overlay.app-config-modal {
+  background-color: rgba(2, 4, 8, 0.66) !important;
 }
 </style>

@@ -4,7 +4,7 @@
 
 <img src="../logo.png" style="width: 96px;" alt="logo">
 
-Her uygulamaya kendi sahte cihazı: paket bazında model, Build alanları, sistem özellikleri ve DPI — ayrıca cihaz veya uygulama bazında çıkış proxy'si (kimlik doğrulamalı proxy'ler dahil).
+**Her uygulama, kendi kimliği.** Paket bazında model, Build parmak izi, sistem özellikleri ve DPI sahtelenir; her uygulama kendi çıkış proxy'sini kullanabilir (kimlik doğrulamalı konut proxy'leri dahil).
 
 > v0.0.1 DevMask'in ilk sürümüdür; sürüm numaralandırması sıfırdan başlar. Geçmiş: [CHANGELOG](CHANGELOG.md).
 

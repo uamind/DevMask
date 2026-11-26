@@ -4,7 +4,7 @@
 
 <img src="logo.png" style="width: 96px;" alt="logo">
 
-给每个应用一层"假设备"：机型、Build、系统属性、DPI 全部按应用伪造，出口网络也能指定到指定代理——包括需要账号密码的住宅代理。
+**一个应用，一个身份。** 按包名伪造机型、Build 指纹、系统属性与 DPI，出口网络也能按应用独立指定——包括需要账号密码的住宅代理。
 
 [![Version](https://img.shields.io/github/v/release/uamind/DevMask?logo=github)](https://github.com/uamind/DevMask/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/uamind/DevMask/total?logo=github&logoColor=green)](https://github.com/uamind/DevMask/releases)

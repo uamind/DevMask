@@ -6,721 +6,388 @@
 
 <template>
   <div class="settings-page">
-    <div class="settings-section glass-effect">
-      <h2 class="section-title">{{ t('settings.display.title') }}</h2>
+    <header class="dm-page-head">
+      <h1 class="dm-page-title">{{ t('nav.settings') }}</h1>
+      <p class="dm-page-sub">{{ t('about.description') }}</p>
+    </header>
 
-      <div class="setting-item setting-item-split">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <Moon :size="24" />
-          </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.display.theme.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.display.theme.desc') }}</p>
-          </div>
-        </div>
-        <BaseSelect
-          v-model="currentTheme"
-          class="setting-control"
-          :options="themeOptions"
-          :aria-label="t('settings.display.theme.label')"
-          @change="onThemeChange"
-        />
+    <!-- 外观：主题 + 语言（主题默认跟随系统） -->
+    <section class="dm-section">
+      <div class="dm-section__head">
+        <h2 class="dm-section__title">{{ t('settings.appearance.title') }}</h2>
       </div>
 
-      <div class="setting-item setting-item-split">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <Globe :size="24" />
+      <div class="dm-card set-card">
+        <div class="set-row">
+          <span class="set-row__icon" aria-hidden="true">
+            <Moon :size="17" :stroke-width="1.8" />
+          </span>
+          <div class="set-row__text">
+            <h3 class="set-row__name">{{ t('settings.display.theme.label') }}</h3>
+            <p class="set-row__desc">{{ t('settings.display.theme.desc') }}</p>
           </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.display.language.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.display.language.desc') }}</p>
-          </div>
+          <BaseSelect
+            v-model="currentTheme"
+            class="set-row__select"
+            :options="themeOptions"
+            :aria-label="t('settings.display.theme.label')"
+            @change="onThemeChange"
+          />
         </div>
-        <BaseSelect
-          v-model="currentLanguage"
-          class="setting-control"
-          :options="languageOptions"
-          :aria-label="t('settings.display.language.label')"
-          @change="onLanguageChange"
-        />
-      </div>
-    </div>
 
-    <div class="settings-section glass-effect">
-      <h2 class="section-title">{{ t('settings.tools.title') }}</h2>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <FileUp :size="24" />
+        <div class="set-row">
+          <span class="set-row__icon" aria-hidden="true">
+            <Globe :size="17" :stroke-width="1.8" />
+          </span>
+          <div class="set-row__text">
+            <h3 class="set-row__name">{{ t('settings.display.language.label') }}</h3>
+            <p class="set-row__desc">{{ t('settings.display.language.desc') }}</p>
           </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.tools.convert.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.tools.convert.desc') }}</p>
-          </div>
+          <BaseSelect
+            v-model="currentLanguage"
+            class="set-row__select"
+            :options="languageOptions"
+            :aria-label="t('settings.display.language.label')"
+            @change="onLanguageChange"
+          />
         </div>
-        <el-button type="primary" :loading="converting" @click="startConversion">
-          {{ t('settings.tools.convert.btn') }}
-        </el-button>
       </div>
-    </div>
+    </section>
 
-    <div class="settings-section glass-effect">
-      <h2 class="section-title">{{ t('settings.module.title') }}</h2>
+    <!-- 网络出口已独立成「网络」页：设置里只留这一行入口，不重复任何出口表单 -->
+    <button type="button" class="entry dm-card" @click="goNetwork">
+      <span class="entry__icon" aria-hidden="true">
+        <Route :size="17" :stroke-width="1.8" />
+      </span>
+      <span class="entry__text">
+        <span class="entry__name">{{ t('settings.egress.title') }}</span>
+        <span class="entry__desc">{{ t('network.subtitle') }}</span>
+      </span>
+      <span class="entry__go">
+        {{ t('nav.network') }}
+        <ArrowRight :size="13" aria-hidden="true" />
+      </span>
+    </button>
 
-      <div class="setting-item setting-item-horizontal">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <Bug :size="24" />
-          </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.module.debug.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.module.debug.desc') }}</p>
-          </div>
-        </div>
-        <el-switch v-model="debugMode" class="setting-control-switch" @change="onDebugChange" />
+    <!-- 高级：模块调试 / 工具 / 外部访问与 API 令牌 / 服务状态 -->
+    <section class="dm-section">
+      <div class="dm-section__head">
+        <h2 class="dm-section__title">{{ t('settings.advanced.title') }}</h2>
       </div>
-    </div>
 
-    <div class="settings-section glass-effect">
-      <h2 class="section-title">{{ t('settings.egress.title') }}</h2>
-      <p class="server-hint server-hint--lead">{{ t('settings.egress.desc') }}</p>
-      <div class="server-banner">{{ t('settings.egress.runtime.' + egress.runtime) }}</div>
+      <div class="set-stack">
+        <div class="dm-card set-card">
+          <div class="set-card__head">{{ t('settings.module.title') }}</div>
 
-      <template v-if="egress.supported">
-        <div class="setting-item setting-item-horizontal">
-          <div class="setting-info">
-            <div class="setting-icon">
-              <Route :size="24" />
+          <div class="set-row">
+            <span class="set-row__icon" aria-hidden="true">
+              <Bug :size="17" :stroke-width="1.8" />
+            </span>
+            <div class="set-row__text">
+              <h3 class="set-row__name">{{ t('settings.module.debug.label') }}</h3>
+              <p class="set-row__desc">{{ t('settings.module.debug.desc') }}</p>
             </div>
-            <div class="setting-text">
-              <h3 class="setting-name">{{ t('settings.egress.enable.label') }}</h3>
-              <p class="setting-desc">{{ t('settings.egress.enable.desc') }}</p>
-            </div>
+            <el-switch v-model="debugMode" class="set-switch" @change="onDebugChange" />
           </div>
-          <el-switch v-model="egress.form.enabled" class="setting-control-switch" />
+
+          <!-- 日志入口：调试日志落在模块运行目录，路径可直接复制 -->
+          <div class="set-log">
+            <span class="set-log__icon" aria-hidden="true">
+              <Terminal :size="14" :stroke-width="1.8" />
+            </span>
+            <code class="set-log__path dm-mono">{{ LOG_PATH }}</code>
+            <button type="button" class="dm-link" @click="copyLogPath">
+              {{ t('settings.serverAccess.token_dialog.copy') }}
+            </button>
+          </div>
         </div>
 
-        <el-form label-position="top" class="egress-form">
-          <div class="egress-grid">
-            <el-form-item :label="t('settings.egress.fields.name.label')">
-              <el-input
-                v-model="egress.form.name"
-                :placeholder="t('settings.egress.fields.name.placeholder')"
-              />
-              <p class="form-tip">{{ t('settings.egress.fields.name.desc') }}</p>
-              <p v-if="egress.fieldErrors.name" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.name }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.fields.type.label')">
-              <BaseSelect
-                v-model="egress.form.type"
-                :options="egressTypeOptions"
-                :aria-label="t('settings.egress.fields.type.label')"
-              />
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.fields.host.label')">
-              <el-input
-                v-model="egress.form.host"
-                :placeholder="t('settings.egress.fields.host.placeholder')"
-              />
-              <p v-if="egress.fieldErrors.host" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.host }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.fields.port.label')">
-              <el-input-number
-                v-model="egress.form.port"
-                :min="1"
-                :max="65535"
-                :step="1"
-                step-strictly
-                controls-position="right"
-              />
-              <p v-if="egress.fieldErrors.port" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.port }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.fields.username.label')">
-              <el-input
-                v-model="egress.form.username"
-                autocomplete="off"
-                :placeholder="t('settings.egress.fields.username.placeholder')"
-              />
-              <p v-if="egress.fieldErrors.username" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.username }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.fields.password.label')">
-              <el-input
-                v-model="egress.form.password"
-                type="password"
-                show-password
-                autocomplete="new-password"
-                :placeholder="passwordPlaceholder"
-              />
-              <p class="form-tip">{{ credentialsLabel }}</p>
-              <p v-if="egress.fieldErrors.password" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.password }}
-              </p>
-            </el-form-item>
-          </div>
+        <div class="dm-card set-card">
+          <div class="set-card__head">{{ t('settings.tools.title') }}</div>
 
-          <div class="egress-inline">
-            <el-checkbox v-model="egress.form.clearCredentials" :disabled="!egress.hasCredentials">
-              {{ t('settings.egress.fields.clear_credentials.label') }}
-            </el-checkbox>
-            <span class="form-tip">{{ t('settings.egress.fields.clear_credentials.desc') }}</span>
-          </div>
-
-          <div class="egress-inline">
-            <el-button link type="primary" @click="toggleAdvanced">
-              {{ t('settings.egress.advanced.toggle') }}
+          <div class="set-row">
+            <span class="set-row__icon" aria-hidden="true">
+              <FileUp :size="17" :stroke-width="1.8" />
+            </span>
+            <div class="set-row__text">
+              <h3 class="set-row__name">{{ t('settings.tools.convert.label') }}</h3>
+              <p class="set-row__desc">{{ t('settings.tools.convert.desc') }}</p>
+            </div>
+            <el-button type="primary" :loading="converting" @click="startConversion">
+              {{ t('settings.tools.convert.btn') }}
             </el-button>
           </div>
-
-          <div v-if="egress.advancedOpen" class="egress-grid">
-            <el-form-item :label="t('settings.egress.advanced.probe_url.label')">
-              <el-input
-                v-model="egress.form.probeUrl"
-                placeholder="http://checkip.amazonaws.com/"
-              />
-              <p class="form-tip">{{ t('settings.egress.advanced.probe_url.desc') }}</p>
-              <p v-if="egress.fieldErrors.probeUrl" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.probeUrl }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.advanced.timeout.label')">
-              <el-input-number
-                v-model="egress.form.probeTimeoutSeconds"
-                :min="1"
-                :max="30"
-                :step="1"
-                step-strictly
-                controls-position="right"
-              />
-              <p v-if="egress.fieldErrors.probeTimeoutSeconds" class="form-tip form-tip--error">
-                {{ egress.fieldErrors.probeTimeoutSeconds }}
-              </p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.advanced.fail_open.label')">
-              <el-switch v-model="egress.form.failOpen" />
-              <p class="form-tip">{{ t('settings.egress.advanced.fail_open.desc') }}</p>
-            </el-form-item>
-            <el-form-item :label="t('settings.egress.advanced.probe_target.label')">
-              <BaseSelect
-                v-model="egress.probeTarget"
-                :options="probeTargetOptions"
-                :aria-label="t('settings.egress.advanced.probe_target.label')"
-              />
-              <p class="form-tip">{{ t('settings.egress.advanced.probe_target.desc') }}</p>
-            </el-form-item>
-          </div>
-        </el-form>
-
-        <h3 class="setting-name egress-status-title">{{ t('settings.egress.status.title') }}</h3>
-        <div class="server-rows">
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.mode') }}</span>
-            <span class="server-value">{{ egress.modeLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.effective_mode') }}</span>
-            <span class="server-value">{{ egress.effectiveModeLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.applied') }}</span>
-            <span class="server-value">{{ egress.appliedLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.readback') }}</span>
-            <span class="server-value server-value--mono">{{ readbackLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.revision') }}</span>
-            <span class="server-value server-value--mono">{{ egress.revisionLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.credentials') }}</span>
-            <span class="server-value">{{ credentialsLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.egress_file') }}</span>
-            <span class="server-value">{{ egressFileLabel }}</span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.degraded') }}</span>
-            <span class="server-value">
-              {{
-                egress.degraded
-                  ? t('settings.egress.status.degraded_yes')
-                  : t('settings.egress.status.degraded_no')
-              }}
-            </span>
-          </div>
-          <div class="server-row">
-            <span class="server-label">{{ t('settings.egress.status.last_probe') }}</span>
-            <span class="server-value">{{ lastProbeLabel }}</span>
-          </div>
         </div>
 
-        <template v-if="egress.proxies.length">
-          <h3 class="setting-name egress-status-title">{{ t('settings.egress.proxy.title') }}</h3>
-          <div class="egress-proxy-list">
-            <div v-for="proxy in egress.proxies" :key="proxy.name" class="egress-proxy-row">
-              <div class="egress-proxy-main">
-                <span class="egress-proxy-name">{{ proxy.name }}</span>
-                <span class="egress-proxy-addr"
-                  >{{ proxy.type }} · {{ proxy.host }}:{{ proxy.port }}</span
-                >
-                <span
-                  v-if="egress.snapshot && egress.snapshot.default === proxy.name"
-                  class="egress-badge"
-                >
-                  {{ t('settings.egress.proxy.default_badge') }}
-                </span>
-              </div>
-              <span :class="['egress-path', 'egress-path--' + egress.proxyPath(proxy)]">
-                {{ proxyPathLabel(proxy) }}
-              </span>
-            </div>
-          </div>
-        </template>
+        <div v-if="serverAccess.supported" class="dm-card set-card">
+          <div class="set-card__head">{{ t('settings.serverAccess.title') }}</div>
+          <p class="set-hint set-hint--lead">{{ t('settings.serverAccess.desc') }}</p>
 
-        <div v-if="egress.relay" class="egress-relay" data-testid="egress-relay">
-          <div class="egress-relay-head">
-            <h3 class="setting-name">{{ t('settings.egress.relay.title') }}</h3>
-            <span
-              :class="['egress-badge', egress.relay.enabled ? '' : 'egress-badge--off']"
-              data-testid="relay-enabled-badge"
-            >
-              {{
-                egress.relay.enabled
-                  ? t('settings.egress.relay.enabled_on')
-                  : t('settings.egress.relay.enabled_off')
-              }}
+          <div class="set-row">
+            <span class="set-row__icon" aria-hidden="true">
+              <Wifi :size="17" :stroke-width="1.8" />
             </span>
-            <span class="egress-relay-spacer"></span>
-            <el-button
-              size="small"
-              :loading="egress.restarting"
-              :disabled="!egress.relayRestartSupported"
-              data-testid="relay-restart"
-              @click="restartRelay"
-            >
-              {{ t('settings.egress.relay.restart') }}
-            </el-button>
-          </div>
-          <p class="form-tip">{{ t('settings.egress.relay.desc') }}</p>
-
-          <div class="server-rows">
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.relay.base_port') }}</span>
-              <span class="server-value server-value--mono">{{ egress.relay.basePort }}</span>
+            <div class="set-row__text">
+              <h3 class="set-row__name">{{ t('settings.serverAccess.allow_lan.label') }}</h3>
+              <p class="set-row__desc">{{ t('settings.serverAccess.allow_lan.desc') }}</p>
             </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.relay.fail_open') }}</span>
-              <span class="server-value">
+            <el-switch v-model="serverAccess.allowLan" class="set-switch" />
+          </div>
+
+          <div class="set-row set-row--split">
+            <span class="set-row__icon" aria-hidden="true">
+              <Network :size="17" :stroke-width="1.8" />
+            </span>
+            <div class="set-row__text">
+              <h3 class="set-row__name">{{ t('settings.serverAccess.port.label') }}</h3>
+              <p class="set-row__desc">{{ t('settings.serverAccess.port.desc') }}</p>
+            </div>
+            <el-input-number
+              v-model="serverAccess.port"
+              class="set-control"
+              :min="1"
+              :max="65535"
+              :step="1"
+              step-strictly
+              controls-position="right"
+            />
+          </div>
+
+          <div class="set-row set-row--split">
+            <span class="set-row__icon" aria-hidden="true">
+              <KeyRound :size="17" :stroke-width="1.8" />
+            </span>
+            <div class="set-row__text">
+              <h3 class="set-row__name">{{ t('settings.serverAccess.token_input.label') }}</h3>
+              <p class="set-row__desc">{{ t('settings.serverAccess.token_input.desc') }}</p>
+            </div>
+            <el-input
+              v-model="serverAccess.tokenDraft"
+              class="set-control"
+              type="password"
+              show-password
+              autocomplete="new-password"
+              :placeholder="t('settings.serverAccess.token_input.placeholder')"
+            />
+          </div>
+
+          <div class="set-rows">
+            <div class="set-kv">
+              <span class="set-kv__k">{{ t('settings.serverAccess.bind') }}</span>
+              <span class="set-kv__v set-kv__v--mono">{{ serverAccess.bindPreview }}</span>
+            </div>
+            <div class="set-kv">
+              <span class="set-kv__k">{{ t('settings.serverAccess.status') }}</span>
+              <span class="set-kv__v">{{ serverAccess.statusLabel }}</span>
+            </div>
+            <div class="set-kv">
+              <span class="set-kv__k">Token</span>
+              <span class="set-kv__v">
                 {{
-                  egress.relay.failOpen
-                    ? t('settings.egress.relay.fail_open_on')
-                    : t('settings.egress.relay.fail_open_off')
+                  serverAccess.hasToken
+                    ? t('settings.serverAccess.token_present')
+                    : t('settings.serverAccess.token_missing')
                 }}
               </span>
             </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.relay.limits') }}</span>
-              <span class="server-value">
-                {{ egress.relay.limits.maxConnections }} /
-                {{ egress.relay.limits.maxConnectionsPerUid }}
-              </span>
+          </div>
+
+          <div class="set-lan">
+            <span class="set-kv__k">{{ t('settings.serverAccess.lan') }}</span>
+            <ul v-if="serverAccess.lanUrls.length > 0" class="set-lan__list">
+              <li v-for="url in serverAccess.lanUrls" :key="url">
+                <code>{{ url }}</code>
+              </li>
+            </ul>
+            <p v-else class="set-hint">{{ t('settings.serverAccess.lan_empty') }}</p>
+          </div>
+
+          <p v-if="serverAccess.error" class="set-hint set-hint--error">
+            {{ serverAccess.error }}
+          </p>
+
+          <div class="set-actions">
+            <el-button type="primary" :loading="serverAccess.saving" @click="applyServerAccess">
+              {{ t('settings.serverAccess.actions.apply') }}
+            </el-button>
+            <el-button :loading="serverAccess.saving" @click="resetAccessToken">
+              {{ t('settings.serverAccess.actions.reset_token') }}
+            </el-button>
+            <el-button :loading="serverAccess.refreshing" @click="refreshServerAccess">
+              {{ t('settings.serverAccess.actions.refresh') }}
+            </el-button>
+          </div>
+        </div>
+
+        <div class="dm-card set-card">
+          <div class="set-card__head">{{ serverStore.messages.section.title }}</div>
+
+          <div v-if="serverStore.isReadOnly" class="set-banner">
+            {{ serverStore.messages.section.readOnlyHint }}
+          </div>
+
+          <div class="set-rows set-rows--flush">
+            <div class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.runtimeLabel }}</span>
+              <span class="set-kv__v">{{ serverStore.runtimeLabel }}</span>
             </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.relay.firewall') }}</span>
-              <span class="server-value">
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.versionLabel }}</span>
+              <span class="set-kv__v">{{ serverStore.serverVersion || '--' }}</span>
+            </div>
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.bindLabel }}</span>
+              <span class="set-kv__v">{{ serverStore.bind || '--' }}</span>
+            </div>
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.revisionLabel }}</span>
+              <span class="set-kv__v set-kv__v--mono">{{ shortRevision }}</span>
+            </div>
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.configMtimeLabel }}</span>
+              <span class="set-kv__v">{{ serverStore.configMtimeLabel }}</span>
+            </div>
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.tokenLabel }}</span>
+              <span class="set-kv__v">
                 {{
-                  egress.relay.firewall.applied
-                    ? t('settings.egress.relay.firewall_applied')
-                    : t('settings.egress.relay.firewall_missing')
+                  serverStore.tokenPresent
+                    ? serverStore.messages.section.tokenPresent
+                    : serverStore.messages.section.tokenMissing
                 }}
-                · ALLOW {{ egress.relay.firewall.allowRules }} · DENY
-                {{ egress.relay.firewall.denyRules }} ·
-                {{ t('settings.egress.relay.firewall_rules') }}
-                {{ egress.relay.firewall.rules }}
               </span>
             </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.relay.at') }}</span>
-              <span class="server-value server-value--mono">{{ egress.relay.at || '—' }}</span>
+            <div v-if="serverStore.isNative" class="set-kv">
+              <span class="set-kv__k">{{ serverStore.messages.section.scopesLabel }}</span>
+              <span class="set-kv__v">{{ serverStore.scopeSummary }}</span>
             </div>
           </div>
 
-          <p
-            v-if="egress.relay.firewall.lastError"
-            class="server-hint server-hint--error"
-            data-testid="relay-firewall-error"
-          >
-            {{ t('settings.egress.relay.firewall_error') }}:
-            <span class="egress-code">{{ egress.relay.firewall.lastError.code }}</span>
-            · {{ egress.relay.firewall.lastError.reason }}
-            <template v-if="egress.relay.firewall.lastError.at">
-              · {{ egress.relay.firewall.lastError.at }}
+          <p v-if="serverStore.isNative" class="set-hint">
+            {{ serverStore.messages.section.degradedHint }}
+          </p>
+          <p v-if="serverStore.error" class="set-hint set-hint--error">
+            {{ serverStore.error }}
+          </p>
+
+          <div v-if="serverStore.isNative || serverStore.isReadOnly" class="set-actions">
+            <el-button :loading="serverStore.loading" @click="refreshServerStatus">
+              {{ serverStore.messages.section.refresh }}
+            </el-button>
+            <template v-if="serverStore.isNative">
+              <el-button type="primary" @click="openTokenDialog">
+                {{ serverStore.messages.section.login }}
+              </el-button>
+              <el-button v-if="serverStore.tokenPresent" @click="logoutServer">
+                {{ serverStore.messages.section.logout }}
+              </el-button>
             </template>
-          </p>
-
-          <p v-if="!egress.relayRestartSupported" class="form-tip">
-            {{ t('settings.egress.relay.restart_unavailable') }}
-          </p>
-
-          <h4 class="egress-subtitle">{{ t('settings.egress.relay.listeners') }}</h4>
-          <p v-if="!egress.relayListeners.length" class="form-tip">
-            {{ t('settings.egress.relay.listener_empty') }}
-          </p>
-          <div v-else class="egress-relay-listeners">
-            <div
-              v-for="listener in egress.relayListeners"
-              :key="listener.proxy + ':' + listener.port"
-              class="egress-relay-listener"
-            >
-              <div class="egress-relay-listener-head">
-                <span class="egress-proxy-name">{{ listener.proxy }}</span>
-                <span
-                  :class="[
-                    'egress-path',
-                    listener.listening ? 'egress-path--relay' : 'egress-path--off',
-                  ]"
-                >
-                  {{
-                    listener.listening
-                      ? t('settings.egress.relay.listener_listening')
-                      : t('settings.egress.relay.listener_down')
-                  }}
-                </span>
-              </div>
-              <div class="egress-relay-listener-meta">
-                <span class="server-value--mono">{{ relayEndpoint(listener.port) }}</span>
-                ·
-                {{
-                  listener.scope === 'app'
-                    ? t('settings.egress.relay.scope_app')
-                    : t('settings.egress.relay.scope_device')
-                }}
-                · {{ t('settings.egress.relay.connections') }} {{ listener.activeConnections }}
-                ·
-                {{
-                  listener.uidPolicy === 'restricted'
-                    ? t('settings.egress.relay.uid_restricted', {
-                        uids: listener.allowedUids.length ? listener.allowedUids.join(', ') : '—',
-                      })
-                    : t('settings.egress.relay.uid_all')
-                }}
-              </div>
-              <p
-                v-if="listener.lastError"
-                class="server-hint server-hint--error"
-                data-testid="relay-listener-error"
-              >
-                {{ t('settings.egress.relay.last_error') }}:
-                <span class="egress-code">{{ listener.lastError.code }}</span>
-                · {{ listener.lastError.reason }}
-              </p>
-            </div>
           </div>
+        </div>
+      </div>
+    </section>
 
-          <template v-if="egress.relayPortChanges.length">
-            <h4 class="egress-subtitle">{{ t('settings.egress.relay.port_changes') }}</h4>
-            <div class="server-rows">
-              <div
-                v-for="change in egress.relayPortChanges"
-                :key="change.proxy + ':' + change.reason"
-                class="server-row"
-              >
-                <span class="server-label">{{ change.proxy }}</span>
-                <span class="server-value server-value--mono">
-                  {{ change.from ?? '—' }} → {{ change.to ?? '—' }} · {{ change.reason }}
-                </span>
-              </div>
-            </div>
-          </template>
+    <!-- 关于：版本 / 作者 / 仓库 / 关注模块 / 译者 / 许可 -->
+    <section class="dm-section">
+      <div class="dm-section__head">
+        <h2 class="dm-section__title">{{ t('about.title') }}</h2>
+      </div>
 
-          <p
-            v-if="egress.relayRestartRequired.length"
-            class="server-hint server-hint--warn"
-            data-testid="relay-restart-required"
-          >
-            {{
-              t('settings.egress.relay.restart_required', {
-                apps: egress.relayRestartRequired.join(', '),
-              })
-            }}
-          </p>
+      <div class="dm-card set-card about-card">
+        <div class="about-brand">
+          <span class="about-brand__mark" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4.5 8.2c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v2.1c-1.3.5-2.2 1.7-2.2 3.1 0 1.4.9 2.6 2.2 3.1v2.1c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8v-2.1c1.3-.5 2.2-1.7 2.2-3.1 0-1.4-.9-2.6-2.2-3.1V8.2z"
+                fill="#fff"
+              />
+              <circle cx="9.2" cy="10.6" r="1.15" fill="var(--brand)" />
+              <circle cx="14.8" cy="10.6" r="1.15" fill="var(--brand)" />
+            </svg>
+          </span>
+          <span class="about-brand__body">
+            <span class="about-brand__name">DevMask</span>
+            <span class="about-brand__desc">{{ t('about.description') }}</span>
+          </span>
         </div>
 
-        <p
-          v-for="(text, index) in egress.warningTexts"
-          :key="index"
-          class="server-hint server-hint--warn"
+        <div class="set-row">
+          <span class="set-row__icon" aria-hidden="true">
+            <Package :size="17" :stroke-width="1.8" />
+          </span>
+          <div class="set-row__text">
+            <h3 class="set-row__name">{{ t('about.version') }}</h3>
+          </div>
+          <span class="set-row__value dm-mono">{{ moduleVersionLabel }}</span>
+        </div>
+
+        <div class="set-row">
+          <span class="set-row__icon" aria-hidden="true">
+            <UserRound :size="17" :stroke-width="1.8" />
+          </span>
+          <div class="set-row__text">
+            <h3 class="set-row__name">{{ t('about.author') }}</h3>
+          </div>
+          <span class="set-row__value">{{ authorLabel }}</span>
+        </div>
+
+        <button type="button" class="set-row set-row--link" @click="openExternal(REPOSITORY_URL)">
+          <span class="set-row__icon" aria-hidden="true">
+            <ExternalLink :size="17" :stroke-width="1.8" />
+          </span>
+          <span class="set-row__text">
+            <span class="set-row__name">{{ t('about.repository') }}</span>
+            <span class="set-row__desc dm-mono">uamind/DevMask</span>
+          </span>
+          <ChevronRight :size="15" class="set-row__chev" aria-hidden="true" />
+        </button>
+
+        <button type="button" class="set-row set-row--link" @click="followDialogVisible = true">
+          <span class="set-row__icon" aria-hidden="true">
+            <Heart :size="17" :stroke-width="1.8" />
+          </span>
+          <span class="set-row__text">
+            <span class="set-row__name">{{ t('about.follow') }}</span>
+            <span class="set-row__desc">{{ t('status.follow.channels') }}</span>
+          </span>
+          <ChevronRight :size="15" class="set-row__chev" aria-hidden="true" />
+        </button>
+
+        <button
+          type="button"
+          class="set-row set-row--link"
+          @click="translatorsDialogVisible = true"
         >
-          {{ text }}
-        </p>
+          <span class="set-row__icon" aria-hidden="true">
+            <Languages :size="17" :stroke-width="1.8" />
+          </span>
+          <span class="set-row__text">
+            <span class="set-row__name">{{ t('about.translators') }}</span>
+            <span class="set-row__desc">{{ t('status.translators.action') }}</span>
+          </span>
+          <ChevronRight :size="15" class="set-row__chev" aria-hidden="true" />
+        </button>
 
-        <p v-if="egress.error" class="server-hint server-hint--error">
-          {{ egress.error }}
-          <span v-if="egress.errorCode" class="egress-code">[{{ egress.errorCode }}]</span>
-          <span v-if="egress.errorMessage"> · {{ egress.errorMessage }}</span>
-          <span v-if="egress.errorDetail"> · {{ egress.errorDetail }}</span>
-        </p>
-
-        <div v-if="egress.probeResult" class="egress-probe">
-          <div class="egress-probe-head">
-            <h3 class="setting-name">{{ t('settings.egress.probe.title') }}</h3>
-            <span v-if="egress.probeApproximate" class="egress-badge">
-              {{ t('settings.egress.probe.approximate') }}
+        <button type="button" class="set-row set-row--link" @click="openExternal(LICENSE_URL)">
+          <span class="set-row__icon" aria-hidden="true">
+            <Scale :size="17" :stroke-width="1.8" />
+          </span>
+          <span class="set-row__text">
+            <span class="set-row__name">{{ t('about.license') }}</span>
+            <span class="set-row__desc set-row__desc--license dm-mono">
+              SPDX-License-Identifier: {{ t('about.license_value') }}
             </span>
-          </div>
-          <div class="server-rows">
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.exit_ip') }}</span>
-              <span class="server-value server-value--mono">{{ egress.probeResult.exitIp }}</span>
-            </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.latency') }}</span>
-              <span class="server-value">{{ egress.probeResult.latencyMs }} ms</span>
-            </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.via') }}</span>
-              <span class="server-value">
-                {{ probeViaLabel(egress.probeResult.via) }}
-                <template
-                  v-if="egress.probeResult.via === 'relay' && egress.probeResult.relayPort !== null"
-                >
-                  · {{ relayEndpoint(egress.probeResult.relayPort) }}
-                </template>
-                <template v-if="egress.probeResult.proxy">
-                  · {{ egress.probeResult.proxy }}</template
-                >
-              </span>
-            </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.checked_at') }}</span>
-              <span class="server-value">{{ egress.probeResult.checkedAt }}</span>
-            </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.upstream') }}</span>
-              <span class="server-value">{{ egress.probeResult.upstreamStatus ?? '—' }}</span>
-            </div>
-            <div class="server-row">
-              <span class="server-label">{{ t('settings.egress.probe.scope') }}</span>
-              <span class="server-value">
-                {{
-                  egress.probeResult.scope === 'app'
-                    ? t('settings.egress.probe.scope_app')
-                    : t('settings.egress.probe.scope_device')
-                }}
-              </span>
-            </div>
-          </div>
-          <p v-if="egress.probeApproximate" class="form-tip">
-            {{ t('settings.egress.probe.approximate_hint') }}
-          </p>
-        </div>
-
-        <div class="server-actions">
-          <el-button type="primary" :loading="egress.saving" @click="saveEgress">
-            {{ t('settings.egress.actions.save') }}
-          </el-button>
-          <el-button
-            :loading="egress.probing"
-            :disabled="!egress.probeSupported"
-            @click="probeEgress"
-          >
-            {{ t('settings.egress.actions.probe') }}
-          </el-button>
-          <el-button :loading="egress.clearing" @click="clearEgress">
-            {{ t('settings.egress.actions.clear') }}
-          </el-button>
-          <el-button :loading="egress.loading" @click="loadEgress">
-            {{ t('settings.egress.actions.refresh') }}
-          </el-button>
-        </div>
-        <p v-if="!egress.probeSupported" class="form-tip">
-          {{ t('settings.egress.actions.probe_unavailable') }} ·
-          {{ t('settings.egress.errors.probe_unsupported') }}
-        </p>
-      </template>
-    </div>
-    <div v-if="serverAccess.supported" class="settings-section glass-effect">
-      <h2 class="section-title">{{ t('settings.serverAccess.title') }}</h2>
-      <p class="server-hint server-hint--lead">{{ t('settings.serverAccess.desc') }}</p>
-
-      <div class="setting-item setting-item-horizontal">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <Wifi :size="24" />
-          </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.serverAccess.allow_lan.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.serverAccess.allow_lan.desc') }}</p>
-          </div>
-        </div>
-        <el-switch v-model="serverAccess.allowLan" class="setting-control-switch" />
-      </div>
-
-      <div class="setting-item setting-item-split">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <Network :size="24" />
-          </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.serverAccess.port.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.serverAccess.port.desc') }}</p>
-          </div>
-        </div>
-        <el-input-number
-          v-model="serverAccess.port"
-          class="setting-control"
-          :min="1"
-          :max="65535"
-          :step="1"
-          step-strictly
-          controls-position="right"
-        />
-      </div>
-
-      <div class="setting-item setting-item-split">
-        <div class="setting-info">
-          <div class="setting-icon">
-            <KeyRound :size="24" />
-          </div>
-          <div class="setting-text">
-            <h3 class="setting-name">{{ t('settings.serverAccess.token_input.label') }}</h3>
-            <p class="setting-desc">{{ t('settings.serverAccess.token_input.desc') }}</p>
-          </div>
-        </div>
-        <el-input
-          v-model="serverAccess.tokenDraft"
-          class="setting-control"
-          type="password"
-          show-password
-          autocomplete="new-password"
-          :placeholder="t('settings.serverAccess.token_input.placeholder')"
-        />
-      </div>
-
-      <div class="server-rows">
-        <div class="server-row">
-          <span class="server-label">{{ t('settings.serverAccess.bind') }}</span>
-          <span class="server-value server-value--mono">{{ serverAccess.bindPreview }}</span>
-        </div>
-        <div class="server-row">
-          <span class="server-label">{{ t('settings.serverAccess.status') }}</span>
-          <span class="server-value">{{ serverAccess.statusLabel }}</span>
-        </div>
-        <div class="server-row">
-          <span class="server-label">Token</span>
-          <span class="server-value">
-            {{
-              serverAccess.hasToken
-                ? t('settings.serverAccess.token_present')
-                : t('settings.serverAccess.token_missing')
-            }}
           </span>
+          <ChevronRight :size="15" class="set-row__chev" aria-hidden="true" />
+        </button>
+
+        <div class="about-foot">
+          <span class="dm-mono">{{ t('about.license_value') }}</span>
+          <span class="about-foot__sep" aria-hidden="true">·</span>
+          <span class="dm-mono">© 2025-2026 Seyud</span>
         </div>
       </div>
-
-      <div class="lan-block">
-        <span class="server-label">{{ t('settings.serverAccess.lan') }}</span>
-        <ul v-if="serverAccess.lanUrls.length > 0" class="lan-list">
-          <li v-for="url in serverAccess.lanUrls" :key="url">
-            <code>{{ url }}</code>
-          </li>
-        </ul>
-        <p v-else class="server-hint">{{ t('settings.serverAccess.lan_empty') }}</p>
-      </div>
-
-      <p v-if="serverAccess.error" class="server-hint server-hint--error">
-        {{ serverAccess.error }}
-      </p>
-
-      <div class="server-actions">
-        <el-button type="primary" :loading="serverAccess.saving" @click="applyServerAccess">
-          {{ t('settings.serverAccess.actions.apply') }}
-        </el-button>
-        <el-button :loading="serverAccess.saving" @click="resetAccessToken">
-          {{ t('settings.serverAccess.actions.reset_token') }}
-        </el-button>
-        <el-button :loading="serverAccess.refreshing" @click="refreshServerAccess">
-          {{ t('settings.serverAccess.actions.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <div class="settings-section glass-effect">
-      <h2 class="section-title">{{ serverStore.messages.section.title }}</h2>
-
-      <div v-if="serverStore.isReadOnly" class="server-banner">
-        {{ serverStore.messages.section.readOnlyHint }}
-      </div>
-
-      <div class="server-rows">
-        <div class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.runtimeLabel }}</span>
-          <span class="server-value">{{ serverStore.runtimeLabel }}</span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.versionLabel }}</span>
-          <span class="server-value">{{ serverStore.serverVersion || '--' }}</span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.bindLabel }}</span>
-          <span class="server-value">{{ serverStore.bind || '--' }}</span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.revisionLabel }}</span>
-          <span class="server-value server-value--mono">{{ shortRevision }}</span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.configMtimeLabel }}</span>
-          <span class="server-value">{{ serverStore.configMtimeLabel }}</span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.tokenLabel }}</span>
-          <span class="server-value">
-            {{
-              serverStore.tokenPresent
-                ? serverStore.messages.section.tokenPresent
-                : serverStore.messages.section.tokenMissing
-            }}
-          </span>
-        </div>
-        <div v-if="serverStore.isNative" class="server-row">
-          <span class="server-label">{{ serverStore.messages.section.scopesLabel }}</span>
-          <span class="server-value">{{ serverStore.scopeSummary }}</span>
-        </div>
-      </div>
-
-      <p v-if="serverStore.isNative" class="server-hint">
-        {{ serverStore.messages.section.degradedHint }}
-      </p>
-      <p v-if="serverStore.error" class="server-hint server-hint--error">{{ serverStore.error }}</p>
-
-      <div v-if="serverStore.isNative || serverStore.isReadOnly" class="server-actions">
-        <el-button :loading="serverStore.loading" @click="refreshServerStatus">
-          {{ serverStore.messages.section.refresh }}
-        </el-button>
-        <template v-if="serverStore.isNative">
-          <el-button type="primary" @click="openTokenDialog">
-            {{ serverStore.messages.section.login }}
-          </el-button>
-          <el-button v-if="serverStore.tokenPresent" @click="logoutServer">
-            {{ serverStore.messages.section.logout }}
-          </el-button>
-        </template>
-      </div>
-    </div>
+    </section>
 
     <!-- 转换结果对话框 -->
     <el-dialog
@@ -730,7 +397,6 @@
       :close-on-click-modal="false"
       :append-to-body="true"
       class="template-dialog"
-      modal-class="template-dialog-modal"
     >
       <el-form label-width="100px" label-position="top">
         <el-form-item :label="t('settings.dialog.result.template_name_label')">
@@ -751,9 +417,9 @@
       </el-form>
       <template #footer>
         <el-button @click="convertDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="saveConvertedTemplate">{{
-          t('settings.dialog.result.btn_save')
-        }}</el-button>
+        <el-button type="primary" @click="saveConvertedTemplate">
+          {{ t('settings.dialog.result.btn_save') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -764,10 +430,9 @@
       :close-on-click-modal="false"
       :append-to-body="true"
       class="template-dialog"
-      modal-class="template-dialog-modal"
       @closed="serverAccess.dismissTokenDialog()"
     >
-      <p class="server-hint">{{ t('settings.serverAccess.token_dialog.desc') }}</p>
+      <p class="set-hint">{{ t('settings.serverAccess.token_dialog.desc') }}</p>
       <el-input :model-value="serverAccess.generatedToken" readonly class="code-font" />
       <template #footer>
         <el-button @click="serverAccess.dismissTokenDialog()">
@@ -778,33 +443,95 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 关注模块 / 译者：直接复用 status 分组的既有弹窗 -->
+    <FollowDialog v-model="followDialogVisible" />
+    <TranslatorsDialog v-model="translatorsDialogVisible" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onActivated, onMounted } from 'vue'
-import { Moon, Globe, Bug, FileUp, KeyRound, Network, Route, Wifi } from '@lucide/vue'
+import {
+  ArrowRight,
+  Bug,
+  ChevronRight,
+  ExternalLink,
+  FileUp,
+  Globe,
+  Heart,
+  KeyRound,
+  Languages,
+  Moon,
+  Network,
+  Package,
+  Route,
+  Scale,
+  Terminal,
+  UserRound,
+  Wifi,
+} from '@lucide/vue'
+import FollowDialog from '../components/status/FollowDialog.vue'
+import TranslatorsDialog from '../components/status/TranslatorsDialog.vue'
 import { useConfigStore } from '../stores/config'
-import { useEgressStore } from '../stores/egress'
 import { useSettingsStore } from '../stores/settings'
 import { useI18n } from '../utils/i18n'
+import { APP_VERSION, navigateToPage } from '../composables/usePageNavigation'
 import { useServerStore } from '../stores/server'
 import { useServerAccessStore } from '../stores/serverAccess'
-import { copyTextToClipboard } from '../utils/templateTransfer'
+import { backend } from '../backend'
+import { copyTextToClipboard, parseFirstTemplateFromToml } from '../utils/templateTransfer'
 import { toast } from 'kernelsu-alt'
 import type { Template } from '../types'
-import { parseFirstTemplateFromToml } from '../utils/templateTransfer'
 import { readZipEntries } from '../utils/zipReader'
 import { convertZipEntriesToTemplate } from '../utils/propsToTemplate'
-import { relayEndpoint } from '../backend'
-import type { EgressProbeVia, EgressProxySummary } from '../backend'
 
 const configStore = useConfigStore()
 const settingsStore = useSettingsStore()
 const serverStore = useServerStore()
 const serverAccess = useServerAccessStore()
-const egress = useEgressStore()
 const { t } = useI18n()
+
+/** 关于分组：仓库、许可与日志入口的固定地址（后端契约不提供，属文档级常量）。 */
+const REPOSITORY_URL = 'https://github.com/uamind/DevMask'
+const LICENSE_URL = `${REPOSITORY_URL}/blob/main/LICENSE`
+const LOG_PATH = '/data/adb/devmask/logs/devmask.log'
+
+/** 出口配置整体搬到「网络」页：设置页只留一行入口。 */
+function goNetwork(): void {
+  navigateToPage('network')
+}
+
+/**
+ * 模块版本：module.prop 读到什么就显示什么（与概览同一口径），
+ * 只有 moduleMeta 还没就绪（首帧 / 读取失败）时才回落到本版 WebUI 的 v0.0.1。
+ */
+const moduleVersionLabel = computed(() =>
+  configStore.moduleMetaReady && configStore.moduleVersion ? configStore.moduleVersion : APP_VERSION
+)
+
+const authorLabel = computed(() => configStore.moduleAuthor || 'Seyud')
+
+/** 关于分组的弹窗（复用 components/status 的既有实现）。 */
+const followDialogVisible = ref(false)
+const translatorsDialogVisible = ref(false)
+
+/** 深链优先走 backend（Android WebView），失败再回落到浏览器新标签。 */
+async function openExternal(url: string) {
+  try {
+    await backend.openDeepLink(url)
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
+
+/** 日志入口：路径直接复制，方便在模块运行目录里定位 devmask.log。 */
+async function copyLogPath() {
+  const copied = await copyTextToClipboard(LOG_PATH)
+  if (copied) {
+    toast(t('common.success'))
+  }
+}
 
 /** revision 太长，界面只展示前 12 位（完整值仍可从服务端取）。 */
 const shortRevision = computed(() => {
@@ -976,110 +703,12 @@ watch(
   }
 )
 
-// ---- 出口代理（egress）----
-
-const egressTypeOptions = computed(() => [
-  { value: 'http', label: t('settings.egress.fields.type.http') },
-  { value: 'socks5', label: t('settings.egress.fields.type.socks5') },
-])
-
-/** 探测目标：设备级 + 已配置的应用级覆盖。 */
-const probeTargetOptions = computed(() => [
-  { value: '', label: t('settings.egress.advanced.probe_target.device') },
-  ...egress.apps.map((app) => ({ value: app.package, label: app.package })),
-])
-
-/** 密码输入框占位：只说「是否已设置」，永不回显。 */
-const passwordPlaceholder = computed(() =>
-  egress.hasCredentials
-    ? t('settings.egress.fields.password.placeholder_set')
-    : t('settings.egress.fields.password.placeholder_unset')
-)
-
-const credentialsLabel = computed(() =>
-  egress.hasCredentials
-    ? t('settings.egress.status.credentials_set')
-    : t('settings.egress.status.credentials_unset')
-)
-
-const readbackLabel = computed(() => {
-  if (!egress.snapshot) return '--'
-  if (!egress.readbackAvailable) return t('settings.egress.status.applied_unknown')
-  const value = egress.snapshot.readback.settingsValue
-  return value && value.trim() ? value : t('settings.egress.status.readback_none')
-})
-
-const egressFileLabel = computed(() => {
-  const info = egress.snapshot?.egressFile
-  if (!info) return '--'
-  if (!info.exists) return t('settings.egress.status.egress_file_missing')
-  return `${info.size} B${info.mtime ? ` · ${info.mtime}` : ''}`
-})
-
-const lastProbeLabel = computed(() => {
-  const probe = egress.lastProbe
-  if (!probe) return t('settings.egress.status.never')
-  const result = probe.ok
-    ? (probe.exitIp ?? '--')
-    : (probe.errorCode ?? t('settings.egress.errors.probe_failed'))
-  return `${result} · ${probe.latencyMs ?? 0} ms · ${probe.checkedAt}`
-})
-
-/**
- * 代理定义走哪条链路：
- * - 带凭据且正在中继 → 「经本机中继（127.0.0.1:port）」
- * - 带凭据但没在监听 → 「凭据未生效（未中继）」
- * - 无凭据 → 「直连上游」
- */
-function proxyPathLabel(proxy: EgressProxySummary): string {
-  const path = egress.proxyPath(proxy)
-  if (path === 'relay') {
-    return t('settings.egress.proxy.path_relay', { endpoint: relayEndpoint(proxy.localPort) })
-  }
-  if (path === 'credentials-inactive') {
-    return t('settings.egress.proxy.path_credentials_off')
-  }
-  return t('settings.egress.proxy.path_upstream')
-}
-
-/** 探测链路文案：proxy / direct / relay。 */
-function probeViaLabel(via: EgressProbeVia): string {
-  if (via === 'relay') return t('settings.egress.modes.relay')
-  if (via === 'direct') return t('settings.egress.modes.direct')
-  return t('settings.egress.modes.proxy')
-}
-
-function toggleAdvanced() {
-  egress.advancedOpen = !egress.advancedOpen
-}
-
-async function saveEgress() {
-  await egress.save()
-}
-
-async function probeEgress() {
-  await egress.probe()
-}
-
-async function clearEgress() {
-  await egress.clear()
-}
-
-async function loadEgress() {
-  await egress.load()
-}
-
-async function restartRelay() {
-  await egress.restartRelay()
-}
-
 // 首次挂载时读一次服务状态（onActivated 只在 KeepAlive 场景触发，不能只靠它）
 onMounted(() => {
   void serverStore.ensureReady()
   if (serverAccess.supported) {
     void serverAccess.load()
   }
-  void egress.load()
 })
 
 // KeepAlive 激活时同步最新配置
@@ -1088,7 +717,6 @@ onActivated(() => {
   currentLanguage.value = settingsStore.language
   debugMode.value = configStore.config.debug || false
   void serverStore.ensureReady()
-  void egress.load()
 })
 </script>
 
@@ -1096,475 +724,409 @@ onActivated(() => {
 .settings-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  /* 确保宽度稳定，不受滚动条影响 */
   overflow: hidden;
+  padding-top: 4px;
 }
 
-.settings-section {
-  padding: 1.5rem;
-  border-radius: 1rem;
-  box-shadow: 0 2px 8px var(--shadow);
+/* 三个分组之间的呼吸：外观 / 网络出口入口 / 高级 / 关于 */
+.dm-section {
+  margin-top: 16px;
 }
 
-.section-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 1rem;
+/* —— 卡片与行基元（浅色 = B 白卡；深色 = A 的 hairline） —— */
+.set-card {
+  padding: 2px 15px 6px;
 }
 
-.setting-item {
+.set-card__head {
+  padding: 12px 0 8px;
+  font-size: 12.5px;
+  font-weight: 660;
+  color: var(--ink);
+}
+
+html.dark .set-card__head {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.set-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
 }
 
-.setting-item:last-child {
-  border-bottom: none;
-}
-
-.setting-info {
+.set-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  flex: 1;
+  gap: 11px;
+  padding: 12px 0;
 }
 
-.setting-icon {
+/* 相邻行之间只用一条 hairline，不叠阴影 */
+.set-row + .set-row,
+.set-hint--lead + .set-row,
+.set-rows + .set-row {
+  border-top: 1px solid var(--line);
+}
+
+.set-row__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.set-row__text {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--background);
-  border-radius: 0.5rem;
-  color: var(--primary);
-  flex-shrink: 0;
-}
-
-.setting-text {
   flex: 1;
-  overflow: hidden;
-}
-
-.setting-name {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text);
-  margin: 0 0 0.25rem 0;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.setting-desc {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-}
-
-.setting-control {
-  width: 100%;
-}
-
-.server-banner {
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.75rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--border);
-  background: var(--background);
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.server-rows {
-  display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  min-width: 0;
 }
 
-.server-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.9rem;
+.set-row__name {
+  font-size: 12.5px;
+  font-weight: 640;
+  line-height: 1.4;
+  color: var(--ink);
 }
 
-.server-label {
-  color: var(--text-secondary);
-  flex-shrink: 0;
+.set-row__desc {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-.server-value {
-  color: var(--text);
+/* SPDX 标识整行可读：等宽下略小一号，避免在 GPL-3.0-or-later 中间断行 */
+.set-row__desc--license {
+  font-size: 10px;
+  letter-spacing: -0.01em;
+}
+
+.set-row__value {
+  flex: none;
+  max-width: 52%;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--ink);
   text-align: right;
   overflow-wrap: anywhere;
 }
 
-.server-value--mono {
-  font-family: monospace;
+.set-row__select {
+  flex: none;
+  width: 148px;
 }
 
-.server-hint {
-  margin: 0.75rem 0 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--text-secondary);
+/* 三语里土耳其语的主题名最长（Sistemi Takip Et），小一号字号保证不截断 */
+.set-row__select :deep(.base-select__trigger) {
+  font-size: 12px;
 }
 
-.server-hint--error {
-  color: #dc2626;
-}
-
-.server-hint--lead {
-  margin: 0 0 0.75rem;
-}
-
-.lan-block {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.75rem;
-}
-
-.lan-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: 0;
-  padding-left: 1.1rem;
-  font-size: 0.85rem;
-}
-
-.lan-list code {
-  font-family: monospace;
-  overflow-wrap: anywhere;
-}
-
-.server-actions {
-  display: flex;
+/* 端口 / Token：说明占满第一行，控件换行后与文字左对齐，避免输入框被挤到 6 个字符宽 */
+.set-row--split {
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 1rem;
+  row-gap: 8px;
 }
 
-.egress-form {
-  margin-top: 0.75rem;
+.set-row--split .set-control {
+  flex: none;
+  width: calc(100% - 43px);
+  margin-left: 43px;
 }
 
-.egress-grid {
+.set-control {
+  width: 100%;
+}
+
+.set-switch {
+  flex: none;
+}
+
+/* 关于分组的跳转行：整行可点，右侧一个 chevron */
+.set-row--link {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.set-row--link:active {
+  opacity: 0.72;
+}
+
+.set-row__chev {
+  flex: none;
+  color: var(--dim);
+}
+
+/* —— 网络出口入口（一行，配置都在「网络」页） —— */
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 13px 15px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.entry:active {
+  opacity: 0.86;
+}
+
+.entry__icon {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-  gap: 0.25rem 1rem;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
 }
 
-.egress-inline {
+.entry__text {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.egress-status-title {
-  margin: 1rem 0 0.5rem;
-}
-
-.egress-probe {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--background);
-}
-
-.egress-probe-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.egress-badge {
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.4rem;
-  background: rgba(234, 179, 8, 0.16);
-  color: #b45309;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.egress-code {
-  font-family: monospace;
-  font-size: 0.75rem;
-  opacity: 0.85;
-}
-
-/* 代理定义：一条一行，右侧标注实际链路（中继 / 直连上游 / 凭据未生效）。 */
-.egress-proxy-list {
-  display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 0.4rem;
-}
-
-.egress-proxy-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  background: var(--background);
-}
-
-.egress-proxy-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  gap: 3px;
   min-width: 0;
 }
 
-.egress-proxy-name {
-  font-weight: 600;
-  color: var(--text);
+.entry__name {
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--ink);
 }
 
-.egress-proxy-addr {
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+.entry__desc {
+  font-size: 10.8px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-.egress-path {
-  padding: 0.05rem 0.4rem;
-  border-radius: 0.4rem;
-  font-size: 0.7rem;
+.entry__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 11.5px;
   font-weight: 600;
+  color: var(--brand);
+}
+
+/* —— 日志入口 —— */
+.set-log {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 8px;
+  border-top: 1px solid var(--line);
+}
+
+.set-log__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--dim);
+}
+
+.set-log__path {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow-x: auto;
   white-space: nowrap;
 }
 
-.egress-path--relay {
-  background: rgba(22, 163, 74, 0.16);
-  color: #15803d;
-}
-
-.egress-path--upstream {
-  background: rgba(100, 116, 139, 0.16);
-  color: #475569;
-}
-
-.egress-path--credentials-inactive,
-.egress-path--off {
-  background: rgba(220, 38, 38, 0.14);
-  color: #b91c1c;
-}
-
-/* 设备内中继（relay）区块：独立卡片，旧服务端没有 relay 时整块不渲染。 */
-.egress-relay {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--background);
-}
-
-.egress-relay-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.egress-relay-spacer {
-  flex: 1;
-}
-
-.egress-badge--off {
-  background: rgba(100, 116, 139, 0.16);
-  color: #475569;
-}
-
-.egress-subtitle {
-  margin: 0.9rem 0 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.egress-relay-listeners {
+/* —— 键值行 / 提示 / 局域网地址 / 操作区 —— */
+.set-rows {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 6px;
+  padding: 12px 0;
 }
 
-.egress-relay-listener {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  background: var(--card-bg);
+.set-row + .set-rows {
+  border-top: 1px solid var(--line);
 }
 
-.egress-relay-listener-head {
+.set-rows--flush {
+  padding-top: 2px;
+}
+
+.set-kv {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
 }
 
-.egress-relay-listener-meta {
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
+.set-kv__k {
+  flex: none;
+  color: var(--muted);
+}
+
+.set-kv__v {
+  color: var(--ink);
+  text-align: right;
   overflow-wrap: anywhere;
 }
 
-.server-hint--warn {
-  color: #b45309;
+.set-kv__v--mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
 }
 
-.form-tip--error {
-  color: #dc2626;
+.set-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--muted);
 }
 
-.setting-item-horizontal {
-  flex-direction: row;
+.set-hint--lead {
+  margin: 0 0 10px;
+}
+
+.set-hint--error {
+  color: var(--danger);
+}
+
+.set-lan {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0 4px;
+  font-size: 11.5px;
+}
+
+.set-lan__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 11px;
+}
+
+.set-lan__list code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.set-banner {
+  padding: 10px 12px;
+  margin: 2px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--line);
+}
+
+/* —— 关于 —— */
+.about-brand {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 11px;
+  padding: 14px 0 12px;
 }
 
-.setting-item-split {
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+.about-brand__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--brand);
+  box-shadow: 0 6px 14px rgba(44, 91, 255, 0.26);
 }
 
-.setting-item-split .setting-info {
+html.dark .about-brand__mark {
+  box-shadow: none;
+}
+
+.about-brand__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
-.setting-item-split .setting-name {
-  white-space: normal;
-  text-overflow: clip;
+.about-brand__name {
+  font-size: 14.5px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
-.setting-item-split .setting-desc {
-  overflow-wrap: anywhere;
+.about-brand__desc {
+  font-size: 11px;
+  color: var(--muted);
 }
 
-.setting-item-split .setting-control {
-  width: clamp(7rem, 30vw, 11rem);
-  min-width: 7rem;
-  flex-shrink: 1;
-}
-
-.setting-control-switch {
-  flex-shrink: 0;
-  margin-left: 1rem;
-}
-
-/* Code font for preview */
-.code-font {
-  font-family: monospace;
-}
-
-/* Dialog styles (copied from TemplatePage for consistency) */
-.template-dialog :deep(.el-dialog) {
-  margin-top: 5vh !important;
-  margin-bottom: 80px !important;
-  max-height: calc(100vh - 80px - 10vh) !important;
+.about-foot {
   display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.15) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(1.1);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 12px 0 6px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--dim);
 }
 
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog) {
-    background: rgba(20, 20, 20, 0.6) !important;
-    backdrop-filter: blur(40px) saturate(150%) brightness(0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
+.about-foot__sep {
+  opacity: 0.55;
+}
+
+/* —— 转换结果 / Token 弹窗 —— */
+.code-font {
+  font-family: var(--font-mono);
 }
 
 .template-dialog :deep(.el-dialog__body) {
-  flex: 1;
+  max-height: 62vh;
   overflow-y: auto;
-  padding: 1.5rem;
-  background: transparent;
-  /* 隐藏滚动条 */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
-.template-dialog :deep(.el-dialog__body::-webkit-scrollbar) {
-  display: none;
-}
-
-.template-dialog :deep(.el-dialog__header) {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog__header) {
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-}
-
-.template-dialog :deep(.el-dialog__footer) {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  flex-shrink: 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog__footer) {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.3);
-  }
-}
-
-.template-dialog :deep(.el-overlay) {
-  z-index: 2000 !important;
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.25) !important;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-overlay) {
-    backdrop-filter: blur(12px) saturate(120%) !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-  }
-}
-
-.form-tip {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-top: 0.25rem;
+.template-dialog :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
 }
 </style>

@@ -11,14 +11,13 @@ export default defineConfig({
     root: {
       label: '简体中文',
       lang: 'zh-CN',
-      description: '基于 Zygisk 的机型伪装模块，可以为不同的应用配置不同的设备型号。',
+      description: '按应用伪造机型与系统属性，出口网络独立可控。',
       themeConfig: zh.themeConfig
     },
     en: {
       label: 'English',
       lang: 'en-US',
-      description:
-        'A Zygisk-based device model spoofing module that configures different device models for different apps.',
+      description: 'Per-app device spoofing with an independent egress network.',
       themeConfig: en.themeConfig
     }
   }

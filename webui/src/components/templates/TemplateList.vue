@@ -5,7 +5,7 @@
 -->
 
 <template>
-  <div class="template-list">
+  <div class="tpl-list">
     <TemplateCard
       v-for="entry in entries"
       :key="entry.name"
@@ -16,18 +16,26 @@
       @delete="emit('delete', entry.name)"
     />
 
-    <div v-if="entries.length === 0" class="empty-state">
-      <FileText :size="64" class="empty-icon" />
-      <p class="empty-text">{{ emptyText }}</p>
-      <p v-if="isSearching" class="empty-hint">{{ t('templates.search.no_results') }}</p>
-      <p v-else class="empty-hint">{{ t('templates.empty.hint') }}</p>
+    <!-- 空状态：一句解释 + 一个主操作（搜索无结果时不给创建入口，避免误导） -->
+    <div v-if="entries.length === 0" class="dm-empty tpl-empty">
+      <p class="tpl-empty__title">{{ emptyTitle }}</p>
+      <template v-if="!isSearching">
+        <p class="tpl-empty__hint">{{ t('templates.empty.hint') }}</p>
+        <div class="tpl-empty__acts">
+          <button type="button" class="tpl-empty__primary" @click="emit('create')">
+            {{ t('templates.actions.new') }}
+          </button>
+          <button type="button" class="tpl-empty__ghost" @click="emit('online')">
+            {{ t('templates.actions.online') }}
+          </button>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { FileText } from '@lucide/vue'
 import TemplateCard from './TemplateCard.vue'
 import { useI18n } from '../../utils/i18n'
 import type { Template } from '../../types'
@@ -37,60 +45,89 @@ interface TemplateListEntry {
   template: Template
 }
 
-const props = defineProps<{ entries: TemplateListEntry[]; isSearching?: boolean }>()
+const props = withDefaults(defineProps<{ entries: TemplateListEntry[]; isSearching?: boolean }>(), {
+  isSearching: false,
+})
+
 const emit = defineEmits<{
   export: [string, Template]
   edit: [string, Template]
   delete: [string]
+  create: []
+  online: []
 }>()
 
 const { t } = useI18n()
 
-const entries = computed(() => props.entries)
-
-const emptyText = computed(() => {
-  if (props.isSearching && props.entries.length === 0) {
-    return t('templates.search.no_results')
-  }
-  return t('templates.empty.title')
-})
+const emptyTitle = computed(() =>
+  props.isSearching ? t('templates.search.no_results') : t('templates.empty.title')
+)
 </script>
 
 <style scoped>
-.template-list {
+.tpl-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 8px;
   box-sizing: border-box;
 }
 
-.empty-state {
+.tpl-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  text-align: center;
-  border-radius: 1rem;
-  background: var(--card);
-  border: 1px solid var(--border);
+  gap: 6px;
+  padding: 26px 16px 20px;
 }
 
-.empty-icon {
-  color: var(--text-secondary);
-  opacity: 0.3;
-  margin-bottom: 1rem;
+.tpl-empty__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
-.empty-text {
-  font-size: 1.125rem;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 0.5rem;
+.tpl-empty__hint {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--dim);
 }
 
-.empty-hint {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+.tpl-empty__acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.tpl-empty__primary,
+.tpl-empty__ghost {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-btn);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tpl-empty__primary {
+  border: 0;
+  background: var(--brand);
+  color: #ffffff;
+}
+
+html.dark .tpl-empty__primary {
+  color: #06101f;
+}
+
+.tpl-empty__ghost {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.tpl-empty__primary:active,
+.tpl-empty__ghost:active {
+  opacity: 0.86;
 }
 </style>

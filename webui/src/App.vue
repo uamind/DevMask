@@ -5,7 +5,30 @@
 -->
 
 <template>
-  <div :class="['app-container', { dark: isDark }]">
+  <div :class="['app-shell', { dark: isDark }]">
+    <!-- App Shell 顶栏：品牌 + 版本 pill + 运行状态。不参与滚动。 -->
+    <header class="shell-bar">
+      <div class="shell-brand">
+        <span class="shell-brand__mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M4.5 8.2c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v2.1c-1.3.5-2.2 1.7-2.2 3.1 0 1.4.9 2.6 2.2 3.1v2.1c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8v-2.1c1.3-.5 2.2-1.7 2.2-3.1 0-1.4-.9-2.6-2.2-3.1V8.2z"
+              fill="#fff"
+            />
+            <circle cx="9.2" cy="10.6" r="1.15" fill="var(--brand)" />
+            <circle cx="14.8" cy="10.6" r="1.15" fill="var(--brand)" />
+          </svg>
+        </span>
+        <span class="shell-brand__name">DevMask</span>
+        <span class="shell-brand__version dm-mono">{{ nav.versionDisplay.value }}</span>
+      </div>
+
+      <span :class="['dm-pill', runtimePill.class]" role="status">
+        <i class="shell-live__dot" aria-hidden="true"></i>
+        {{ runtimePill.label }}
+      </span>
+    </header>
+
     <main class="main-content">
       <div
         ref="pageStageRef"
@@ -31,12 +54,6 @@
               @touchcancel="overscroll.handleTouchEnd"
             >
               <div class="page-scroll-content">
-                <header class="app-header">
-                  <h1 class="header-title">
-                    DevMask
-                    <span class="version">{{ nav.versionDisplay.value }}</span>
-                  </h1>
-                </header>
                 <component
                   :is="page.component"
                   v-if="nav.shouldRenderPage(page.id)"
@@ -50,15 +67,20 @@
       </div>
     </main>
 
-    <nav class="bottom-nav glass-effect">
+    <nav class="bottom-nav">
       <button
         v-for="page in nav.pages.value"
         :key="page.id"
-        :class="['nav-item', { active: nav.activePage.value === page.id }]"
+        type="button"
+        :class="['nav-item', { 'nav-item--active': nav.activePage.value === page.id }]"
+        :aria-current="nav.activePage.value === page.id ? 'page' : undefined"
         @pointerdown="primePage(page.id)"
         @click.stop="nav.handlePageChange(page.id)"
       >
-        <component :is="page.icon" :size="24" />
+        <span class="nav-item__glyph">
+          <i class="nav-item__bar" aria-hidden="true"></i>
+          <component :is="page.icon" :size="22" :stroke-width="1.7" />
+        </span>
         <span class="nav-label">{{ page.label }}</span>
       </button>
     </nav>
@@ -67,12 +89,14 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useConfigStore } from './stores/config'
 import { useSettingsStore } from './stores/settings'
-import { applyThemeToDocument } from './utils/theme'
+import { applyThemeToDocument, resolveIsDarkTheme, systemPrefersDark } from './utils/theme'
 import { usePageNavigation, PAGE_INDEX_BY_ID } from './composables/usePageNavigation'
 import { usePageSwipe } from './composables/usePageSwipe'
 import { useOverscrollBounce } from './composables/useOverscrollBounce'
 import { usePageHistory } from './composables/usePageHistory'
+import { useI18n } from './utils/i18n'
 import type { PageId } from './stores/navigation'
 
 type ResizeObserverInstance = InstanceType<typeof window.ResizeObserver>
@@ -81,7 +105,7 @@ const AsyncPagePlaceholder = defineComponent({
   name: 'AsyncPagePlaceholder',
   setup() {
     return () =>
-      h('div', { class: 'page-placeholder glass-effect' }, [
+      h('div', { class: 'page-placeholder' }, [
         h('div', { class: 'page-placeholder__line page-placeholder__line--title' }),
         h('div', { class: 'page-placeholder__line' }),
         h('div', { class: 'page-placeholder__line page-placeholder__line--short' }),
@@ -95,11 +119,23 @@ let mediaQueryListener: ((event: { matches: boolean }) => void) | null = null
 
 const pageStageRef = ref<HTMLElement | null>(null)
 const settingsStore = useSettingsStore()
-const systemPrefersDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
+const configStore = useConfigStore()
+const { t } = useI18n()
 
-const isDark = computed(() => {
-  if (settingsStore.theme === 'system') return systemPrefersDark.value
-  return settingsStore.theme === 'dark'
+const systemPrefersDarkRef = ref(systemPrefersDark())
+
+// 默认跟随系统（settings store 默认 'system'），用户显式选择后以设置为准
+const isDark = computed(() => resolveIsDarkTheme(settingsStore.theme, systemPrefersDarkRef.value))
+
+// 顶栏状态：配置读到 = 运行中；未读到 = 检查中；读失败 = 未运行
+const runtimePill = computed(() => {
+  if (!configStore.configReady) {
+    return { class: 'dm-pill--muted', label: t('shell.checking') }
+  }
+  if (configStore.error) {
+    return { class: 'dm-pill--warn', label: t('shell.stopped') }
+  }
+  return { class: 'dm-pill--ok', label: t('shell.running') }
 })
 
 // Composables — break circular dependency
@@ -149,9 +185,9 @@ onMounted(() => {
   }
 
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  systemPrefersDark.value = mediaQuery.matches
+  systemPrefersDarkRef.value = mediaQuery.matches
   mediaQueryListener = (event) => {
-    systemPrefersDark.value = event.matches
+    systemPrefersDarkRef.value = event.matches
   }
   mediaQuery.addEventListener('change', mediaQueryListener)
 })
@@ -173,67 +209,89 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.app-container {
+.app-shell {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
-  background: var(--background);
+  background: var(--bg);
+  color: var(--ink);
   padding: 0 var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
 }
 
-.app-header {
-  padding-top: calc(var(--safe-area-inset-top) + 1rem);
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-bottom: 1rem;
-  border-radius: 0 0 1rem 1rem;
-  margin-bottom: 0.5rem;
-  box-shadow: 0 4px 12px var(--shadow);
-  position: relative;
-  overflow: hidden;
-  background: var(--card-bg);
-  border-bottom: 1px solid var(--border);
-}
-
-.app-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
-  opacity: 0.08;
-  z-index: 0;
-}
-
-.header-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+/* —— 顶栏 —— */
+.shell-bar {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  line-height: 1;
-  position: relative;
-  z-index: 1;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  gap: 10px;
+  padding: calc(var(--safe-area-inset-top) + 10px) var(--page-x) 10px;
+  background: var(--bg);
 }
 
-.version {
-  font-size: 1rem;
-  font-weight: 400;
-  color: var(--text-secondary);
-  line-height: 1;
-  padding-bottom: 0.1rem;
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
 }
 
+.shell-brand__mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: var(--brand);
+  box-shadow: 0 6px 14px rgba(44, 91, 255, 0.28);
+}
+
+html.dark .shell-brand__mark {
+  box-shadow: none;
+}
+
+.shell-brand__name {
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.shell-brand__version {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shell-live__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.dm-pill--ok .shell-live__dot {
+  box-shadow: 0 0 0 3px rgba(14, 159, 110, 0.14);
+}
+
+html.dark .dm-pill--ok .shell-live__dot {
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.16);
+}
+
+/* —— 页面轨道 —— */
 .main-content {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 0;
-  overflow: hidden;
   display: flex;
+  overflow: hidden;
 }
 
 .page-stage {
@@ -264,7 +322,7 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
   height: 100%;
-  padding: 0 1rem;
+  padding: 0 var(--page-x);
 }
 
 .page-scroll {
@@ -272,7 +330,7 @@ onUnmounted(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 5.5rem;
+  padding-bottom: calc(var(--nav-h) + var(--safe-area-inset-bottom) + 24px);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: none;
   overflow-anchor: none;
@@ -288,105 +346,94 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.page-placeholder {
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  padding: 1.5rem;
-  border-radius: 1rem;
-  min-height: 14rem;
-}
-
-.page-placeholder__line {
-  height: 0.95rem;
-  width: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--border) 25%, var(--card-bg) 50%, var(--border) 75%);
-  background-size: 200% 100%;
-  animation: page-placeholder-shimmer 1.3s linear infinite;
-  opacity: 0.75;
-}
-
-.page-placeholder__line--title {
-  width: 42%;
-  height: 1.2rem;
-}
-
-.page-placeholder__line--short {
-  width: 65%;
-}
-
-@keyframes page-placeholder-shimmer {
-  from {
-    background-position: -200% 0;
-  }
-
-  to {
-    background-position: 200% 0;
-  }
-}
-
+/* —— 底部导航：浅色胶囊 / 深色下划线 —— */
 .bottom-nav {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  padding: 0.75rem 0;
-  border-radius: 1rem 1rem 0 0;
-  box-shadow: 0 -4px 12px var(--shadow);
   position: fixed;
-  bottom: 0;
   left: 0;
   right: 0;
+  bottom: 0;
   z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 2px;
+  height: calc(var(--nav-h) + var(--safe-area-inset-bottom));
+  padding: 6px 8px calc(6px + var(--safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
   pointer-events: auto;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-.dark .bottom-nav {
-  background: rgba(30, 41, 59, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-top: 1px solid rgba(51, 65, 85, 0.4);
+html.dark .bottom-nav {
+  background: var(--bg);
 }
 
 .nav-item {
+  position: relative;
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.5rem 1rem;
+  justify-content: center;
+  gap: 3px;
+  max-width: 78px;
+  height: 48px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: var(--radius-btn);
   background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease,
-    transform 0.2s ease;
-  border-radius: 0.5rem;
+  color: var(--dim);
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
-  cursor: pointer;
-  touch-action: manipulation;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
 }
 
-.nav-item:active {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%);
-  transform: scale(0.95);
+.nav-item__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 24px;
 }
 
-.nav-item.active {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
-  color: var(--primary);
+/* 下划线只在深色主题出现 */
+.nav-item__bar {
+  display: none;
 }
 
-.nav-item.active svg {
-  filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.5));
+.nav-item--active {
+  color: var(--brand);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+
+html.dark .nav-item--active {
+  color: #cfe0ff;
+  background: transparent;
+  font-weight: 500;
+}
+
+html.dark .nav-item--active .nav-item__bar {
+  display: block;
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--brand);
+  transform: translateX(-50%);
 }
 
 .nav-label {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 </style>

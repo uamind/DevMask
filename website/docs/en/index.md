@@ -4,8 +4,8 @@ title: DevMask
 
 hero:
   name: DevMask
-  text: Spoof a different device model per app
-  tagline: Per-app device profiles · property spoofing · instant reload
+  text: One app, one identity
+  tagline: Per-app device and network identity · restart the app to apply
   image:
     src: /logo.svg
     alt: DevMask
@@ -24,14 +24,13 @@ hero:
       link: https://t.me/devmask
 
 features:
-  - title: 🎯 Per-app precision
-    details: Configure device info individually for each app. Only configured apps are affected — everything else stays untouched.
+  - title: 🎭 One app, one identity
+    details: Model, Build fingerprint, system properties and DPI are spoofed per package — only configured apps see the fake values.
   - title: 📁 Reusable templates
-    details: One template applied to many package names at once; or use `[[apps]]` for a single app, which takes higher priority.
-  - title: 🔄 Hot-reloaded config
-    details: The config is re-read on every app launch. After changes, just restart the target app — no system reboot needed.
-  - title: 🛡️ Safe and reliable
-    details: Based on the Zygisk framework, with a modular design.
-  - title: 🖥️ Modern WebUI
-    details: Graphical app and template management with an online template library, multi-user app display, swipe-back navigation and multiple UI languages.
----
+    details: Apply one device profile to many packages; a single app's own config still wins.
+  - title: 🌐 Independent egress
+    details: Give the device or a single app its own HTTP / SOCKS5 exit; authenticated proxies are filled in by an on-device relay.
+  - title: 🖥️ Device WebUI
+    details: Overview, templates, app matrix and egress probes in the browser, plus an online template library, app clones and i18n.
+  - title: 🛰️ Manager fleet
+    details: One Manager for every device: unified models, proxy pool, bulk jobs, per-device results and audit.

@@ -5,110 +5,54 @@
 -->
 
 <template>
-  <div class="template-card glass-effect">
-    <div class="template-header">
-      <div class="template-info">
-        <h3 class="template-name">{{ name }}</h3>
-        <p class="template-device">{{ template.brand }} {{ template.model }}</p>
-      </div>
-      <div class="template-actions">
-        <button
-          class="icon-btn"
-          type="button"
-          :title="t('templates.actions.export')"
-          :aria-label="t('templates.actions.export')"
-          @click="emit('export', name, template)"
-        >
-          <Copy :size="18" />
-        </button>
-        <button
-          class="icon-btn"
-          type="button"
-          :title="t('common.edit')"
-          :aria-label="t('common.edit')"
-          @click="emit('edit', name, template)"
-        >
-          <PenLine :size="18" />
-        </button>
-        <button
-          class="icon-btn danger"
-          type="button"
-          :title="t('common.delete')"
-          :aria-label="t('common.delete')"
-          @click="emit('delete', name)"
-        >
-          <Trash :size="18" />
-        </button>
-      </div>
-    </div>
+  <!--
+    模板卡只保留三件事：机型名（模板名）、型号代码、套用应用数。
+    其余字段（fingerprint / build_id / 包名列表…）留在编辑页，避免列表变成表单快照。
+  -->
+  <article class="tpl-card">
+    <button type="button" class="tpl-card__main" @click="emit('edit', name, template)">
+      <span class="tpl-card__glyph" aria-hidden="true">
+        <Smartphone :size="16" :stroke-width="1.7" />
+      </span>
 
-    <div class="template-details">
-      <div class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.manufacturer') }}:</span>
-        <span class="detail-value">{{ template.manufacturer }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.device') }}:</span>
-        <span class="detail-value">{{ template.device }}</span>
-      </div>
-      <div class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.model') }}:</span>
-        <span class="detail-value">{{ template.model }}</span>
-      </div>
-      <div v-if="template.build_id" class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.build_id') }}:</span>
-        <span class="detail-value">{{ template.build_id }}</span>
-      </div>
-      <div v-if="template.characteristics" class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.characteristics') }}:</span>
-        <span class="detail-value">{{ template.characteristics }}</span>
-      </div>
-      <div v-if="template.force_denylist_unmount !== undefined" class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.force_denylist_unmount') }}:</span>
-        <span class="detail-value">
-          {{ template.force_denylist_unmount ? t('common.enabled') : t('common.disabled') }}
+      <span class="tpl-card__body">
+        <span class="tpl-card__name" :title="name">{{ name }}</span>
+        <span class="tpl-card__meta">
+          <span class="tpl-card__code dm-mono" :title="codeLabel">{{ codeLabel }}</span>
+          <span class="tpl-card__dot" aria-hidden="true">·</span>
+          <span :class="['tpl-card__count', { 'is-zero': packageCount === 0 }]">{{
+            countLabel
+          }}</span>
         </span>
-      </div>
-      <div v-if="template.companion_resetprop" class="detail-item">
-        <span class="detail-label">{{ t('templates.fields.companion_resetprop') }}:</span>
-        <span class="detail-value">{{ t('common.enabled') }}</span>
-      </div>
-      <div v-if="template.packages && template.packages.length > 0" class="detail-item">
-        <span class="detail-label">{{ t('templates.labels.packages') }}:</span>
-        <span class="detail-value"
-          >{{ template.packages.length }} {{ t('templates.labels.count_suffix') }}</span
-        >
-      </div>
+      </span>
+    </button>
 
-      <div
-        v-if="template.version || template.version_code || template.author || template.description"
-        class="template-meta"
+    <span class="tpl-card__acts">
+      <button
+        type="button"
+        class="tpl-icon"
+        :title="t('templates.actions.export')"
+        :aria-label="t('templates.actions.export')"
+        @click="emit('export', name, template)"
       >
-        <p v-if="template.version || template.version_code" class="meta-item">
-          <span class="meta-label">{{ t('templates.labels.version') }}:</span>
-          <span class="meta-value"
-            >{{ template.version || '' }}
-            <span v-if="template.version_code" class="version-code"
-              >({{ template.version_code }})</span
-            >
-          </span>
-        </p>
-        <p v-if="template.author" class="meta-item">
-          <span class="meta-label">{{ t('templates.labels.author') }}:</span>
-          <span class="meta-value">{{ template.author }}</span>
-        </p>
-        <p v-if="template.description" class="meta-item meta-description">
-          <span class="meta-label">{{ t('templates.labels.description') }}:</span>
-          <span class="meta-value">{{ template.description }}</span>
-        </p>
-      </div>
-    </div>
-  </div>
+        <Copy :size="14" :stroke-width="1.8" />
+      </button>
+      <button
+        type="button"
+        class="tpl-icon tpl-icon--danger"
+        :title="t('common.delete')"
+        :aria-label="t('common.delete')"
+        @click="emit('delete', name)"
+      >
+        <Trash :size="14" :stroke-width="1.8" />
+      </button>
+    </span>
+  </article>
 </template>
 
 <script setup lang="ts">
-import { Copy, PenLine, Trash } from '@lucide/vue'
-import { toRefs } from 'vue'
+import { Copy, Smartphone, Trash } from '@lucide/vue'
+import { computed, toRefs } from 'vue'
 import { useI18n } from '../../utils/i18n'
 import type { Template } from '../../types'
 
@@ -121,146 +65,150 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/** 型号代码：优先 model，其次 device / product 代号。 */
+const codeLabel = computed(() => {
+  const code = template.value.model || template.value.device || template.value.product || ''
+  return code.trim() || t('overview.templates.model_unknown')
+})
+
+const packageCount = computed(() => template.value.packages?.length ?? 0)
+
+const countLabel = computed(() => t('overview.templates.apps', { count: packageCount.value }))
 </script>
 
 <style scoped>
-.template-card {
-  padding: 1.25rem;
-  border-radius: 1rem;
-  box-shadow: 0 2px 8px var(--shadow);
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  position: relative;
-  transform: translateZ(0);
-  contain: layout style paint;
-  box-shadow:
-    0 2px 8px var(--shadow),
-    0 0 0 0 transparent;
-}
-
-.template-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.template-info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.template-name {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-}
-
-.template-device {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-}
-
-.template-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-  min-width: fit-content;
-}
-
-.icon-btn {
+.tpl-card {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: var(--background);
-  border: none;
-  border-radius: 0.5rem;
-  color: var(--text);
-  transition: all 0.2s ease;
+  gap: 8px;
+  padding: 11px 10px 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  box-shadow: var(--shadow-1);
+  min-width: 0;
+}
+
+html.dark .tpl-card {
+  box-shadow: none;
+}
+
+.tpl-card__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.icon-btn:active {
-  background: var(--primary);
-  color: white;
-  transform: scale(0.95);
+.tpl-card:active {
+  background: var(--surface-2);
 }
 
-.icon-btn.danger:active {
-  background: #ef4444;
+.tpl-card__main:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
-.template-details {
+.tpl-card__glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.tpl-card__body {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-}
-
-.detail-item {
-  display: flex;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.detail-label {
-  color: var(--text-secondary);
-  min-width: 100px;
-}
-
-.detail-value {
-  color: var(--text);
+  gap: 3px;
   flex: 1;
-  word-break: break-all;
+  min-width: 0;
 }
 
-.template-meta {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
+.tpl-card__name {
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.meta-item {
+.tpl-card__meta {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.375rem;
-  font-size: 0.8125rem;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--muted);
 }
 
-.meta-label {
-  color: var(--text-secondary);
-  min-width: 100px;
+.tpl-card__code {
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.meta-value {
-  color: var(--text);
-  flex: 1;
-  word-break: break-word;
+.tpl-card__dot {
+  flex: none;
+  color: var(--dim);
 }
 
-.version-code {
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  margin-left: 0.25rem;
+.tpl-card__count {
+  flex: none;
+  color: var(--brand);
 }
 
-.meta-description {
-  align-items: flex-start;
+.tpl-card__count.is-zero {
+  color: var(--dim);
+}
+
+.tpl-card__acts {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+
+.tpl-icon {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tpl-icon:active {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.tpl-icon--danger:active {
+  color: var(--danger);
 }
 </style>

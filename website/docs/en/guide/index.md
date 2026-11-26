@@ -1,53 +1,53 @@
 # DevMask 📱
 
-A device model spoofing module based on Zygisk that can configure different device models for different applications.
+**One app, one identity.** DevMask spoofs model, Build fingerprint, system properties and DPI per package, and lets each app egress through its own proxy. Apps without a config keep reading the real values.
 
-## Features ✨
+## What it solves
 
-- 🎯 **Precise Control**: Configure device information individually for each application, only takes effect on configured apps
-- 📁 **Template Management**: Multiple device templates, easily apply to multiple package names
-- 🔄 **Real-time Effect**: After modifying configuration, just restart the application, no need to restart the system
-- 🛡️ **Safe and Reliable**: Based on Zygisk framework, modular design
-- 📝 **Simple Configuration**: Using TOML format configuration files, easy to edit
-- 🎭 **Unified Execution Flow**: No mode selection needed, automatically schedules JNI field spoofing, COW property spoofing and companion services
-- 🔒 **COW Property Engine**: process-private property-area copies for spoofing, per-process isolation, zero residency and no write-mapping fingerprint
-- 🌐 **WebUI Management**: Provides graphical interface for convenient configuration management
+Ten apps on one phone can be linked through model, Build, properties and DPI; switch devices and they usually still share one home IP. DevMask splits the two problems:
 
-## WebUI Features 🖥️
+- **Device layer** — per-package model and property spoofing; only configured apps are affected
+- **Network layer** — a device-wide or per-app egress proxy; authenticated proxies are filled in by an on-device relay
+- **Fleet layer** — a Manager / Relay aggregates many devices, applies one model in bulk and exposes a single API
 
-DevMask provides a modern web management interface.
+## Capabilities
 
-- 📋 **Template Management**: Create, edit and delete device templates, batch apply to multiple package names
-- 📱 **Application Management**: Intuitive view of installed applications and their configuration status, supports multi-user apps display
-- 🖋️ **Configuration Editing**: Graphical interface for editing application configuration, supporting template application and custom configuration
-- 🌍 **Multilingual**: 简体中文, English, Türkçe
+| Area | Details |
+| --- | --- |
+| Model / templates | manufacturer, brand, model, device, product, board, SoC, fingerprint, build id — applied as templates to many packages |
+| System properties | property-family expansion (including ro.product partition copies), custom-property allow list, __DELETE__ / __EMPTY__ semantics |
+| Version and DPI | Android version, SDK, security patch, Build.DISPLAY, incremental; per-app display density (120–640) |
+| Per-app egress | HTTP or SOCKS5 proxy per package without affecting other apps |
+| Authenticated relay | credentials filled by an on-device relay; HTTP Basic and SOCKS5 (RFC 1929) |
+| Fleet and audit | Manager proxy pool, bindings, job dispatch, per-device results, exit-IP checks, audit log |
 
-## Configuration Guide ⚙️
+## Quick start
 
-For detailed configuration instructions, please refer to the [Configuration Documentation](./configuration/index.md).
+1. Install the module (a Zygisk implementation such as ZygiskNext is required)
+2. Open the WebUI, create a model template under **Templates**, or edit a single app
+3. Bind the template to a package under **Apps**, then restart that app
+4. For egress, fill in a proxy in Settings; authenticated proxies go through the on-device relay automatically
+5. For multiple devices, start the Manager, add devices (address + device token), then use the proxy pool and bulk apply
 
-The configuration file is located at `/data/adb/devmask/config/config.toml` and uses TOML format. After modifying the configuration, just restart the corresponding application to take effect, no need to restart the system.
+## WebUI
 
-## Template Configuration Contribution 🎁
+- **Overview** — module version, masked app count, templates, egress state and shortcuts
+- **Templates** — create, edit, import/export, plus an online template library
+- **Apps** — per-package identities; app clones can inherit or override their own config
+- **Settings** — theme / language, egress, debug switches and API access
 
-Thanks to community contributions! You can also participate! DevMask configuration repository:
+See the [WebUI guide](./webui.md), [configuration](./configuration/index.md) and [FAQ](./faq.md).
 
-- 📦 [devmask_config](https://github.com/Seyud/device_faker_config) - Contribute device template configurations
+## Online template library
 
-Contribute device configurations to help more users get better device spoofing results!
+The library is backed by the community repository [device_faker_config](https://github.com/Seyud/device_faker_config); entries can be previewed and applied from the WebUI.
 
 ## Acknowledgments 🙏
 
-This project references the following excellent projects during development:
-
-- [zygisk-dump-dex](https://github.com/ri-char/zygisk-dump-dex) - Provides prototype reference for Rust Zygisk module development
-- [zygisk-api-rs](https://github.com/rmnscnce/zygisk-api-rs) - Provides Rust dependency support for Zygisk API
-- [MiPushZygisk](https://github.com/wushidia/MiPushZygisk) - Provides reference for Zygisk device spoofing solutions
-
-Thanks to the developers of these projects! 💖
+- [zygisk-dump-dex](https://github.com/ri-char/zygisk-dump-dex) — prototype reference for a Rust Zygisk module
+- [zygisk-api-rs](https://github.com/rmnscnce/zygisk-api-rs) — Rust bindings for the Zygisk API
+- [MiPushZygisk](https://github.com/wushidia/MiPushZygisk) — reference for Zygisk device spoofing
 
 ---
 
-**📱 Let devices not be limited by application model restrictions!** 🚀
-
-> 💝 If this module helps you, please give it a ⭐ Star for support
+**📱 Let your device stop being limited by app model checks.** 🚀

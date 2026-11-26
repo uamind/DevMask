@@ -1,0 +1,475 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Copyright (c) 2025-2026 Seyud
+ * DevMask: https://github.com/uamind/DevMask
+ *
+ * 网络页局部基元：只在 NetworkPage 与 components/network/* 之间共用。
+ * 设计令牌与 .dm-* 在 style.css（只读），这里只补本页需要的组合，
+ * 浅色 = 方向 B 白卡 + hairline；深色 = 方向 A 的 hairline 卡、无阴影。
+ */
+
+.net-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-top: 4px;
+}
+
+/* —— 卡片 —— */
+.net-card {
+  padding: 14px 15px;
+}
+
+.net-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.net-card__head .dm-link {
+  flex: none;
+}
+
+/* —— 状态卡：页头两块（状态 / 一键直连） —— */
+.net-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.net-status__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.net-status__id {
+  min-width: 0;
+}
+
+.net-status__state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.net-status__line {
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-status__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.net-status__meta b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.net-status__meta .dm-link {
+  margin-left: auto;
+}
+
+/* —— 按钮（本页自绘，浅色/深色都只换令牌） —— */
+.net-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-btn);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.net-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.net-btn--primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.net-btn--ghost {
+  background: transparent;
+}
+
+.net-btn--direct {
+  flex: none;
+  height: 36px;
+  padding: 0 13px;
+  box-shadow: 0 6px 14px rgba(44, 91, 255, 0.22);
+}
+
+html.dark .net-btn--direct {
+  box-shadow: none;
+}
+
+/* —— 键值行 —— */
+.net-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.net-rows--flush {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.net-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.net-row__k {
+  flex: none;
+  color: var(--muted);
+}
+
+.net-row__v {
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.net-row__v--mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* —— 提示文案 —— */
+.net-hint {
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
+.net-hint--warn {
+  color: var(--warn);
+}
+
+.net-hint--error {
+  color: var(--danger);
+}
+
+.net-code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.net-subtitle {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: 660;
+  color: var(--ink);
+}
+
+html.dark .net-subtitle {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* —— 小标签 —— */
+.net-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.net-tag--default {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.net-tag--type,
+.net-tag--upstream {
+  color: var(--muted);
+  background: var(--surface-3);
+}
+
+.net-tag--relay {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+
+.net-tag--off {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+html.dark .net-tag--default {
+  border: 1px solid rgba(76, 141, 255, 0.28);
+}
+
+html.dark .net-tag--relay {
+  border: 1px solid rgba(52, 211, 153, 0.22);
+}
+
+html.dark .net-tag--type,
+html.dark .net-tag--upstream,
+html.dark .net-tag--off {
+  border: 1px solid var(--line);
+}
+
+/* —— 代理定义卡 —— */
+.net-proxy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.net-proxy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+}
+
+.net-proxy__top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.net-proxy__name {
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.net-proxy__addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.net-proxy__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.net-proxy__cred {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+/* —— 空态 —— */
+.net-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.net-empty .net-btn {
+  align-self: center;
+}
+
+/* —— 中继监听 —— */
+.net-listener {
+  margin-top: 8px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+}
+
+.net-listener__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.net-listener__meta {
+  margin-top: 4px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* —— 表单字段（编辑弹窗） —— */
+.net-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.net-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.net-field__label {
+  font-size: 11.5px;
+  font-weight: 660;
+  color: var(--ink);
+}
+
+.net-field__tip {
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.net-field__tip--error {
+  color: var(--danger);
+}
+
+.net-field .el-input-number {
+  width: 100%;
+}
+
+.net-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+}
+
+.net-toggle__text {
+  min-width: 0;
+}
+
+.net-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.net-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.net-actions .net-hint {
+  margin: 0;
+}
+
+.net-advanced-toggle .dm-link {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.net-advanced-toggle .dm-link svg {
+  transition: transform 0.16s ease;
+}
+
+.net-advanced-toggle .dm-link svg.is-open {
+  transform: rotate(180deg);
+}
+
+/* —— 弹窗：只用一层压暗 + 实心卡（与 style.css 的 .el-dialog 令牌一致） —— */
+.net-dialog-modal .el-dialog {
+  margin-bottom: 0;
+}
+
+.net-dialog-modal .el-dialog__body {
+  max-height: 62vh;
+  padding: 0 16px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.net-dialog-modal .el-dialog__body::-webkit-scrollbar {
+  display: none;
+}
+
+.net-dialog-modal .el-dialog__header {
+  padding: 16px 16px 8px;
+  margin-right: 0;
+}
+
+.net-dialog-modal .el-dialog__title {
+  font-size: 15px;
+  font-weight: 680;
+}
+
+.net-dialog-modal .el-dialog__footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.net-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.net-dialog__error {
+  margin-top: 10px;
+}

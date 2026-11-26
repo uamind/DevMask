@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DevMask UI · 方向 B · Passport</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#F4F5F7; --surface:#FFFFFF; --ink:#111827; --muted:#6B7280; --dim:#9AA3B2;
+    --line:#E9EBF0; --brand:#2C5BFF; --brand-soft:#EDF1FF; --navy:#0E1A38; --ok:#0E9F6E; --ok-soft:#E7F7F0;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  body{background:#E8EAEE;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;
+       color:var(--ink);display:flex;gap:28px;padding:26px 28px 30px;align-items:flex-start}
+  .slot{display:flex;flex-direction:column;gap:10px}
+  .cap{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8A93A3;font-family:var(--mono);padding-left:2px}
+  .phone{width:390px;height:844px;background:var(--bg);border-radius:22px;overflow:hidden;position:relative;
+         border:1px solid #DDE1E8;box-shadow:0 20px 50px rgba(17,24,39,.14)}
+  .status{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 26px;font-size:12px;font-weight:600;color:#1F2937}
+  .status .r{display:flex;gap:6px;align-items:center}
+  .screen{height:calc(100% - 44px);display:flex;flex-direction:column;position:relative}
+  .scroll{flex:1;overflow:hidden;padding:0 20px 90px}
+  .hd{display:flex;align-items:center;justify-content:space-between;padding:6px 0 16px}
+  .brand{display:flex;align-items:center;gap:9px}
+  .mark{width:29px;height:29px;border-radius:9px;background:var(--brand);display:grid;place-items:center;box-shadow:0 6px 14px rgba(44,91,255,.28)}
+  .brand .nm{font-size:15.5px;font-weight:700;letter-spacing:-.01em}
+  .ver{font-family:var(--mono);font-size:10px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px 5px}
+  .live{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:560;color:var(--ok);background:var(--ok-soft);border-radius:99px;padding:5px 10px}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(14,159,110,.14)}
+  .page-hd{padding:2px 0 16px}
+  .page-hd h1{font-size:27px;font-weight:730;letter-spacing:-.02em}
+  .page-hd p{font-size:12.5px;color:var(--muted);margin-top:6px}
+  .page-hd .cnt{font-family:var(--mono);font-size:11px;color:var(--dim);float:right;margin-top:10px}
+  /* hero */
+  .hero{position:relative;overflow:hidden;background:var(--navy);border-radius:22px;padding:16px 20px 14px;color:#fff;
+        box-shadow:0 16px 34px rgba(14,26,56,.26)}
+  .hero:before{content:"";position:absolute;width:220px;height:220px;right:-70px;top:-90px;border-radius:50%;
+        background:radial-gradient(circle at center,rgba(76,120,255,.55),transparent 65%)}
+  .hero:after{content:"";position:absolute;width:150px;height:150px;right:-30px;bottom:-90px;border-radius:50%;
+        background:radial-gradient(circle at center,rgba(126,86,255,.4),transparent 68%)}
+  .hero .lb{position:relative;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.55);font-family:var(--mono)}
+  .hero h2{position:relative;font-size:28px;line-height:1.2;font-weight:700;letter-spacing:-.02em;margin-top:12px}
+  .hero h2 span{color:#9DBCFF}
+  .hero .sub{position:relative;font-size:12.5px;color:rgba(255,255,255,.62);margin-top:7px}
+  .hero .foot{position:relative;display:flex;align-items:center;gap:12px;margin-top:15px}
+  .hero .cta{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:99px;
+        background:#fff;color:#0E1A38;font-size:12.5px;font-weight:640}
+  .hero .ghost{font-size:12.5px;color:rgba(255,255,255,.72)}
+  .phones{position:absolute;right:16px;top:16px;display:flex}
+  .phones i{display:block;width:26px;height:52px;border:1.4px solid rgba(255,255,255,.28);border-radius:7px;margin-left:-6px;position:relative}
+  .phones i:before{content:"";position:absolute;left:50%;top:5px;transform:translateX(-50%);width:7px;height:1.4px;border-radius:2px;background:rgba(255,255,255,.35)}
+  /* tiles */
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:11px 13px;display:flex;gap:10px;align-items:center}
+  .tile .ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);flex:none}
+  .tile .ic.g{background:var(--ok-soft);color:var(--ok)}
+  .tile .ic.v{background:#F3EEFF;color:#7A5AF8}
+  .tile .k{display:block;font-size:11px;color:var(--muted)}
+  .tile .v2{display:block;font-size:14px;font-weight:640;margin-top:2px;letter-spacing:-.01em}
+  .tile .v2.mono{font-family:var(--mono);font-size:12.5px}
+  /* section */
+  .sec{display:flex;align-items:baseline;justify-content:space-between;margin:15px 0 9px}
+  .sec h3{font-size:13.5px;font-weight:660}
+  .sec a{font-size:11.5px;color:var(--brand)}
+  .tpls{display:flex;gap:10px}
+  .tpl{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:9px 11px;min-width:0}
+  .tpl .n{font-size:12px;font-weight:620;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tpl .m{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:4px}
+  .tpl .c{font-size:10.5px;color:var(--muted);margin-top:8px}
+  /* recent */
+  .recent{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  .recent .rh{display:flex;justify-content:space-between;align-items:center;padding:11px 15px 8px;font-size:12.5px;font-weight:640}
+  .recent .rh span{font-size:11px;font-weight:500;color:var(--brand)}
+  .act{display:flex;align-items:center;gap:10px;padding:8px 15px;border-top:1px solid var(--line)}
+  .act .d{width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none}
+  .act .d.g{background:var(--ok)}
+  .act .tx{font-size:12px;color:#374151;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .act .tx b{font-weight:600}
+  .act .tm{font-size:10.5px;color:var(--dim);font-family:var(--mono);flex:none}
+  /* inherit */
+  .inherit{margin-top:11px;background:var(--brand-soft);border-radius:16px;padding:10px 15px}
+  .inherit .ih{font-size:11px;font-weight:660;color:var(--brand);letter-spacing:.02em}
+  .inherit p{font-size:11.5px;line-height:1.65;color:#5A6A88;margin-top:6px}
+  /* search + tabs */
+  .search{height:44px;background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;
+          align-items:center;gap:9px;padding:0 13px;color:var(--dim);font-size:13px;margin-bottom:12px}
+  .tabs{display:flex;gap:20px;border-bottom:1px solid var(--line);margin-bottom:2px}
+  .tabs span{font-size:13px;color:var(--muted);padding:0 1px 10px;position:relative}
+  .tabs span.on{color:var(--ink);font-weight:640}
+  .tabs span.on:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--brand)}
+  .tabs b{font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:500;margin-left:4px}
+  /* app cards */
+  .cards{margin-top:9px;display:flex;flex-direction:column;gap:6px}
+  .app{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 13px;display:flex;align-items:center;gap:11px}
+  .app .av{width:38px;height:38px;border-radius:12px;flex:none;display:grid;place-items:center;color:#fff;font-size:15px;font-weight:600}
+  .app .nm{display:block;font-size:14px;font-weight:600;letter-spacing:-.005em}
+  .app .pk{display:block;font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:3px}
+  .app .tag{display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:10.5px;font-weight:560;color:var(--brand);
+            background:var(--brand-soft);border-radius:7px;padding:4px 8px;max-width:126px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .app .tag.empty{color:var(--dim);background:#F5F6F8}
+  .app .ch{margin-left:6px;color:#C3C9D4;flex:none}
+  .hint{font-size:10.5px;color:var(--dim);text-align:center;margin-top:8px;line-height:1.6}
+  /* nav */
+  .nav{position:absolute;left:0;right:0;bottom:0;height:80px;display:flex;align-items:center;justify-content:space-around;
+       background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-top:1px solid var(--line);padding-bottom:10px}
+  .nav .it{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:#98A1B0;width:64px;height:46px;justify-content:center;border-radius:12px}
+  .nav .it.on{color:var(--brand);background:var(--brand-soft);font-weight:600}
+  .glyph{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+  <!-- ================= B-1 概览 ================= -->
+  <figure class="slot">
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">
+        <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#1F2937"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#1F2937"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#1F2937"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#AEB6C2"/></svg>
+        <svg width="16" height="11" viewBox="0 0 16 11"><path d="M8 9.6l2.2-2.3a3.1 3.1 0 00-4.4 0L8 9.6z" fill="#1F2937"/><path d="M3.2 5.2a6.7 6.7 0 019.6 0" stroke="#1F2937" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M5.2 7.2a4 4 0 015.6 0" stroke="#1F2937" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>
+        <svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="3" stroke="#AEB6C2" fill="none"/><rect x="2" y="2" width="13" height="7" rx="1.6" fill="#1F2937"/><path d="M21 3.6v3.8a2 2 0 000-3.8z" fill="#AEB6C2"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="hd">
+            <div class="brand">
+              <span class="mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4.5 8.2c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v2.1c-1.3.5-2.2 1.7-2.2 3.1 0 1.4.9 2.6 2.2 3.1v2.1c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8v-2.1c1.3-.5 2.2-1.7 2.2-3.1 0-1.4-.9-2.6-2.2-3.1V8.2z" fill="#fff"/><circle cx="9.2" cy="10.6" r="1.15" fill="#2C5BFF"/><circle cx="14.8" cy="10.6" r="1.15" fill="#2C5BFF"/></svg></span>
+              <span class="nm">DevMask</span>
+              <span class="ver">v0.0.1</span>
+            </div>
+            <span class="live"><i class="dot"></i>运行中</span>
+          </div>
+
+          <div class="page-hd">
+            <h1>概览</h1>
+            <p>运行于 Pixel 9 Pro · Android 17</p>
+          </div>
+
+          <div class="hero">
+            <div class="phones"><i></i><i></i><i></i></div>
+            <div class="lb">当前伪装</div>
+            <h2><span>12</span> 个应用<br>各自一个身份</h2>
+            <div class="sub">5 套机型模板 · 出口 HTTP 已连接</div>
+            <div class="foot">
+              <span class="cta">管理应用 <svg width="13" height="13" viewBox="0 0 24 24" class="glyph"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
+              <span class="ghost">新建模板</span>
+            </div>
+          </div>
+
+          <div class="tiles">
+            <div class="tile"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" class="glyph"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 10h17"/></svg></span>
+              <span><span class="k">机型模板</span><span class="v2">5 套</span></span></div>
+            <div class="tile"><span class="ic g"><svg width="16" height="16" viewBox="0 0 24 24" class="glyph"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 2.4 14.6 0 17"/></svg></span>
+              <span><span class="k">网络出口</span><span class="v2">已连接</span></span></div>
+            <div class="tile"><span class="ic v"><svg width="16" height="16" viewBox="0 0 24 24" class="glyph"><path d="M12 3l7 3v5.5c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6l7-3z"/></svg></span>
+              <span><span class="k">模块版本</span><span class="v2 mono">v0.0.1</span></span></div>
+            <div class="tile"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" class="glyph"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>
+              <span><span class="k">上次应用</span><span class="v2">2 分钟前</span></span></div>
+          </div>
+
+          <div class="sec"><h3>常用模板</h3><a>全部 5 套 →</a></div>
+          <div class="tpls">
+            <div class="tpl"><div class="n">红魔 9 Pro</div><div class="m">NX769J</div><div class="c">4 个应用</div></div>
+            <div class="tpl"><div class="n">Pixel 9 Pro</div><div class="m">caiman</div><div class="c">3 个应用</div></div>
+            <div class="tpl"><div class="n">小米 15 Ultra</div><div class="m">aurora</div><div class="c">3 个应用</div></div>
+          </div>
+
+          <div class="recent">
+            <div class="rh">最近改动 <span>全部记录 →</span></div>
+            <div class="act"><i class="d"></i><span class="tx"><b>微信</b> 套用「红魔 9 Pro」</span><span class="tm">2 分钟前</span></div>
+            <div class="act"><i class="d g"></i><span class="tx"><b>淘宝</b> 应用级出口切换为香港住宅</span><span class="tm">昨天 21:40</span></div>
+          </div>
+        </div>
+        <nav class="nav">
+          <span class="it on"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 19v-8.5z"/></svg>概览</span>
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 10h17"/></svg>模板</span>
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>应用</span>
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.6-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>设置</span>
+        </nav>
+      </div>
+    </div>
+    <figcaption class="cap">B-1 · 概览 / Status</figcaption>
+  </figure>
+
+  <!-- ================= B-2 应用 ================= -->
+  <figure class="slot">
+    <div class="phone">
+      <div class="status"><span>9:41</span><span class="r">
+        <svg width="17" height="11" viewBox="0 0 17 11"><rect x="0" y="7" width="3" height="4" rx="1" fill="#1F2937"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="#1F2937"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="#1F2937"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="#AEB6C2"/></svg>
+        <svg width="16" height="11" viewBox="0 0 16 11"><path d="M8 9.6l2.2-2.3a3.1 3.1 0 00-4.4 0L8 9.6z" fill="#1F2937"/><path d="M3.2 5.2a6.7 6.7 0 019.6 0" stroke="#1F2937" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M5.2 7.2a4 4 0 015.6 0" stroke="#1F2937" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>
+        <svg width="23" height="11" viewBox="0 0 23 11"><rect x=".5" y=".5" width="19" height="10" rx="3" stroke="#AEB6C2" fill="none"/><rect x="2" y="2" width="13" height="7" rx="1.6" fill="#1F2937"/><path d="M21 3.6v3.8a2 2 0 000-3.8z" fill="#AEB6C2"/></svg>
+      </span></div>
+      <div class="screen">
+        <div class="scroll">
+          <div class="hd">
+            <div class="brand">
+              <span class="mark"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4.5 8.2c0-1 .8-1.8 1.8-1.8h11.4c1 0 1.8.8 1.8 1.8v2.1c-1.3.5-2.2 1.7-2.2 3.1 0 1.4.9 2.6 2.2 3.1v2.1c0 1-.8 1.8-1.8 1.8H6.3c-1 0-1.8-.8-1.8-1.8v-2.1c1.3-.5 2.2-1.7 2.2-3.1 0-1.4-.9-2.6-2.2-3.1V8.2z" fill="#fff"/><circle cx="9.2" cy="10.6" r="1.15" fill="#2C5BFF"/><circle cx="14.8" cy="10.6" r="1.15" fill="#2C5BFF"/></svg></span>
+              <span class="nm">DevMask</span>
+              <span class="ver">v0.0.1</span>
+            </div>
+            <span class="live"><i class="dot"></i>运行中</span>
+          </div>
+
+          <div class="page-hd">
+            <span class="cnt">12 / 86</span>
+            <h1>应用</h1>
+            <p>为单个应用指定身份，未配置的应用不受影响。</p>
+          </div>
+
+          <div class="search">
+            <svg width="15" height="15" viewBox="0 0 24 24" class="glyph" style="color:#9AA3B2"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
+            搜索应用名称或包名
+            <svg style="margin-left:auto" width="16" height="16" viewBox="0 0 24 24" class="glyph" ><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+          </div>
+
+          <div class="tabs"><span class="on">已配置<b>12</b></span><span>全部<b>86</b></span><span>系统应用<b>41</b></span></div>
+
+          <div class="cards">
+            
+              <div class="app">
+                <span class="av" style="background:#07C160">微</span>
+                <span style="min-width:0"><span class="nm">微信</span><span class="pk">com.tencent.mm</span></span>
+                <span class="tag ">红魔 9 Pro</span>
+                <svg class="ch" width="15" height="15" viewBox="0 0 24 24" class="glyph"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="app">
+                <span class="av" style="background:#FF5000">淘</span>
+                <span style="min-width:0"><span class="nm">淘宝</span><span class="pk">com.taobao.taobao</span></span>
+                <span class="tag ">Pixel 9 Pro</span>
+                <svg class="ch" width="15" height="15" viewBox="0 0 24 24" class="glyph"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="app">
+                <span class="av" style="background:#161823">抖</span>
+                <span style="min-width:0"><span class="nm">抖音</span><span class="pk">com.ss.android.ugc.aweme</span></span>
+                <span class="tag ">小米 15 Ultra</span>
+                <svg class="ch" width="15" height="15" viewBox="0 0 24 24" class="glyph"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="app">
+                <span class="av" style="background:#4A7DFF">原</span>
+                <span style="min-width:0"><span class="nm">原神</span><span class="pk">com.miHoYo.Yuanshen</span></span>
+                <span class="tag ">一加 13</span>
+                <svg class="ch" width="15" height="15" viewBox="0 0 24 24" class="glyph"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+              <div class="app">
+                <span class="av" style="background:#FF2E4D">书</span>
+                <span style="min-width:0"><span class="nm">小红书</span><span class="pk">com.xingin.xhs</span></span>
+                <span class="tag empty">未配置</span>
+                <svg class="ch" width="15" height="15" viewBox="0 0 24 24" class="glyph"><path d="M9 5l7 7-7 7"/></svg>
+              </div>
+          </div>
+          <div class="hint">右侧标签即该应用读到的机型<br>点击应用可单独修改，或套用模板</div>
+          <div class="inherit">
+            <div class="ih">分身与继承</div>
+            <p><b>3</b> 个分身随主应用继承同一身份；为分身单独保存的配置优先，不会回写主应用。</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 19v-8.5z"/></svg>概览</span>
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 10h17"/></svg>模板</span>
+          <span class="it on"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg>应用</span>
+          <span class="it"><svg width="21" height="21" viewBox="0 0 24 24" class="glyph"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 01-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.6-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 012.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 012.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>设置</span>
+        </nav>
+      </div>
+    </div>
+    <figcaption class="cap">B-2 · 应用列表 / Apps</figcaption>
+  </figure>
+</body>
+</html>

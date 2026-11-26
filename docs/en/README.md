@@ -4,7 +4,7 @@
 
 <img src="../logo.png" style="width: 96px;" alt="logo">
 
-Give every app its own fake device: per-package model, Build fields, system properties and DPI — plus per-device or per-app egress proxies, including authenticated residential proxies.
+**One app, one identity.** Per-package model, Build fingerprint, system properties and DPI — and each app can egress through its own proxy, authenticated residential ones included.
 
 > v0.0.1 is the first DevMask release; versioning restarts from zero. History: [CHANGELOG](CHANGELOG.md).
 

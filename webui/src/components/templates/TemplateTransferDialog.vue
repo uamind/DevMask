@@ -14,14 +14,13 @@
     :destroy-on-close="true"
     :z-index="2001"
     class="template-transfer-dialog"
-    modal-class="template-transfer-dialog-modal"
   >
     <div class="transfer-tabs">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         type="button"
-        :class="['transfer-tab', { active: activeTab === tab.id }]"
+        :class="['transfer-tab', { 'is-active': activeTab === tab.id }]"
         @click="activeTab = tab.id"
       >
         {{ tab.label }}
@@ -44,7 +43,7 @@
         />
       </div>
 
-      <div class="panel-section preview-card">
+      <div class="panel-section">
         <div class="section-header">
           <h3>{{ t('templates.transfer.import.preview_label') }}</h3>
           <p v-if="importPreview.names.length > 0">
@@ -95,7 +94,7 @@
         </el-checkbox-group>
       </div>
 
-      <div class="panel-section preview-card">
+      <div class="panel-section">
         <div class="section-header">
           <h3>{{ t('templates.transfer.export.preview_label') }}</h3>
           <p v-if="selectedExportNames.length > 0">
@@ -144,7 +143,7 @@
         />
       </div>
 
-      <div class="panel-section preview-card">
+      <div class="panel-section">
         <div class="section-header">
           <h3>{{ t('templates.transfer.device.preview_label') }}</h3>
         </div>
@@ -515,8 +514,8 @@ watch(templateEntries, () => {
 <style scoped>
 .transfer-tabs {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 6px;
+  margin-bottom: 14px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -527,152 +526,174 @@ watch(templateEntries, () => {
 }
 
 .transfer-tab {
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  flex: none;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 560;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.transfer-tab.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
+.transfer-tab.is-active {
+  border-color: transparent;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 620;
+}
+
+html.dark .transfer-tab.is-active {
+  border-color: rgba(76, 141, 255, 0.28);
 }
 
 .transfer-panel {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 16px;
 }
 
 .panel-section {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-}
-
-.preview-card,
-.checkbox-list,
-.selection-toolbar,
-.primary-action,
-.transfer-tab,
-.toolbar-btn {
-  -webkit-tap-highlight-color: transparent;
+  gap: 8px;
 }
 
 .section-header h3 {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 640;
+  color: var(--ink);
 }
 
 .section-header p {
-  margin: 0.25rem 0 0;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
 }
 
 .empty-state,
 .error-state {
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background: var(--background);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  padding: 12px 13px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-btn);
+  background: var(--surface-2);
+  font-size: 11.5px;
+  line-height: 1.55;
 }
 
 .empty-state {
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 
 .error-state {
-  color: #d14343;
+  border-color: rgba(220, 38, 38, 0.32);
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .name-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 6px;
 }
 
 .name-chip {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 0.4rem 0.75rem;
-  background: var(--background);
-  color: var(--text);
-  font-size: 0.8rem;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
 }
 
 .selection-toolbar {
   display: flex;
-  gap: 0.5rem;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .toolbar-btn,
 .primary-action {
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  background: var(--card);
-  color: var(--text);
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 11.5px;
   font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .primary-action {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
+  align-self: flex-start;
+  border-color: transparent;
+  background: var(--brand);
+  color: #ffffff;
+}
+
+html.dark .primary-action {
+  color: #06101f;
 }
 
 .primary-action:disabled {
-  opacity: 0.7;
+  opacity: 0.55;
+}
+
+.toolbar-btn:active,
+.primary-action:active {
+  opacity: 0.85;
 }
 
 .checkbox-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .checkbox-card {
   display: block;
-  padding: 0.85rem 1rem;
-  border-radius: 0.9rem;
-  background: var(--background);
-  border: 1px solid var(--border);
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface-2);
 }
 
 .checkbox-copy {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  margin-left: 0.35rem;
+  gap: 2px;
+  margin-left: 4px;
 }
 
 .checkbox-copy strong {
-  color: var(--text);
-  font-size: 0.9rem;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .checkbox-copy span {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  color: var(--muted);
+  font-size: 10.5px;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -705,85 +726,71 @@ watch(templateEntries, () => {
   grid-column: 1 / -1;
 }
 
-.code-font {
-  font-family: monospace;
-}
-</style>
-
-<style scoped>
-.template-transfer-dialog :deep(.el-dialog) {
-  margin-top: 5vh !important;
-  margin-bottom: 80px !important;
-  max-height: calc(100vh - 80px - 10vh) !important;
-  display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.15) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(1.1);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-transfer-dialog :deep(.el-dialog) {
-    background: rgba(20, 20, 20, 0.6) !important;
-    backdrop-filter: blur(40px) saturate(150%) brightness(0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-}
-
-.template-transfer-dialog :deep(.el-dialog__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  background: transparent;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.template-transfer-dialog :deep(.el-dialog__body::-webkit-scrollbar) {
-  display: none;
-}
-
-.template-transfer-dialog :deep(.el-dialog__header) {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-transfer-dialog :deep(.el-dialog__header) {
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-}
-
-.template-transfer-dialog :deep(.el-dialog__footer) {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  flex-shrink: 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-transfer-dialog :deep(.el-dialog__footer) {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.3);
-  }
+.code-font :deep(.el-textarea__inner) {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
 }
 </style>
 
 <style>
-.template-transfer-dialog-modal {
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.25) !important;
+/*
+ * 弹窗外壳：浅色 = B 的白卡 + 轻阴影；深色 = A 的 surface + hairline、去阴影。
+ * 用 html.dark 而不是 prefers-color-scheme —— 主题由设置页显式切换。
+ */
+.el-dialog.template-transfer-dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
+  margin-top: 6vh !important;
+  margin-bottom: 80px !important;
+  max-height: calc(100vh - 80px - 6vh) !important;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (prefers-color-scheme: dark) {
-  .template-transfer-dialog-modal {
-    backdrop-filter: blur(12px) saturate(120%) !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-  }
+html.dark .el-dialog.template-transfer-dialog {
+  box-shadow: none;
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__title {
+  font-size: 14px;
+  font-weight: 640;
+  color: var(--ink);
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__headerbtn {
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__body::-webkit-scrollbar {
+  display: none;
+}
+
+.el-dialog.template-transfer-dialog .el-dialog__footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
 }
 </style>

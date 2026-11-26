@@ -3,5 +3,5 @@ name=DevMask
 version=v0.0.1
 versionCode=20261125
 author=酷安@瓦力喀/GitHub@Seyud
-description=使用Zygisk实现自定义配置对应用伪装机型
+description=按应用伪造机型、Build 指纹与系统属性；可为单个应用指定出口代理
 updateJson=https://github.com/uamind/DevMask/raw/main/Update.json

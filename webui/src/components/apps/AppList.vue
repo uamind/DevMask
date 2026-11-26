@@ -7,86 +7,80 @@
 <template>
   <div class="apps-list">
     <template v-if="loading">
-      <div v-for="i in 15" :key="i" class="app-card skeleton-item">
-        <div class="app-icon-container">
-          <div class="skeleton-loader icon-placeholder"></div>
-        </div>
-        <div class="app-info">
-          <div class="skeleton-loader name-placeholder"></div>
-          <div class="skeleton-loader package-placeholder"></div>
-          <div class="app-status-group">
-            <div class="skeleton-loader badge-placeholder"></div>
-            <div class="skeleton-loader badge-placeholder short"></div>
-          </div>
-        </div>
+      <div v-for="i in 3" :key="i" class="row-skeleton" aria-hidden="true">
+        <span class="dm-skeleton row-skeleton__avatar"></span>
+        <span class="row-skeleton__body">
+          <span class="dm-skeleton row-skeleton__name"></span>
+          <span class="dm-skeleton row-skeleton__pkg"></span>
+        </span>
+        <span class="dm-skeleton row-skeleton__tag"></span>
       </div>
     </template>
 
     <template v-else>
-      <div v-for="app in apps" :key="app.packageName" class="app-card" @click="emit('select', app)">
-        <div class="app-icon-container" :data-package="app.packageName">
-          <div
-            v-if="
-              !appIcons[app.packageName] ||
-              (appIcons[app.packageName] !== 'fallback' && !iconLoaded[app.packageName])
-            "
-            class="skeleton-loader icon-placeholder"
-          ></div>
+      <button
+        v-for="app in apps"
+        :key="app.packageName"
+        type="button"
+        class="app-row"
+        :data-package="app.packageName"
+        @click="emit('select', app)"
+      >
+        <!-- 图标容器同时是 useAppIcons 的观察目标：读取成功前先显示首字方块 -->
+        <span
+          class="app-icon-container app-row__avatar"
+          :data-package="app.packageName"
+          :style="{ background: avatarColor(app.packageName) }"
+          aria-hidden="true"
+        >
           <img
-            v-if="appIcons[app.packageName] && appIcons[app.packageName] !== 'fallback'"
+            v-if="hasIcon(app.packageName)"
             :src="appIcons[app.packageName]"
-            class="app-icon-img"
-            :class="{ loaded: iconLoaded[app.packageName] }"
+            class="app-row__icon"
+            :class="{ 'app-row__icon--loaded': iconLoaded[app.packageName] }"
             alt=""
             loading="lazy"
             @load="onIconLoad(app.packageName)"
             @error="onIconError(app.packageName)"
           />
-          <Smartphone
-            v-if="appIcons[app.packageName] === 'fallback'"
-            :size="40"
-            class="app-icon-fallback"
-          />
-        </div>
-        <div class="app-info">
-          <h3 class="app-name">{{ app.appName }}</h3>
-          <p class="app-package">{{ app.packageName }}</p>
-          <div class="app-status-group">
-            <p v-if="app.configured && app.inherited" class="app-status inherited">
-              <Link :size="14" />
-              {{ t('apps.status.inherited') }}
-            </p>
-            <p v-else-if="app.configured" class="app-status configured">
-              <Check :size="14" />
-              {{ t('apps.status.configured') }}
-            </p>
-            <p v-else class="app-status unconfigured">{{ t('apps.status.unconfigured') }}</p>
-            <p v-if="!isInstalled(app)" class="app-status not-installed">
-              {{ t('apps.status.not_installed') }}
-            </p>
-          </div>
-        </div>
-        <div class="app-actions">
-          <ChevronRight :size="20" />
-        </div>
-      </div>
+          <span v-else class="app-row__initial">{{ initialOf(app) }}</span>
+        </span>
 
-      <div v-if="apps.length === 0" class="empty-state">
-        <Smartphone :size="64" class="empty-icon" />
-        <p class="empty-text">{{ emptyText }}</p>
-      </div>
+        <span class="app-row__body">
+          <span class="app-row__name">{{ app.appName }}</span>
+          <span class="app-row__package dm-mono">{{ app.packageName }}</span>
+          <span v-if="metaOf(app)" class="app-row__meta">{{ metaOf(app) }}</span>
+        </span>
+
+        <!-- 右侧机型标签：已配置 = 实心，未配置 = 虚线灰 -->
+        <span v-if="app.configured" class="app-row__tag" :title="app.modelLabel">
+          {{ app.modelLabel }}
+        </span>
+        <span v-else class="app-row__tag app-row__tag--empty">
+          {{ t('apps.status.unconfigured') }}
+        </span>
+
+        <ChevronRight :size="15" :stroke-width="1.9" class="app-row__chev" aria-hidden="true" />
+      </button>
+
+      <p v-if="apps.length === 0" class="dm-empty empty-state">{{ emptyText }}</p>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { Smartphone, ChevronRight, Check, Link } from '@lucide/vue'
+import { ChevronRight } from '@lucide/vue'
 import { useI18n } from '../../utils/i18n'
 import { useAppIcons } from '../../composables/useAppIcons'
 import type { InstalledApp } from '../../types'
 
-type AppListItem = InstalledApp & { configured: boolean; inherited: boolean }
+type AppListItem = InstalledApp & {
+  configured: boolean
+  inherited: boolean
+  /** 该应用读到的机型；未配置时为空串 */
+  modelLabel: string
+}
 
 const props = defineProps<{
   apps: AppListItem[]
@@ -100,9 +94,50 @@ const { t } = useI18n()
 const { appIcons, iconLoaded, onIconLoad, onIconError, setupIconObserver, teardownIconObserver } =
   useAppIcons()
 
-const isInstalled = (app: InstalledApp) => app.installed !== false
-
 const loading = computed(() => props.loading)
+
+/** 原生图标协议读到的 data URL / ksu URI；'fallback' 表示没有图标，用首字方块。 */
+function hasIcon(packageName: string): boolean {
+  const icon = appIcons.value[packageName]
+  return typeof icon === 'string' && icon !== '' && icon !== 'fallback'
+}
+
+/** 首字：中文取第一个字，拉丁字母取首字母大写。 */
+function initialOf(app: AppListItem): string {
+  const name = (app.appName || app.packageName).trim()
+  const char = Array.from(name)[0] ?? '?'
+  return char.toUpperCase()
+}
+
+/** 首字方块底色：同一包名永远同色（只用于没有真实图标时的占位）。 */
+const AVATAR_COLORS = [
+  '#2C5BFF',
+  '#0E9F6E',
+  '#7A5AF8',
+  '#E4570B',
+  '#129A4E',
+  '#DC3A55',
+  '#0E1A38',
+  '#0E7490',
+  '#A16207',
+  '#4C8DFF',
+]
+
+function avatarColor(packageName: string): string {
+  let hash = 0
+  for (let i = 0; i < packageName.length; i += 1) {
+    hash = (hash * 31 + packageName.charCodeAt(i)) >>> 0
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+/** 行内说明：分身继承主应用配置 / 该包当前未安装。 */
+function metaOf(app: AppListItem): string {
+  const parts: string[] = []
+  if (app.configured && app.inherited) parts.push(t('apps.status.inherited'))
+  if (app.installed === false) parts.push(t('apps.status.not_installed'))
+  return parts.join(' · ')
+}
 
 watch(
   () => [props.apps, props.loading],
@@ -124,218 +159,191 @@ onUnmounted(() => {
 .apps-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 6px;
 }
 
 /*
- * 列表卡片不使用 .glass-effect 毛玻璃:backdrop-filter 是 WebView 滚动中
- * 最昂贵的绘制操作,几百张卡逐帧实时高斯模糊必然掉帧。
- * 注意:不要写 backdrop-filter:none 去覆盖全局类——压缩器会把初始值的标准
- * 属性删掉只留 -webkit- 前缀(Chromium 已移除该别名),导致覆盖失效;
- * 直接从模板上摘掉 glass-effect 类才是可靠做法。
+ * 列表行不用毛玻璃：backdrop-filter 是 WebView 滚动中最贵的绘制操作，
+ * 几百行逐帧模糊必然掉帧。跳过视口外的布局/绘制（近似虚拟化）。
  */
-.apps-list .app-card {
+.app-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 4px var(--shadow);
-  /* 只过渡反馈需要的属性;box-shadow/背景过渡在滚动列表里是纯浪费 */
+  gap: 11px;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transform-origin: center;
   transition: transform 0.15s ease;
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
-  /* 跳过视口外卡片的布局/绘制(近似虚拟化),auto 关键字记录上次实际高度 */
-  contain: layout style paint;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 96px;
 }
 
-.apps-list .app-card:active {
-  transform: scale(0.98);
-  box-shadow: 0 1px 3px var(--shadow);
+html.dark .app-row {
+  box-shadow: none;
 }
 
-.app-icon-container {
+.app-row:active {
+  transform: scale(0.985);
+}
+
+.app-row__avatar {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border-radius: 0.75rem;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   overflow: hidden;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.app-icon-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 0.75rem;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.app-icon-img.loaded {
-  opacity: 1;
-}
-
-.app-icon-fallback {
-  color: var(--primary);
-}
-
-.app-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.app-name {
-  font-size: 1rem;
+  color: #fff;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 0.25rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1;
 }
 
-.app-package {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.25rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-status-group {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-wrap: wrap;
-}
-
-.app-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0.25rem;
-}
-
-.app-status.configured {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
-}
-
-.app-status.inherited {
-  background: rgba(59, 130, 246, 0.12);
-  color: #3b82f6;
-}
-
-.app-status.unconfigured {
-  background: rgba(156, 163, 175, 0.1);
-  color: var(--text-secondary);
-}
-
-.app-status.not-installed {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-}
-
-.app-actions {
-  display: flex;
-  align-items: center;
-  color: var(--text-secondary);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1rem;
-  text-align: center;
-}
-
-.empty-icon {
-  color: var(--text-secondary);
-  opacity: 0.3;
-  margin-bottom: 1rem;
-}
-
-.empty-text {
-  font-size: 1.125rem;
-  font-weight: 500;
-  color: var(--text);
-}
-
-.skeleton-item {
+.app-row__initial {
   pointer-events: none;
 }
 
-.skeleton-loader {
-  background: linear-gradient(90deg, var(--border) 25%, var(--card-bg) 50%, var(--border) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
-  border-radius: 0.25rem;
-  opacity: 0.7;
-}
-
-.dark .skeleton-loader {
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05) 25%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 255, 255, 0.05) 75%
-  );
-}
-
-.icon-placeholder {
+.app-row__icon {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
-  border-radius: 0.75rem;
-  z-index: 1;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.22s ease;
 }
 
-.name-placeholder {
-  height: 1rem;
-  width: 60%;
-  margin-bottom: 0.5rem;
+.app-row__icon--loaded {
+  opacity: 1;
 }
 
-.package-placeholder {
-  height: 0.75rem;
-  width: 40%;
-  margin-bottom: 0.5rem;
+.app-row__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.badge-placeholder {
-  height: 1.25rem;
-  width: 5rem;
-  display: inline-block;
-  margin-right: 0.5rem;
-  border-radius: 0.25rem;
+.app-row__name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.badge-placeholder.short {
-  width: 3rem;
+.app-row__package {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-row__meta {
+  margin-top: 3px;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-row__tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  max-width: 120px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-row__tag--empty {
+  max-width: 82px;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.app-row__chev {
+  flex: none;
+  color: var(--dim);
+}
+
+.empty-state {
+  margin-top: 2px;
+}
+
+/* —— loading（页面级骨架另有 AppsPageSkeleton，这里只做兜底） —— */
+.row-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  background: var(--surface);
+  pointer-events: none;
+}
+
+.row-skeleton__avatar {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 12px;
+}
+
+.row-skeleton__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.row-skeleton__name {
+  width: 45%;
+  height: 12px;
+}
+
+.row-skeleton__pkg {
+  width: 62%;
+  height: 9px;
+}
+
+.row-skeleton__tag {
+  width: 62px;
+  height: 20px;
+  flex: none;
+  border-radius: 7px;
 }
 </style>

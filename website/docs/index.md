@@ -4,8 +4,8 @@ title: DevMask
 
 hero:
   name: DevMask
-  text: 为每个应用伪装不同的机型
-  tagline: 按应用定制机型 · 属性伪装 · 改完即生效
+  text: 一个应用，一个身份
+  tagline: 逐应用伪造机型与属性 · 出口网络独立可控 · 改完重启应用即生效
   image:
     src: /logo.svg
     alt: DevMask
@@ -27,14 +27,13 @@ hero:
       link: https://qun.qq.com/universal-share/share?ac=1&authKey=ls4nlfcsF%2Bxp5SPnVsXRgpbeV1axPZb%2FmJCMXms6ZCHjgAwvOyl1LV%2BDNVL1btgL&busi_data=eyJncm91cENvZGUiOiI4NTQxODgyNTIiLCJ0b2tlbiI6IlE1WVVyZTZxUXVjZUtGUUxWSGFmbzkvMEd3UWNRSiszdklTZDhHejU0RDRyT0lWRTFqS3d4UGJSM1ltaXpkS3MiLCJ1aW4iOiIxMTA1NzgzMDMzIn0%3D&data=IbvhTKt9HwCSsCsl_610-rQ8p6H2NgLmxhEKkMcn-BMWPb86jygWBZJfWLQGm7J8LwpVV2yhPafxTMXYGkjRVA&svctype=4&tempid=h5_group_info
 
 features:
-  - title: 🎯 按应用精确伪装
-    details: 为每个应用单独配置设备信息，仅对配置的应用生效，其他应用完全不受影响。
-  - title: 📁 机型模板复用
-    details: 一套模板批量应用到多个包名；也可以为单个应用单独定制，优先级更高。
-  - title: 🔄 配置热加载
-    details: 每次应用启动时重新读取配置；修改后只需重启目标应用，无需重启系统。
-  - title: 🛡️ 安全可靠
-    details: 基于 Zygisk 框架，模块化设计。
-  - title: 🖥️ 现代化 WebUI
-    details: 图形化管理应用与模板，支持在线模板库、多用户应用显示和界面多语言。
----
+  - title: 🎭 一个应用，一个身份
+    details: 机型、Build 指纹、系统属性与 DPI 都按包名伪造，只有配置过的应用读到假值。
+  - title: 📁 模板复用
+    details: 一套机型批量套到多个包名；单应用的独立配置优先级更高。
+  - title: 🌐 独立出口
+    details: 设备或单个应用指定 HTTP / SOCKS5 出口，需要认证的代理由设备内中继代填凭据。
+  - title: 🖥️ 设备端 WebUI
+    details: 概览、模板、应用矩阵与出口探测都在浏览器里；支持在线模板库、分身与多语言。
+  - title: 🛰️ Manager 聚合
+    details: 多设备统一机型、代理池、批量下发、逐设备结果与审计，AI 只需对接一个入口。

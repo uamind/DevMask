@@ -3,38 +3,64 @@
 // DevMask: https://github.com/uamind/DevMask
 
 import { computed, defineAsyncComponent, defineComponent, h, ref } from 'vue'
-import { FileText, House, Settings, Smartphone } from '@lucide/vue'
+import { FileText, House, LayoutGrid, Settings, Wifi } from '@lucide/vue'
 import AppsPageSkeleton from '../components/apps/AppsPageSkeleton.vue'
+import NetworkPage from '../pages/NetworkPage.vue'
+import StatusPage from '../pages/StatusPage.vue'
 import { useAppsStore } from '../stores/apps'
 import { useConfigStore } from '../stores/config'
 import { useNavigationStore } from '../stores/navigation'
 import type { PageId } from '../stores/navigation'
 import { useI18n } from '../utils/i18n'
-import StatusPage from '../pages/StatusPage.vue'
 
 type AppsPageComponent = (typeof import('../pages/AppsPage.vue'))['default']
 type TemplatePageComponent = (typeof import('../pages/TemplatePage.vue'))['default']
 type SettingsPageComponent = (typeof import('../pages/SettingsPage.vue'))['default']
 
-export const PAGE_ORDER: PageId[] = ['home', 'templates', 'apps', 'settings']
+/**
+ * 界面版本（docs/design/ui-redesign §7：任何界面一律 v0.0.1）。
+ *
+ * 顶部 pill 展示的是这一版 WebUI 的版本口径，与 module.prop / package.json 同源；
+ * 模块真实版本（可能被用户自定义）在「设置 · 关于」里展示。
+ */
+export const APP_VERSION = 'v0.0.1'
+
+/** 底部导航顺序：概览 / 模板 / 应用 / 网络 / 设置。 */
+export const PAGE_ORDER: PageId[] = ['home', 'templates', 'apps', 'network', 'settings']
 export const PAGE_INDEX_BY_ID: Record<PageId, number> = {
   home: 0,
   templates: 1,
   apps: 2,
-  settings: 3,
+  network: 3,
+  settings: 4,
 }
 
 const AsyncPagePlaceholder = defineComponent({
   name: 'AsyncPagePlaceholder',
   setup() {
     return () =>
-      h('div', { class: 'page-placeholder glass-effect' }, [
+      h('div', { class: 'page-placeholder' }, [
         h('div', { class: 'page-placeholder__line page-placeholder__line--title' }),
         h('div', { class: 'page-placeholder__line' }),
         h('div', { class: 'page-placeholder__line page-placeholder__line--short' }),
       ])
   },
 })
+
+/* ---------------------------------------------------------------------------
+ * 页面切换桥：页面内的 CTA（例如概览 hero 的「管理应用」）需要切 tab，
+ * 但动画与 history 只在 App.vue 的实例里，因此暴露一个模块级回调。
+ * ------------------------------------------------------------------------- */
+let pageChangeHandler: ((pageId: PageId) => void) | null = null
+
+export function setPageChangeHandler(handler: ((pageId: PageId) => void) | null) {
+  pageChangeHandler = handler
+}
+
+/** 从页面内部请求切换底部导航（带转场与 history）。 */
+export function navigateToPage(pageId: PageId) {
+  pageChangeHandler?.(pageId)
+}
 
 let appsPageLoader: Promise<AppsPageComponent> | null = null
 let templatePageLoader: Promise<TemplatePageComponent> | null = null
@@ -122,7 +148,8 @@ export function usePageNavigation(opts?: {
       icon: FileText,
       component: AsyncTemplatePage,
     },
-    { id: 'apps' as const, label: t('nav.apps'), icon: Smartphone, component: AsyncAppsPage },
+    { id: 'apps' as const, label: t('nav.apps'), icon: LayoutGrid, component: AsyncAppsPage },
+    { id: 'network' as const, label: t('nav.network'), icon: Wifi, component: NetworkPage },
     {
       id: 'settings' as const,
       label: t('nav.settings'),
@@ -131,8 +158,11 @@ export function usePageNavigation(opts?: {
     },
   ])
   const activePageIndex = computed(() => PAGE_INDEX_BY_ID[activePage.value])
+  // 顶栏 pill 显示模块真实版本；只有 moduleMeta 未就绪时才回落到本版 WebUI 版本
   const versionDisplay = computed(() =>
-    configStore.moduleMetaReady && configStore.moduleVersion ? configStore.moduleVersion : '--'
+    configStore.moduleMetaReady && configStore.moduleVersion
+      ? configStore.moduleVersion
+      : APP_VERSION
   )
 
   function markPageAsRendered(pageId: PageId) {
@@ -166,10 +196,11 @@ export function usePageNavigation(opts?: {
     if (pageId === 'settings') {
       void preloadSettingsPage().catch(() => {})
     }
+    // 'home' / 'network' 是同步组件，无需预热
   }
 
   function primePage(pageId: PageId) {
-    if (pageId === 'home') return
+    if (pageId === 'home' || pageId === 'network') return
     markPageAsRendered(pageId)
     warmPage(pageId, { includeAppData: pageId === 'apps' })
   }
@@ -216,6 +247,9 @@ export function usePageNavigation(opts?: {
     setActivePage(pageId)
   }
 
+  // 页面内的 CTA 走同一条切换路径（转场 + history 都保留）
+  setPageChangeHandler(handlePageChange)
+
   function scheduleConfigBootstrap() {
     requestAnimationFrame(() => {
       window.setTimeout(() => {
@@ -261,6 +295,7 @@ export function usePageNavigation(opts?: {
     if (appDataWarmupId !== null && typeof window.cancelIdleCallback === 'function') {
       window.cancelIdleCallback(appDataWarmupId)
     }
+    setPageChangeHandler(null)
   }
 
   return {

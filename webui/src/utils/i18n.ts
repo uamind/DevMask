@@ -30,10 +30,99 @@ export const messages = {
       backup_failed: '本地备份不可用，配置加载失败',
     },
     nav: {
-      home: '主页',
+      home: '概览',
       templates: '模板',
       apps: '应用',
+      network: '网络',
       settings: '设置',
+    },
+    shell: {
+      running: '运行中',
+      stopped: '未运行',
+      checking: '检查中',
+    },
+    overview: {
+      title: '概览',
+      subtitle: '运行于 {device} · Android {android}',
+      subtitle_fallback: '按应用伪造机型；未配置的应用读取的仍是真机信息。',
+      hero: {
+        eyebrow: '当前伪装',
+        suffix: '个应用',
+        line2: '各自一个身份',
+        sub: '{templates} 套机型模板 · 出口{egress}',
+        manage: '管理应用',
+        new_template: '新建模板',
+      },
+      metrics: {
+        templates_label: '机型模板',
+        templates_value: '{count} 套',
+        egress_label: '网络出口',
+        last_saved_label: '上次写入',
+        unknown: '--',
+      },
+      templates: {
+        title: '常用模板',
+        all: '全部 {count} 套 →',
+        apps: '{count} 个应用',
+        model_unknown: '未填写型号',
+        empty: '还没有机型模板',
+        empty_hint: '先新建一套模板，再套用到应用',
+      },
+      recent: {
+        title: '最近改动',
+        config_saved: '配置已写入',
+        egress_connected: '出口已切换为代理',
+        empty: '还没有改动记录',
+        empty_hint: '套用模板或修改出口后会显示在这里',
+      },
+      time: {
+        just_now: '刚刚',
+        minutes: '{n} 分钟前',
+        hours: '{n} 小时前',
+        days: '{n} 天前',
+      },
+    },
+    network: {
+      title: '网络',
+      subtitle: '给整机或单个应用指定出口，探测出口 IP，随时一键恢复直连。',
+      sections: {
+        egress: '出口代理',
+        relay: '本机中继',
+        probe: '出口探测',
+      },
+      state: {
+        connected: '已连接',
+        direct: '直连',
+        disabled: '未启用',
+        unknown: '未知',
+      },
+      direct: '一键直连',
+      skeleton_hint:
+        '出口配置正在迁到本页：启用设备级代理、保存凭据、探测出口 IP 与恢复直连都在这里完成。',
+      relay_hint: '带凭据的代理由设备内中继持有：应用只连 127.0.0.1:端口，凭据不会写进应用配置。',
+      actions: {
+        save: '保存',
+        probe: '探测出口 IP',
+        clear: '恢复直连',
+        refresh: '刷新',
+        restart_relay: '重启中继',
+      },
+      empty: {
+        title: '还没有配置出口',
+        hint: '保存一个代理并启用设备级代理后，这里会显示出口状态与探测结果。',
+      },
+    },
+    about: {
+      title: '关于',
+      version: '版本',
+      author: '作者',
+      repository: '仓库',
+      website: '官网',
+      license: '许可',
+      license_value: 'GPL-3.0-or-later',
+      description: '一个应用，一个身份。',
+      follow: '关注模块',
+      translators: '译者',
     },
     status: {
       title: '主页',
@@ -319,6 +408,12 @@ export const messages = {
         all: '全部',
         configured: '已配置',
         unconfigured: '未配置',
+        system: '系统应用',
+      },
+      subtitle: '为单个应用指定身份，未配置的应用不受影响。',
+      inherit: {
+        title: '分身与继承',
+        desc: '{count} 个分身随主应用继承同一身份；为分身单独保存的配置优先，不会回写主应用。',
       },
       status: {
         configured: '已配置',
@@ -358,6 +453,12 @@ export const messages = {
       },
     },
     settings: {
+      appearance: {
+        title: '外观',
+      },
+      advanced: {
+        title: '高级',
+      },
       display: {
         title: '显示设置',
         theme: {
@@ -671,10 +772,102 @@ export const messages = {
       backup_failed: 'Local backup unavailable, configuration load failed',
     },
     nav: {
-      home: 'Home',
+      home: 'Overview',
       templates: 'Templates',
       apps: 'Apps',
+      network: 'Network',
       settings: 'Settings',
+    },
+    shell: {
+      running: 'Running',
+      stopped: 'Not running',
+      checking: 'Checking',
+    },
+    overview: {
+      title: 'Overview',
+      subtitle: 'Running on {device} · Android {android}',
+      subtitle_fallback:
+        'Identity is spoofed per app; apps without a profile still read the real device.',
+      hero: {
+        eyebrow: 'Active masking',
+        suffix: 'apps',
+        line2: 'each with its own identity',
+        sub: '{templates} device templates · egress {egress}',
+        manage: 'Manage apps',
+        new_template: 'New template',
+      },
+      metrics: {
+        templates_label: 'Device templates',
+        templates_value: '{count} sets',
+        egress_label: 'Network egress',
+        last_saved_label: 'Last write',
+        unknown: '--',
+      },
+      templates: {
+        title: 'Common templates',
+        all: 'All {count} →',
+        apps: '{count} apps',
+        model_unknown: 'No model set',
+        empty: 'No device templates yet',
+        empty_hint: 'Create a template first, then apply it to apps',
+      },
+      recent: {
+        title: 'Recent changes',
+        config_saved: 'Config written',
+        egress_connected: 'Egress switched to a proxy',
+        empty: 'No changes recorded yet',
+        empty_hint: 'Applying a template or changing egress shows up here',
+      },
+      time: {
+        just_now: 'just now',
+        minutes: '{n} min ago',
+        hours: '{n} h ago',
+        days: '{n} d ago',
+      },
+    },
+    network: {
+      title: 'Network',
+      subtitle:
+        'Assign an egress for the whole device or a single app, probe the exit IP, and fall back to direct with one tap.',
+      sections: {
+        egress: 'Egress proxy',
+        relay: 'On-device relay',
+        probe: 'Egress probe',
+      },
+      state: {
+        connected: 'Connected',
+        direct: 'Direct',
+        disabled: 'Disabled',
+        unknown: 'Unknown',
+      },
+      direct: 'Go direct',
+      skeleton_hint:
+        'Egress settings land on this page: enable the device-level proxy, store credentials, probe the exit IP, and restore a direct connection here.',
+      relay_hint:
+        'Proxy credentials live in the on-device relay: apps only connect to 127.0.0.1:port, so credentials never reach app configs.',
+      actions: {
+        save: 'Save',
+        probe: 'Probe exit IP',
+        clear: 'Restore direct',
+        refresh: 'Refresh',
+        restart_relay: 'Restart relay',
+      },
+      empty: {
+        title: 'No egress configured yet',
+        hint: 'Save a proxy and enable the device-level proxy; status and probe results appear here.',
+      },
+    },
+    about: {
+      title: 'About',
+      version: 'Version',
+      author: 'Author',
+      repository: 'Repository',
+      website: 'Website',
+      license: 'License',
+      license_value: 'GPL-3.0-or-later',
+      description: 'One app, one identity.',
+      follow: 'Follow module',
+      translators: 'Translators',
     },
     status: {
       title: 'Home',
@@ -961,6 +1154,12 @@ export const messages = {
         all: 'All',
         configured: 'Configured',
         unconfigured: 'Unconfigured',
+        system: 'System apps',
+      },
+      subtitle: 'Give a single app its own identity; unconfigured apps stay untouched.',
+      inherit: {
+        title: 'Clones & inheritance',
+        desc: '{count} clones inherit the base app identity; a config saved for a clone takes precedence and never writes back to the base app.',
       },
       status: {
         configured: 'Configured',
@@ -1002,6 +1201,12 @@ export const messages = {
       },
     },
     settings: {
+      appearance: {
+        title: 'Appearance',
+      },
+      advanced: {
+        title: 'Advanced',
+      },
       display: {
         title: 'Display Settings',
         theme: {
@@ -1330,10 +1535,102 @@ export const messages = {
       backup_failed: 'Yerel yedek mevcut değil, konfigürasyon yüklemesi başarısız oldu.',
     },
     nav: {
-      home: 'Ev',
+      home: 'Genel Bakış',
       templates: 'Şablonlar',
       apps: 'Uygulamalar',
+      network: 'Ağ',
       settings: 'Ayarlar',
+    },
+    shell: {
+      running: 'Çalışıyor',
+      stopped: 'Çalışmıyor',
+      checking: 'Kontrol ediliyor',
+    },
+    overview: {
+      title: 'Genel Bakış',
+      subtitle: '{device} · Android {android} üzerinde çalışıyor',
+      subtitle_fallback:
+        'Kimlik uygulama bazında taklit edilir; yapılandırılmamış uygulamalar gerçek cihaz bilgisini okur.',
+      hero: {
+        eyebrow: 'Etkin maskeleme',
+        suffix: 'uygulama',
+        line2: 'her biri kendi kimliğiyle',
+        sub: '{templates} cihaz şablonu · çıkış {egress}',
+        manage: 'Uygulamaları yönet',
+        new_template: 'Yeni şablon',
+      },
+      metrics: {
+        templates_label: 'Cihaz şablonu',
+        templates_value: '{count} adet',
+        egress_label: 'Ağ çıkışı',
+        last_saved_label: 'Son yazma',
+        unknown: '--',
+      },
+      templates: {
+        title: 'Sık kullanılan şablonlar',
+        all: 'Tümü {count} →',
+        apps: '{count} uygulama',
+        model_unknown: 'Model girilmemiş',
+        empty: 'Henüz cihaz şablonu yok',
+        empty_hint: 'Önce bir şablon oluşturun, sonra uygulamaya uygulayın',
+      },
+      recent: {
+        title: 'Son değişiklikler',
+        config_saved: 'Yapılandırma yazıldı',
+        egress_connected: 'Çıkış proxy olarak ayarlandı',
+        empty: 'Henüz değişiklik kaydı yok',
+        empty_hint: 'Şablon uyguladığınızda veya çıkışı değiştirdiğinizde burada görünür',
+      },
+      time: {
+        just_now: 'az önce',
+        minutes: '{n} dakika önce',
+        hours: '{n} saat önce',
+        days: '{n} gün önce',
+      },
+    },
+    network: {
+      title: 'Ağ',
+      subtitle:
+        'Cihazın tamamı veya tek bir uygulama için çıkış tanımlayın, çıkış IP adresini sınayın ve tek dokunuşla doğrudan bağlantıya dönün.',
+      sections: {
+        egress: 'Çıkış proxy',
+        relay: 'Cihaz içi aktarıcı',
+        probe: 'Çıkış sınaması',
+      },
+      state: {
+        connected: 'Bağlı',
+        direct: 'Doğrudan',
+        disabled: 'Devre dışı',
+        unknown: 'Bilinmiyor',
+      },
+      direct: 'Doğrudan bağlantı',
+      skeleton_hint:
+        'Çıkış ayarları bu sayfaya taşınıyor: cihaz düzeyi proxy, kimlik bilgileri, çıkış IP sınaması ve doğrudan bağlantıya dönüş burada yönetilecek.',
+      relay_hint:
+        'Kimlik bilgili proxy cihaz içi aktarıcıda tutulur: uygulamalar yalnızca 127.0.0.1:port adresine bağlanır, kimlik bilgileri uygulama yapılandırmasına yazılmaz.',
+      actions: {
+        save: 'Kaydet',
+        probe: 'Çıkış IP sınaması',
+        clear: 'Doğrudan bağlantıya dön',
+        refresh: 'Yenile',
+        restart_relay: 'Aktarıcıyı yeniden başlat',
+      },
+      empty: {
+        title: 'Henüz çıkış yapılandırılmadı',
+        hint: 'Bir proxy kaydedip cihaz düzeyi proxy etkinleştirildiğinde durum ve sınama sonucu burada görünür.',
+      },
+    },
+    about: {
+      title: 'Hakkında',
+      version: 'Sürüm',
+      author: 'Geliştirici',
+      repository: 'Depo',
+      website: 'Web sitesi',
+      license: 'Lisans',
+      license_value: 'GPL-3.0-or-later',
+      description: 'Tek uygulama, tek kimlik.',
+      follow: 'Modülü takip et',
+      translators: 'Çevirmenler',
     },
     status: {
       title: 'Ana Sayfa',
@@ -1626,6 +1923,12 @@ export const messages = {
         all: 'Hepsi',
         configured: 'Yapılandırıldı',
         unconfigured: 'Yapılandırılmadı',
+        system: 'Sistem uygulamaları',
+      },
+      subtitle: 'Tek bir uygulamaya kimlik atayın; yapılandırılmamış uygulamalar etkilenmez.',
+      inherit: {
+        title: 'Klonlar ve devralma',
+        desc: '{count} klon temel uygulamanın kimliğini devralır; klon için kaydedilen yapılandırma önceliklidir ve temel uygulamaya geri yazılmaz.',
       },
       status: {
         configured: 'Yapılandırıldı',
@@ -1668,6 +1971,12 @@ export const messages = {
       },
     },
     settings: {
+      appearance: {
+        title: 'Görünüm',
+      },
+      advanced: {
+        title: 'Gelişmiş',
+      },
       display: {
         title: 'Görüntüleme Ayarları',
         theme: {

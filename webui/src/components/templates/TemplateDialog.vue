@@ -233,12 +233,12 @@ watch(
 .package-manager {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 10px;
 }
 
 .package-input-wrapper {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
   align-items: center;
 }
 
@@ -278,22 +278,23 @@ watch(
 
 .app-name {
   font-size: 0.875rem;
-  color: var(--text);
+  color: var(--ink);
 }
 
 .package-name {
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-family: monospace;
+  color: var(--muted);
 }
 
 .package-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--background);
-  border-radius: 0.5rem;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
   max-height: 300px;
   overflow-y: auto;
   scrollbar-width: none;
@@ -305,26 +306,25 @@ watch(
 }
 
 .package-list-empty {
-  padding: 1.5rem;
+  padding: 18px 12px;
   text-align: center;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  background: var(--background);
-  border-radius: 0.5rem;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-btn);
 }
 
 .package-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.625rem 0.75rem;
-  background: var(--card);
-  border-radius: 0.375rem;
-  transition: all 0.2s ease;
-}
-
-.package-item:hover {
-  background: var(--hover);
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 
 .package-info {
@@ -336,119 +336,78 @@ watch(
 }
 
 .package-name-text {
-  font-size: 0.875rem;
-  font-family: monospace;
-  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink);
   word-break: break-all;
 }
 
 .app-name-text {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-</style>
-
-<style scoped>
-.template-dialog :deep(.el-dialog) {
-  margin-top: 5vh !important;
-  margin-bottom: 80px !important;
-  max-height: calc(100vh - 80px - 10vh) !important;
-  display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.15) !important;
-  backdrop-filter: blur(40px) saturate(150%) brightness(1.1);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  box-sizing: border-box;
-  width: 90%;
-  transform: translateZ(0);
-  contain: layout style paint;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog) {
-    background: rgba(20, 20, 20, 0.6) !important;
-    backdrop-filter: blur(40px) saturate(150%) brightness(0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-}
-
-.template-dialog :deep(.el-dialog__body) {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-  padding-bottom: 2rem;
-  max-height: calc(100vh - 200px);
-  background: transparent;
-}
-
-.template-dialog :deep(.el-dialog__header) {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog__header) {
-    background: rgba(0, 0, 0, 0.2);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-}
-
-.template-dialog :deep(.el-dialog__footer) {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  flex-shrink: 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-dialog__footer) {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.3);
-  }
-}
-
-.template-dialog :deep(.el-overlay) {
-  z-index: 2000 !important;
-  backdrop-filter: blur(8px) saturate(110%) !important;
-  background-color: rgba(0, 0, 0, 0.25) !important;
-  contain: layout style paint;
-  overflow: hidden;
-}
-
-@media (prefers-color-scheme: dark) {
-  .template-dialog :deep(.el-overlay) {
-    backdrop-filter: blur(8px) saturate(110%) !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-  }
-}
-
-.template-dialog :deep(.el-dialog__body) {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  contain: layout style paint;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.template-dialog :deep(.el-dialog__body::-webkit-scrollbar) {
-  display: none;
+  font-size: 10.5px;
+  color: var(--muted);
 }
 </style>
 
 <style>
-.template-dialog-modal {
-  backdrop-filter: blur(12px) saturate(120%) !important;
-  background-color: rgba(0, 0, 0, 0.25) !important;
+/*
+ * 模板编辑弹窗的外壳：与模板页/导入导出弹窗同一套 B/A 令牌。
+ * 下拉、输入、折叠面板的细节样式由 style.css 统一处理，这里只管外壳。
+ */
+.el-dialog.template-dialog {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
+  box-sizing: border-box;
+  margin-top: 6vh !important;
+  margin-bottom: 80px !important;
+  max-height: calc(100vh - 80px - 6vh) !important;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (prefers-color-scheme: dark) {
-  .template-dialog-modal {
-    backdrop-filter: blur(12px) saturate(120%) !important;
-    background-color: rgba(0, 0, 0, 0.4) !important;
-  }
+html.dark .el-dialog.template-dialog {
+  box-shadow: none;
+}
+
+.el-dialog.template-dialog .el-dialog__header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.el-dialog.template-dialog .el-dialog__title {
+  font-size: 14px;
+  font-weight: 640;
+  color: var(--ink);
+}
+
+.el-dialog.template-dialog .el-dialog__headerbtn {
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+}
+
+.el-dialog.template-dialog .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 16px 16px;
+  background: var(--surface);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.el-dialog.template-dialog .el-dialog__body::-webkit-scrollbar {
+  display: none;
+}
+
+.el-dialog.template-dialog .el-dialog__footer {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex-shrink: 0;
 }
 </style>

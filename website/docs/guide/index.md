@@ -1,53 +1,55 @@
 # DevMask 📱
 
-一个基于 Zygisk 的机型伪装模块，可以为不同的应用配置不同的设备型号。
+**一个应用，一个身份。** DevMask 按包名伪造机型、Build 指纹、系统属性与 DPI，并可为每个应用单独指定出口网络；未配置的应用读取的仍是真机值。
 
-## 特性 ✨
+## 它解决什么
 
-- 🎯 **精确控制**: 为每个应用单独配置设备信息，仅对配置的应用生效，不影响其他应用
-- 📁 **模板管理**: 多机型模板，便捷应用到多包名
-- 🔄 **实时生效**: 修改配置后仅需重启应用，无需重启系统
-- 🛡️ **安全可靠**: 基于 Zygisk 框架，模块化设计
-- 📝 **简单配置**: 使用 TOML 格式配置文件，易于编辑
-- 🎭 **统一执行流**: 无需选择模式，自动调度 JNI 字段伪装、COW 属性伪造与 companion 服务
-- 🔒 **COW 属性引擎**: 进程私有属性区副本伪造系统属性，per-process 隔离、模块零驻留、不留写映射指纹
-- 🌐 **WebUI管理**: 提供图形化界面，方便配置管理
+十个应用装在一台手机上，平台侧靠机型、Build、属性与 DPI 就能把你串成同一个人；换一台设备，出口 IP 往往还是同一条宽带。DevMask 把这两件事拆开：
 
-## WebUI 功能 🖥️
+- **设备侧**：按包名伪造机型与系统属性，只影响配置过的应用
+- **网络侧**：为设备或单个应用指定出口代理，需要认证的代理由设备内中继代填凭据
+- **管理侧**：多台设备聚合到 Manager / Relay，统一机型、代理池与批量下发
 
-DevMask 提供了现代化的 Web 管理界面
+## 能力一览
 
-- 📋 **模板管理**: 创建、编辑和删除机型模板，批量应用到多个包名
-- 📱 **应用管理**: 直观查看已安装应用及其配置状态，支持多用户应用显示
-- 🖋️ **配置编辑**: 图形化界面编辑应用配置，支持模板应用和自定义配置
-- 🌍 **多语言支持**: 简体中文、English、Türkçe
+| 能力 | 说明 |
+| --- | --- |
+| 机型 / 模板 | manufacturer、brand、model、device、product、board、SoC、fingerprint、build id 整套字段，按模板批量套用 |
+| 系统属性 | 属性族展开（含 ro.product 多分区副本）、自定义属性白名单、__DELETE__ / __EMPTY__ 语义 |
+| 版本与 DPI | Android 版本、SDK、安全补丁、Build.DISPLAY、增量号；按应用调整显示密度（120–640） |
+| 应用级出口 | 按包名指定 HTTP 或 SOCKS5 代理，不影响其它应用 |
+| 认证中继 | 需要用户名密码的代理由设备内中继代填，支持 HTTP Basic 与 SOCKS5（RFC 1929） |
+| 批量与审计 | Manager 代理池、绑定、job 下发、逐设备结果、出口 IP 校验、操作日志 |
 
-## 配置说明 ⚙️
+## 快速开始
 
-详细的配置说明请参考 [配置文档](./configuration/index.md)。
+1. 安装模块（需要 Zygisk 实现，如 ZygiskNext）
+2. 打开 WebUI，在「模板」里建一个机型模板，或直接编辑某个应用
+3. 在「应用」里把模板绑到包名，重启该应用生效
+4. 需要出口代理时，在设置里填写；带账号密码的代理会自动走设备内中继
+5. 多设备场景：启动 Manager，添加设备（地址 + 设备 Token），之后用代理池与批量下发统一管理
 
-配置文件位于 `/data/adb/devmask/config/config.toml`，使用 TOML 格式。修改配置后仅需重启对应应用即可生效，无需重启系统。
+## WebUI
 
-## 模板配置贡献 🎁
+- **概览**：模块版本、伪装应用数、模板数、出口状态与操作入口
+- **模板**：新建、编辑、导入导出，支持在线模板库检索与套用
+- **应用**：按包名配置身份，分身可单独配置或继承主应用
+- **设置**：主题 / 语言、网络出口、调试开关与 API 访问
 
-感谢社区成员的贡献，你也可以参与！DevMask 配置仓库：
+更多细节见 [WebUI 指南](./webui.md)、[配置说明](./configuration/index.md) 与 [常见问题](./faq.md)。
 
-- 📦 [device_faker_config](https://github.com/Seyud/device_faker_config) - 贡献机型模板配置
+## 在线模板库
 
-贡献设备配置，帮助更多用户获得更好的机型伪装效果！
+在线模板库的机型配置来自社区仓库 [device_faker_config](https://github.com/Seyud/device_faker_config)，可直接在 WebUI 里预览并套用到包名。
 
 ## 致谢 🙏
 
 本项目在开发过程中参考了以下优秀项目：
 
 - [zygisk-dump-dex](https://github.com/ri-char/zygisk-dump-dex) - 提供了 Rust 开发 Zygisk 模块的原型参考
-- [zygisk-api-rs](https://github.com/rmnscnce/zygisk-api-rs) - 提供了 Zygisk API的 Rust 依赖支持
+- [zygisk-api-rs](https://github.com/rmnscnce/zygisk-api-rs) - 提供了 Zygisk API 的 Rust 依赖支持
 - [MiPushZygisk](https://github.com/wushidia/MiPushZygisk) - 提供了 Zygisk 机型伪装的方案参考
-
-感谢这些项目的开发者！💖
 
 ---
 
 **📱 让设备不为应用的机型限制所困！** 🚀
-
-> 💝 如果这个模块对你有帮助，可以给个 ⭐ Star 支持一下

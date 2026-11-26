@@ -1,79 +1,80 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#f2f9ff" id="theme-color">
-  <title>DevMask Manager</title>
-  <link rel="stylesheet" href="https://mui.kernelsu.org/internal/insets.css">
-  <script>
-    (() => {
-      const SETTINGS_KEY = 'devmask_settings'
-      const DARK_THEME_COLOR = '#1a2538'
-      const LIGHT_THEME_COLOR = '#f2f9ff'
-      const DARK_BACKGROUND = '#0f172a'
-      const LIGHT_BACKGROUND = '#f9fafb'
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#f4f5f7" id="theme-color" />
+    <title>DevMask</title>
+    <link rel="stylesheet" href="https://mui.kernelsu.org/internal/insets.css" />
+    <script>
+      ;(function () {
+        // 首帧之前就把主题定下来：任何情况下都不出现"先浅后深"的白闪。
+        var SETTINGS_KEY = 'devmask_settings'
+        var DARK_THEME_COLOR = '#0b0e13'
+        var LIGHT_THEME_COLOR = '#f4f5f7'
 
-      const root = document.documentElement
-      const themeMeta = document.getElementById('theme-color')
+        var root = document.documentElement
+        var themeMeta = document.getElementById('theme-color')
 
-      const resolveStoredTheme = () => {
-        try {
-          const raw = window.localStorage.getItem(SETTINGS_KEY)
-          if (!raw) {
+        var resolveStoredTheme = function () {
+          try {
+            var raw = window.localStorage.getItem(SETTINGS_KEY)
+            if (!raw) {
+              return 'system'
+            }
+
+            var parsed = JSON.parse(raw)
+            var theme = parsed && parsed.theme
+            return theme === 'light' || theme === 'dark' || theme === 'system' ? theme : 'system'
+          } catch (error) {
             return 'system'
           }
-
-          const parsed = JSON.parse(raw)
-          const theme = parsed?.theme
-          return theme === 'light' || theme === 'dark' || theme === 'system'
-            ? theme
-            : 'system'
-        } catch {
-          return 'system'
-        }
-      }
-
-      const theme = resolveStoredTheme()
-      const prefersDark =
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-      const isDark = theme === 'dark' || (theme === 'system' && prefersDark)
-
-      root.classList.toggle('dark', isDark)
-      root.dataset.theme = isDark ? 'dark' : 'light'
-      root.style.colorScheme = isDark ? 'dark' : 'light'
-      root.style.backgroundColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND
-
-      if (themeMeta) {
-        themeMeta.setAttribute('content', isDark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR)
-      }
-
-      const applyBodyBackground = () => {
-        if (!document.body) {
-          return
         }
 
-        document.body.style.margin = '0'
-        document.body.style.backgroundColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND
+        var theme = resolveStoredTheme()
+        var prefersDark =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+        var isDark = theme === 'dark' || (theme === 'system' && prefersDark)
+        var background = isDark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR
 
-        const app = document.getElementById('app')
-        if (app) {
-          app.style.minHeight = '100vh'
-          app.style.backgroundColor = isDark ? DARK_BACKGROUND : LIGHT_BACKGROUND
+        root.classList.toggle('dark', isDark)
+        root.dataset.theme = isDark ? 'dark' : 'light'
+        root.style.colorScheme = isDark ? 'dark' : 'light'
+        root.style.backgroundColor = background
+
+        if (themeMeta) {
+          themeMeta.setAttribute('content', background)
         }
-      }
 
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', applyBodyBackground, { once: true })
-      } else {
-        applyBodyBackground()
-      }
-    })()
-  </script>
-</head>
-<body style="margin: 0; background: #f9fafb;">
-  <div id="app"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+        var applyBodyBackground = function () {
+          if (!document.body) {
+            return
+          }
+
+          document.body.style.margin = '0'
+          document.body.style.backgroundColor = background
+
+          var app = document.getElementById('app')
+          if (app) {
+            app.style.minHeight = '100vh'
+            app.style.backgroundColor = background
+          }
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', applyBodyBackground, { once: true })
+        } else {
+          applyBodyBackground()
+        }
+      })()
+    </script>
+  </head>
+  <body style="margin: 0; background: #f4f5f7">
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

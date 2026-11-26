@@ -5,46 +5,62 @@
 -->
 
 <template>
-  <div class="page-header">
-    <h2 class="page-title">{{ t('templates.title') }}</h2>
-    <div class="header-toolbar">
-      <div class="search-wrapper">
-        <Search :size="18" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          type="text"
-          class="search-input"
-          :placeholder="t('templates.search.placeholder')"
-        />
-        <button v-if="searchQuery" class="clear-btn" @click="clearSearch">
-          <X :size="16" />
-        </button>
+  <header class="tpl-head">
+    <div class="tpl-head__top">
+      <div class="tpl-head__copy">
+        <h1 class="dm-page-title">{{ t('templates.title') }}</h1>
+        <span class="dm-pill dm-pill--muted tpl-head__count">
+          {{ t('overview.metrics.templates_value', { count }) }}
+        </span>
       </div>
-      <div class="header-actions" :class="{ 'vertical-layout': locale === 'en' }">
-        <button class="add-btn secondary" @click="emit('open-online')">
-          <Download :size="18" />
-          {{ t('templates.actions.online') }}
-        </button>
-        <button class="add-btn" @click="emit('open-create')">
-          <Plus :size="18" />
-          {{ t('templates.actions.new') }}
-        </button>
-        <button class="add-btn secondary" @click="emit('open-transfer')">
-          <ArrowLeftRight :size="18" />
-          {{ t('templates.actions.transfer') }}
-        </button>
-      </div>
+
+      <button type="button" class="tpl-new" @click="emit('open-create')">
+        <Plus :size="15" :stroke-width="2.2" aria-hidden="true" />
+        {{ t('templates.actions.new') }}
+      </button>
     </div>
-  </div>
+
+    <div class="tpl-search">
+      <Search :size="15" class="tpl-search__icon" aria-hidden="true" />
+      <input
+        v-model="searchQuery"
+        type="text"
+        class="tpl-search__input"
+        enterkeyhint="search"
+        :placeholder="t('templates.search.placeholder')"
+        :aria-label="t('templates.search.placeholder')"
+      />
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="tpl-search__clear"
+        :aria-label="t('common.cancel')"
+        @click="clearSearch"
+      >
+        <X :size="12" />
+      </button>
+    </div>
+
+    <div class="tpl-acts">
+      <button type="button" class="tpl-act" @click="emit('open-online')">
+        <Download :size="14" aria-hidden="true" />
+        {{ t('templates.actions.online') }}
+      </button>
+      <button type="button" class="tpl-act" @click="emit('open-transfer')">
+        <ArrowLeftRight :size="14" aria-hidden="true" />
+        {{ t('templates.actions.transfer') }}
+      </button>
+    </div>
+  </header>
 </template>
 
 <script setup lang="ts">
-import { ArrowLeftRight, Plus, Download, Search, X } from '@lucide/vue'
-import { toRefs, ref, watch } from 'vue'
+import { ArrowLeftRight, Download, Plus, Search, X } from '@lucide/vue'
+import { ref, watch } from 'vue'
 import { useI18n } from '../../utils/i18n'
 
-const props = defineProps<{ locale: string }>()
-const { locale } = toRefs(props)
+defineProps<{ count: number }>()
+
 const emit = defineEmits<{
   'open-online': []
   'open-create': []
@@ -66,149 +82,139 @@ watch(searchQuery, (value) => {
 </script>
 
 <style scoped>
-.page-header {
+/* 页头：标题 + 计数 + 主操作；搜索与次操作各占一行，避免 390px 下互相挤压 */
+.tpl-head {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 10px;
+  padding: 4px 0 14px;
 }
 
-.page-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.3;
-}
-
-.header-toolbar {
+.tpl-head__top {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.header-actions {
+.tpl-head__copy {
   display: flex;
-  gap: 0.375rem;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-
-.header-actions.vertical-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: 100%;
-  gap: 0.375rem;
-}
-
-.header-actions.vertical-layout .add-btn {
-  width: 100%;
-}
-
-.header-actions.vertical-layout .add-btn:last-child {
-  grid-column: 1 / -1;
-}
-
-.search-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  flex: 1;
-  max-width: 400px;
-  min-width: 200px;
-}
-
-.search-icon {
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.search-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 0.875rem;
-  color: var(--text);
-  outline: none;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
 
-.search-input::placeholder {
-  color: var(--text-secondary);
+.tpl-head__count {
+  flex: none;
+  /* 底色/边框交给 .dm-pill--muted 基类，避免与网络页同一胶囊两种观感 */
+  color: var(--muted);
 }
 
-.clear-btn {
+.tpl-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 34px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: var(--radius-btn);
+  background: var(--brand);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 640;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.dark .tpl-new {
+  color: #06101f;
+}
+
+.tpl-new:active {
+  opacity: 0.88;
+}
+
+.tpl-search {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 11px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  box-shadow: var(--shadow-1);
+}
+
+html.dark .tpl-search {
+  box-shadow: none;
+}
+
+.tpl-search__icon {
+  flex: none;
+  color: var(--dim);
+}
+
+.tpl-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.tpl-search__input::placeholder {
+  color: var(--dim);
+}
+
+.tpl-search__clear {
+  display: grid;
+  place-items: center;
+  flex: none;
   width: 20px;
   height: 20px;
-  background: var(--background);
-  border: none;
+  border: 0;
   border-radius: 50%;
-  color: var(--text-secondary);
+  background: var(--surface-3);
+  color: var(--muted);
   cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.clear-btn:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
-.add-btn {
+.tpl-acts {
   display: flex;
+  gap: 8px;
+}
+
+.tpl-act {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.375rem;
-  padding: 0.625rem 0.75rem;
-  min-width: 0;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.1;
-  transition: all 0.2s ease;
+  gap: 6px;
+  flex: 1 1 0;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-btn);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  -webkit-user-select: none;
-  white-space: nowrap;
 }
 
-.add-btn :deep(svg) {
-  flex-shrink: 0;
+.tpl-act:active {
+  background: var(--surface-2);
 }
 
-@media (max-width: 640px) {
-  .header-toolbar {
-    align-items: stretch;
-  }
-
-  .header-actions {
-    width: 100%;
-  }
-
-  .add-btn {
-    flex: 1 1 calc(33.333% - 0.25rem);
-    padding-inline: 0.625rem;
-  }
-}
-
-.add-btn.secondary {
-  background: var(--card);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.add-btn:active {
-  opacity: 0.8;
-  transform: scale(0.98);
+.tpl-act :deep(svg) {
+  color: var(--muted);
 }
 </style>

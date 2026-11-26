@@ -5,58 +5,79 @@
 -->
 
 <template>
-  <div class="page-header">
-    <div class="page-header-top">
-      <h2 class="page-title">{{ t('apps.title') }}</h2>
-      <el-button class="system-toggle-btn" plain size="small" @click="toggleSystemApps">
-        {{ showSystemApps ? t('apps.actions.hide_system') : t('apps.actions.show_system') }}
-      </el-button>
+  <div class="apps-filters">
+    <!-- 搜索：白卡 + 放大镜，键入只更新输入值（防抖在页面里） -->
+    <div class="search">
+      <Search :size="15" :stroke-width="1.9" class="search__icon" aria-hidden="true" />
+      <input
+        v-model="searchModel"
+        class="search__input"
+        type="text"
+        enterkeyhint="search"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="none"
+        spellcheck="false"
+        :placeholder="t('apps.search_placeholder')"
+        :aria-label="t('apps.search_placeholder')"
+      />
+      <button
+        v-if="searchQuery"
+        type="button"
+        class="search__clear"
+        :aria-label="t('common.cancel')"
+        @click="searchModel = ''"
+      >
+        <X :size="13" :stroke-width="2" aria-hidden="true" />
+      </button>
     </div>
-    <el-input
-      v-model="searchModel"
-      :placeholder="t('apps.search_placeholder')"
-      clearable
-      class="search-input"
-    >
-      <template #prefix>
-        <el-icon><Search /></el-icon>
-      </template>
-    </el-input>
-  </div>
 
-  <div class="filter-tabs">
-    <button :class="['filter-tab', { active: filterType === 'all' }]" @click="setFilter('all')">
-      {{ t('apps.tabs.all') }} <span v-if="!loading">({{ totalCount }})</span>
-    </button>
-    <button
-      :class="['filter-tab', { active: filterType === 'configured' }]"
-      @click="setFilter('configured')"
-    >
-      {{ t('apps.tabs.configured') }} ({{ configuredCount }})
-    </button>
+    <!-- 三段胶囊：已配置 / 全部 / 系统应用 -->
+    <div class="seg" role="tablist">
+      <button
+        v-for="option in options"
+        :key="option.id"
+        type="button"
+        role="tab"
+        :class="['seg__item', { 'seg__item--active': filterType === option.id }]"
+        :aria-selected="filterType === option.id"
+        :aria-label="option.srLabel"
+        @click="setFilter(option.id)"
+      >
+        <span class="seg__label">{{ option.label }}</span>
+        <span v-if="option.count !== null" class="seg__count dm-mono">{{ option.count }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { Search, X } from '@lucide/vue'
 import { useI18n } from '../../utils/i18n'
 
-type FilterType = 'all' | 'configured'
+type FilterType = 'configured' | 'all' | 'system'
+
+interface FilterOption {
+  id: FilterType
+  label: string
+  /** null = 该分组还没加载（系统应用未读取时不显示数量，避免显示假的 0） */
+  count: number | null
+  /** 读屏用的一句话标签（含数量） */
+  srLabel: string
+}
 
 const props = defineProps<{
   searchQuery: string
   filterType: FilterType
-  totalCount: number
   configuredCount: number
-  showSystemApps: boolean
-  loading?: boolean
+  totalCount: number
+  systemCount: number | null
 }>()
 
 const emit = defineEmits<{
   'update:searchQuery': [string]
   'update:filterType': [FilterType]
-  'update:showSystemApps': [boolean]
 }>()
 
 const { t } = useI18n()
@@ -66,111 +87,158 @@ const searchModel = computed({
   set: (val: string) => emit('update:searchQuery', val),
 })
 
+function withCount(label: string, count: number | null): Omit<FilterOption, 'id'> {
+  return {
+    label,
+    count,
+    // 视觉上标签与数量是两个 span（靠 gap 分隔），读屏需要一句话：已配置 3
+    srLabel: count === null ? label : `${label} ${count}`,
+  }
+}
+
+const options = computed<FilterOption[]>(() => [
+  { id: 'configured', ...withCount(t('apps.tabs.configured'), props.configuredCount) },
+  { id: 'all', ...withCount(t('apps.tabs.all'), props.totalCount) },
+  { id: 'system', ...withCount(t('apps.tabs.system'), props.systemCount) },
+])
+
 const setFilter = (type: FilterType) => emit('update:filterType', type)
-const toggleSystemApps = () => emit('update:showSystemApps', !props.showSystemApps)
 </script>
 
 <style scoped>
-.page-header {
+.apps-filters {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.page-header-top {
+/* —— 搜索框 —— */
+.search {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  height: 44px;
+  padding: 0 13px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
 }
 
-.page-title {
+html.dark .search {
+  box-shadow: none;
+}
+
+.search:focus-within {
+  border-color: var(--brand);
+}
+
+.search__icon {
+  flex: none;
+  color: var(--dim);
+}
+
+.search__input {
   flex: 1 1 auto;
   min-width: 0;
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text);
-  line-height: 1.2;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  appearance: none;
 }
 
-.system-toggle-btn {
-  flex: 0 1 11rem;
-  min-width: 0;
-  height: auto;
-  margin-left: auto;
-  padding: 0.5rem 0.875rem;
-  border-radius: 0.75rem;
-  border-color: var(--border);
-  background: var(--card-bg);
-  color: var(--text);
-  box-shadow: 0 2px 6px var(--shadow);
-  transition:
-    transform 0.16s ease,
-    opacity 0.16s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+.search__input::placeholder {
+  color: var(--dim);
 }
 
-.system-toggle-btn :deep(span) {
-  white-space: normal;
-  text-align: center;
-  line-height: 1.2;
+.search__clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.system-toggle-btn:hover,
-.system-toggle-btn:focus-visible {
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.system-toggle-btn:active {
-  transform: scale(0.97);
-  opacity: 0.88;
-  box-shadow: 0 1px 3px var(--shadow);
-}
-
-.search-input {
-  width: 100%;
-  max-width: 400px;
-}
-
-.filter-tabs {
+/* —— 三段胶囊 —— */
+.seg {
   display: flex;
-  gap: 0.5rem;
-  padding-bottom: 0.5rem;
+  gap: 3px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-1);
 }
 
-.filter-tab {
-  flex: 1;
-  padding: 0.5rem 1rem;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
+html.dark .seg {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.seg__item {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 1;
   white-space: nowrap;
-  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.filter-tab:active {
-  transform: scale(0.95);
-  opacity: 0.8;
+.seg__item:active {
+  opacity: 0.82;
 }
 
-.filter-tab.active {
-  background: var(--primary);
-  color: white;
-  border-color: var(--primary);
+.seg__item--active {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 640;
+}
+
+.seg__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seg__count {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.seg__item--active .seg__count {
+  color: var(--brand);
 }
 </style>
