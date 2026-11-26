@@ -21,15 +21,22 @@
 | 更新通道 | `module/module.prop` 的 `updateJson` → `uamind/DevMask/raw/main/Update.json` |
 | 本地远端 | `origin` → `https://github.com/uamind/DevMask.git` |
 
-## 3. 平台侧待办（需要 GitHub / Gitee 操作）
+## 3. 平台侧状态
 
-1. **仓库改名/转移**：`uamind/device_faker` → `uamind/DevMask`（GitHub 会对旧地址 301 跳转）。
-2. **创建模板仓 `uamind/devmask-config`**：结构与上游一致，见第 4 节。
-3. **Gitee 镜像**：建 `uamind/devmask-config`（或保留同名 mirror 仓），与 GitHub 同步；WebUI 的 gitee 源已指向该地址。
-4. **发布资产**：Release 附件命名为 `devmask-v<version>.zip`，与 `Update.json` 的 `zipUrl` 对齐；如后端打包脚本输出 `devmask-(release).zip`，在 CI 里补一步重命名。
-5. **GitHub Pages**：仓库 Settings → Pages 指向 `website/docs/.vitepress/dist` 的构建产物；确认 `BASE='/devmask/'` 与新仓库名一致。
-6. **Secrets**：`BOT_TOKEN` / `CHAT_ID` / `MESSAGE_THREAD_ID` 在新仓库重新配置（CI 通知用）。
-7. **旧仓归档**：`Seyud/device_faker` 侧加归档说明与跳转链接；我们不要删除旧仓，避免历史 issue/PR 与 GPL 溯源断链。
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 仓库改名 `uamind/device_faker` → `uamind/DevMask` | ✅ 2026-11-26 | 旧地址 301 跳转；description/homepage 已更新 |
+| 模板仓 `uamind/devmask-config` | ✅ 已建 | 911 个模板 + `dist/templates.toml` + bundle/validate 脚本，MIT |
+| GitHub Pages | ✅ 已启用 | https://uamind.github.io/DevMask/ ，`BASE='/DevMask/'`（路径大小写敏感，已踩过一次坑） |
+| Release v0.0.1 | ✅ 已发布 | 资产 `devmask-v0.0.1.zip`，与 `Update.json` 对齐 |
+| 更新通道 | ✅ 可用 | `raw.githubusercontent.com/uamind/DevMask/main/Update.json` |
+| CI（build / test / website） | ✅ 已跑通 | 见下方环境说明 |
+| Gitee 镜像 | ⏳ | 暂无 Gitee 凭据；当前 WebUI 的 gitee 源走 jsDelivr 读 GitHub 仓，不影响使用 |
+| 旧仓归档说明 | ⏳ | 需上游 `Seyud/device_faker` 侧操作，避免历史 issue 断链 |
+
+### CI 环境说明
+
+`Test (host crates)` 里 6 个 relay uid 用例在 GitHub runner 上失败（`app_scoped_listener_resolves_uids_and_requires_restart` 等），原因是 runner 上本地连接 uid 可解析，构造不出“未知 uid + 防火墙已生效”场景；与迁移和 WebUI 改动无关，真机/本地环境可过。后续可给这些用例加 `#[ignore]` 或注入 uid 解析失败点。
 
 ## 4. 模板仓 `uamind/devmask-config` 结构
 
