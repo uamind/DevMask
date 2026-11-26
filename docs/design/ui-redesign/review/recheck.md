@@ -4,6 +4,7 @@
 > 日期：2026-11-26 11:36
 > 范围：t5 报告里的 F1 / F2 / F3 / F12b / F8 / F6 / F10 / F14 / F16 共 9 项
 > 方法：vite dev（dev mock）+ headless Chrome CDP，390×844@2x，浅/深两主题**实测 computed style 与对比度**，不只看代码
+> 归档说明（F-7，v0.0.2）：本轮的 `recheck-*.png` 中间截图已在截图裁剪中删除 —— `review/` 只保留 `final-*`、`final2-*`、`recheck2-*`、`apps-inherit.png` 与四份报告。下文的截图引用因此改为文件名（不再是链接），需要看图时先 `git log -- docs/design/ui-redesign/review/recheck-network-dark.png` 找到最后一个含该图的提交，再 `git show <commit>:docs/design/ui-redesign/review/recheck-network-dark.png` 取回。本报告的实测数字与 `file:line` 不受影响。
 
 ## 0. 结论
 
@@ -39,7 +40,7 @@
 | 浅色 | `#F1F3F6`（--surface-3） | `#6B7280` | 1px `#E9EBF0` | **4.35:1** | 2.16:1（#96ADFF + 白字） |
 
 - 深色达到 AA（≥4.5），浅色 4.35 略低于 4.5 —— 但**禁用态不受 WCAG 对比度约束**，且从"几乎看不见"变成"一眼能读出是禁用"，判 PASS。
-- 截图：[recheck-network-dark.png](recheck-network-dark.png)（禁用胶囊 = 淡蓝底 + 灰字，不再是亮蓝底白字）。
+- 截图：`recheck-network-dark.png`（禁用胶囊 = 淡蓝底 + 灰字，不再是亮蓝底白字）。
 
 **删除确认框红色主按钮（是否被误伤）**：
 
@@ -49,7 +50,7 @@
 | 深色 | `#F87171`（--danger 深色值） | `#FFFFFF` | **2.77:1** | ✅ 仍是白字红底（新规则带 `!important` 的白字优先），**未被误伤** |
 
 - 验证要点：新增的 `html.dark .el-button--primary:not(.is-disabled){color:#06101f}` 没有带 `!important`，而 `.el-message-box__btns .el-button--primary`（style.css:880-885）的 `color:#fff !important` 优先级更高，所以确认框没有被染成深字。实测也如此。
-- 截图：[recheck-delete-confirm-dark.png](recheck-delete-confirm-dark.png)、[recheck-delete-confirm-light.png](recheck-delete-confirm-light.png)。
+- 截图：`recheck-delete-confirm-dark.png`、`recheck-delete-confirm-light.png`。
 - 深色红底白字只有 2.77:1，属**既有问题**（--danger 深色值一直是 #F87171），不是这批引入；见 R3。
 
 ---
@@ -67,7 +68,7 @@
 
 - **底色完全一致** ✅；**≥1.2:1** ✅（1.21，改进前分别是 1.14 / 1.10）。
 - 补充口径：胶囊实际坐在**卡片底** `#141922` 上时是 **1.11:1**（改进前 1.04），形状主要靠 12% 白边立起来 —— 数值达标，但视觉上是"细描边胶囊"，可接受。
-- 截图：[recheck-network-dark.png](recheck-network-dark.png)（直连胶囊有可见描边）、[recheck-delete-confirm-dark.png](recheck-delete-confirm-dark.png)（背景里的「1 套」胶囊同样有描边）。
+- 截图：`recheck-network-dark.png`（直连胶囊有可见描边）、`recheck-delete-confirm-dark.png`（背景里的「1 套」胶囊同样有描边）。
 
 ### ⚠️ R1（新回退，medium）：浅色胶囊被一起"压平"
 
@@ -78,7 +79,7 @@
 | 模板页「1 套」 | 白底 #FFF + 1px #E9EBF0 边（1.09:1，清晰） | `#F1F3F6` + **0px 边** | **1.02:1**，胶囊形状消失，只剩文字 |
 | 网络页「直连」 | #F1F3F6 无边框（本来就弱） | 同上 | 1.02:1 |
 
-- 截图证据：[recheck-templates-light.png](recheck-templates-light.png)（「1 adet / 1 套」只剩文字，没有胶囊轮廓）。
+- 截图证据：`recheck-templates-light.png`（「1 adet / 1 套」只剩文字，没有胶囊轮廓）。
 - 建议（一处改，两处同时修好）：
 
 ```css
@@ -103,7 +104,7 @@
 | 网络 | 当前状态 / 代理定义 / 探测结果 | `#8695AC` | **6.36:1** ×3 | 3.57:1 |
 
 - 字号/字族仍是 11px `ui-monospace` + UPPERCASE + 0.1em（A 方向形态不变）✅
-- 截图：[recheck-settings-dark.png](recheck-settings-dark.png)、[recheck-network-dark.png](recheck-network-dark.png)（分区标题明显比改版前亮一档）。
+- 截图：`recheck-settings-dark.png`、`recheck-network-dark.png`（分区标题明显比改版前亮一档）。
 
 ---
 
@@ -142,7 +143,7 @@
 | 深色 | `radial-gradient(circle, rgba(0,0,0,0), rgba(0,0,0,0) 65%)` | 同（全透明） |
 | 浅色 | `rgba(76,120,255,.55) → transparent` | `rgba(126,86,255,.4) → transparent` |
 
-✅ PASS（深色 hero 变为纯 `#151B26` + hairline，浅色保留品牌光斑）。截图：[recheck-overview-dark.png](recheck-overview-dark.png)。
+✅ PASS（深色 hero 变为纯 `#151B26` + hairline，浅色保留品牌光斑）。截图：`recheck-overview-dark.png`。
 
 ### F14 深色主按钮深字（`style.css:1024-1026`）
 
@@ -192,20 +193,20 @@ EXIT:0
 
 | 文件 | 覆盖项 |
 | --- | --- |
-| [recheck-network-dark.png](recheck-network-dark.png) | F1 禁用胶囊、F2 直连胶囊、F3 网络分区标题、F14 深字主按钮 |
-| [recheck-settings-dark.png](recheck-settings-dark.png) | F3 三组标题、F14「开始转换」深字 |
-| [recheck-overview-dark.png](recheck-overview-dark.png) | F10 去光斑、F6 三列、R2 名称断词 |
-| [recheck-delete-confirm-dark.png](recheck-delete-confirm-dark.png) | F1b 红色主按钮未被误伤、F2 背景里的「1 套」胶囊 |
+| `recheck-network-dark.png` | F1 禁用胶囊、F2 直连胶囊、F3 网络分区标题、F14 深字主按钮 |
+| `recheck-settings-dark.png` | F3 三组标题、F14「开始转换」深字 |
+| `recheck-overview-dark.png` | F10 去光斑、F6 三列、R2 名称断词 |
+| `recheck-delete-confirm-dark.png` | F1b 红色主按钮未被误伤、F2 背景里的「1 套」胶囊 |
 
 佐证（浅色 / 状态对照）：
 
 | 文件 | 用途 |
 | --- | --- |
-| [recheck-templates-light.png](recheck-templates-light.png) | R1：浅色「N 套」胶囊无轮廓 |
-| [recheck-network-light.png](recheck-network-light.png) | F1 浅色禁用态、F2 浅色胶囊 |
-| [recheck-overview-light.png](recheck-overview-light.png) | F6 三列、R2 名称断词（浅色同） |
-| [recheck-delete-confirm-light.png](recheck-delete-confirm-light.png) | F1b 浅色红底白字 4.83:1 |
-| [recheck-apps-light.png](recheck-apps-light.png) / [-dark](recheck-apps-dark.png) | F8 新副标题、F12b 未配置标签 |
+| `recheck-templates-light.png` | R1：浅色「N 套」胶囊无轮廓 |
+| `recheck-network-light.png` | F1 浅色禁用态、F2 浅色胶囊 |
+| `recheck-overview-light.png` | F6 三列、R2 名称断词（浅色同） |
+| `recheck-delete-confirm-light.png` | F1b 浅色红底白字 4.83:1 |
+| `recheck-apps-light.png` / `recheck-apps-dark.png` | F8 新副标题、F12b 未配置标签 |
 
 ---
 

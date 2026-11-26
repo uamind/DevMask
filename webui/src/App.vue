@@ -96,7 +96,7 @@ import { usePageNavigation, PAGE_INDEX_BY_ID } from './composables/usePageNaviga
 import { usePageSwipe } from './composables/usePageSwipe'
 import { useOverscrollBounce } from './composables/useOverscrollBounce'
 import { usePageHistory } from './composables/usePageHistory'
-import { useI18n } from './utils/i18n'
+import { useI18n, type Locale } from './utils/i18n'
 import type { PageId } from './stores/navigation'
 
 type ResizeObserverInstance = InstanceType<typeof window.ResizeObserver>
@@ -120,7 +120,7 @@ let mediaQueryListener: ((event: { matches: boolean }) => void) | null = null
 const pageStageRef = ref<HTMLElement | null>(null)
 const settingsStore = useSettingsStore()
 const configStore = useConfigStore()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const systemPrefersDarkRef = ref(systemPrefersDark())
 
@@ -163,6 +163,18 @@ function primePage(pageId: PageId) {
 
 // Theme
 watch(isDark, (v) => applyThemeToDocument(v), { immediate: true })
+
+/** 界面语言 → `<html lang>`：`html[lang='tr']` 这类选择器（土耳其语标题字号）依赖它。 */
+const DOCUMENT_LANG: Record<Locale, string> = { zh: 'zh-CN', en: 'en', tr: 'tr' }
+
+// 语言：locale 变化（含「跟随系统」解析结果变化）时同步 <html lang>，挂载前先跑一次
+watch(
+  () => locale.value,
+  (value) => {
+    document.documentElement.lang = DOCUMENT_LANG[value]
+  },
+  { immediate: true }
+)
 
 // Lifecycle
 function syncWidth() {

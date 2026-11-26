@@ -100,7 +100,9 @@
           :title="item.name"
           @click="go('templates')"
         >
-          <span class="tpl__name">{{ item.label }}</span>
+          <span :class="['tpl__name', item.isFallback ? 'tpl__name--fallback' : '']">{{
+            item.label
+          }}</span>
           <span v-if="item.model" class="tpl__model dm-mono">{{ item.model }}</span>
           <span class="tpl__count">{{ t('overview.templates.apps', { count: item.count }) }}</span>
         </button>
@@ -223,10 +225,13 @@ const topTemplates = computed(() =>
     .map(({ name, template }) => {
       const model = (template.model || template.device || template.product || '').trim()
       const market = (template.marketname || '').trim()
+      // 标题优先市场名，其次型号，最后退回 TOML key——避免 key 在窄卡片里被断词
+      const label = market || model || name
       return {
         name,
-        // 标题优先市场名，其次型号，最后退回 TOML key——避免 key 在窄卡片里被断词
-        label: market || model || name,
+        label,
+        // 兜底分支（只剩 TOML key）：窄卡片里不断词，改单行省略，全名交给按钮 :title
+        isFallback: label === name,
         // 市场名已经表达清楚时不再重复型号；只有市场名 + 型号同时存在才显示副标题
         model: market ? model : '',
         count: template.packages?.length ?? 0,
@@ -543,6 +548,16 @@ html.dark .tpl {
   font-weight: 620;
   line-height: 1.35;
   color: var(--ink);
+}
+
+/* R6 兜底：没有 marketname / model 的模板只剩 TOML key，不断词、不做 2 行 clamp，
+   改单行省略；全名由 .tpl 的 :title 提供 */
+.tpl__name--fallback {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
 }
 
 .tpl__model {

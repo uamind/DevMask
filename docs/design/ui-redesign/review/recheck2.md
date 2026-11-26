@@ -4,6 +4,7 @@
 > 日期：2026-11-26 11:44
 > 范围：仅 recheck.md 的三项 —— F16、R1、R2，外加「是否引入新回退」
 > 方法：vite dev（dev mock）+ headless Chrome CDP，390×844@2x，浅/深两主题实测 computed style；关键行为用夹具注入补验
+> 归档说明（F-7，v0.0.2）：上一轮的 `recheck-*.png` 已在截图裁剪中删除，R1 一节里用于前后对比的 `recheck-templates-light.png` 因此改为文件名。取回方式：`git log -- docs/design/ui-redesign/review/recheck-templates-light.png` 找提交，再 `git show <commit>:<path>`。
 
 ## 0. 结论
 
@@ -64,7 +65,7 @@
 | 深色 | 模板页「1 套」 | `#1B2230` | 1px `rgba(255,255,255,.12)` | 5.24:1 | **1.21:1** |
 | 深色 | 网络页「直连」 | `#1B2230` | 1px `rgba(255,255,255,.12)` | 5.24:1 | **1.21:1** |
 
-- **轮廓回来了**：浅色从 1.02 / 0px 边变成 1.09 / 1px hairline，截图上「1 套」是清晰的白胶囊（对比 [recheck-templates-light.png](recheck-templates-light.png) 里上一轮只剩文字的状态）。
+- **轮廓回来了**：浅色从 1.02 / 0px 边变成 1.09 / 1px hairline，截图上「1 套」是清晰的白胶囊（对比 `recheck-templates-light.png` 里上一轮只剩文字的状态）。
 - **深浅对称**：浅 = 白底 + #E9EBF0 边；深 = surface-2 + 12% 白边；两主题都是「一层底 + 发丝边」的同一种语言，模板页与网络页四处完全一致（数值逐项相等）✅
 - 深色未被浅色规则污染（`:root:not(.dark)` 生效），仍维持 recheck.md 的 1.21:1。
 - 截图：[recheck2-templates-light.png](recheck2-templates-light.png)、[recheck2-templates-dark.png](recheck2-templates-dark.png)、[recheck2-network-light.png](recheck2-network-light.png)、[recheck2-network-dark.png](recheck2-network-dark.png)。

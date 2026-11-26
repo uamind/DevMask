@@ -26,7 +26,7 @@ Ten apps on one phone can be linked through model, Build, properties and DPI; sw
 1. Install the module (a Zygisk implementation such as ZygiskNext is required)
 2. Open the WebUI, create a model template under **Templates**, or edit a single app
 3. Bind the template to a package under **Apps**, then restart that app
-4. For egress, fill in a proxy in Settings; authenticated proxies go through the on-device relay automatically
+4. For egress, configure it under **Network** (Settings keeps a single entry card); authenticated proxies go through the on-device relay automatically
 5. For multiple devices, start the Manager, add devices (address + device token), then use the proxy pool and bulk apply
 
 ## WebUI
@@ -34,7 +34,8 @@ Ten apps on one phone can be linked through model, Build, properties and DPI; sw
 - **Overview** — module version, masked app count, templates, egress state and shortcuts
 - **Templates** — create, edit, import/export, plus an online template library
 - **Apps** — per-package identities; app clones can inherit or override their own config
-- **Settings** — theme / language, egress, debug switches and API access
+- **Network** — device-wide egress, proxy definitions, exit-IP probe, on-device relay and "Go direct"
+- **Settings** — theme / language, module settings and tools, external access and API access, about
 
 See the [WebUI guide](./webui.md), [configuration](./configuration/index.md) and [FAQ](./faq.md).
 
