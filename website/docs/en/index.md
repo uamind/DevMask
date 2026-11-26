@@ -33,4 +33,4 @@ features:
   - title: 🖥️ Device WebUI
     details: Overview, templates, app matrix and egress probes in the browser, plus an online template library, app clones and i18n.
   - title: 🛰️ Manager fleet
-    details: One Manager for every device: unified models, proxy pool, bulk jobs, per-device results and audit.
+    details: "One Manager for every device: unified models, proxy pool, bulk jobs, per-device results and audit."
