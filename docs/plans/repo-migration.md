@@ -31,7 +31,7 @@
 | Release v0.0.1 | ✅ 已发布 | 资产 `devmask-v0.0.1.zip`，与 `Update.json` 对齐 |
 | 更新通道 | ✅ 可用 | `raw.githubusercontent.com/uamind/DevMask/main/Update.json` |
 | CI（build / test / website） | ✅ 已跑通 | 见下方环境说明 |
-| Gitee 镜像 | ✅ 2026-11-26 | [gitee.com/cutebabylab/devmask-config](https://gitee.com/cutebabylab/devmask-config)（推送账号 cutebabylab，公开仓）；WebUI gitee 源已指向它，raw 实测 302→200 |
+| Gitee 镜像 | ✅ 2026-11-26 | [gitee.com/cutebabylab/devmask-config](https://gitee.com/cutebabylab/devmask-config)（推送账号 cutebabylab，公开仓）；GitHub Actions `mirror-gitee.yml` 在每次 push 后强制同步（已实测两端同 SHA）；WebUI gitee 源指向它，raw 实测 302→200 |
 | 旧仓归档说明 | ⏳ | 需上游 `Seyud/device_faker` 侧操作，避免历史 issue 断链 |
 
 ### CI 环境说明
