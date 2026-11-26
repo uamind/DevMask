@@ -90,14 +90,14 @@ WebUI 采用纯 KernelSU WebUI API 实现，支持 KernelSU、WeaveMask 和 APat
 
 WebUI 内置在线模板源，可以从社区模板仓库筛选后一键导入：
 
-- 仓库地址：[device_faker_config](https://github.com/Seyud/device_faker_config)
+- 仓库地址：[uamind/devmask-config](https://github.com/uamind/devmask-config)（DevMask 维护）
 - 打开后先显示数据源与详情拉取进度，支持刷新与失败重试
 - 分类胶囊（全部 / 通用设备 / 游戏设备 / 破限设备）与品牌胶囊叠加筛选
 - 支持按品牌、型号、模板名或**模板描述**搜索；多个关键词以空白分隔，需全部命中
 - 点任意一行打开预览抽屉，确认 fingerprint、作者、版本与描述后再导入；返回键先关抽屉，再关模板库
 
 ::: tip 欢迎贡献
-如果你有整理好的机型配置，可以提交到 `device_faker_config`，帮助更多用户。
+如果你有整理好的机型配置，可以提交到 `uamind/devmask-config`，帮助更多用户。
 :::
 
 ### 重命名已存在模板

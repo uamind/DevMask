@@ -57,7 +57,7 @@ function nav() {
       text: 'Community',
       items: [
         { text: '💬 Telegram Group', link: 'https://t.me/devmask' },
-        { text: '📦 Template Repository', link: 'https://github.com/Seyud/device_faker_config' }
+        { text: '📦 Template Repository', link: 'https://github.com/uamind/devmask-config' }
       ]
     },
     { text: 'Downloads', link: 'https://github.com/uamind/DevMask/releases/latest' }

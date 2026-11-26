@@ -90,14 +90,14 @@ When several templates declare the same package, only the one written **first** 
 
 The WebUI has a built-in online template source. Filter community templates, then import them in one click:
 
-- Repository: [device_faker_config](https://github.com/Seyud/device_faker_config)
+- Repository: [uamind/devmask-config](https://github.com/uamind/devmask-config) (maintained by DevMask)
 - The library first shows the data source and detail-fetch progress, with refresh and retry for failed items
 - Category chips (All / Common / Gaming / Transcend) combine with brand chips
 - Search by brand, model, template name or **template description**; space-separated keywords must all match
 - Tap any row to open the preview drawer, check fingerprint, author, version and description, then import. The back gesture closes the drawer first, then the library
 
 ::: tip Contribute
-If you have a well-organized device config, submit it to `device_faker_config` to help others.
+If you have a well-organized device config, submit it to `uamind/devmask-config` to help others.
 :::
 
 ### Rename Existing Templates

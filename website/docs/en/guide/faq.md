@@ -79,6 +79,6 @@ Match order: `@999` is tried first, then falls back to the version without the s
 ### Online template library fails to load
 
 - Check the device's network connection
-- Template source: https://github.com/Seyud/device_faker_config
+- Template source: https://github.com/uamind/devmask-config (upstream fallback: Seyud/device_faker_config)
 - Accessing GitHub may require a network tool in some regions
 

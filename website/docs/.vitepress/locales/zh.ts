@@ -78,7 +78,7 @@ function nav() {
           text: '🐧 QQ 群：854188252',
           link: 'https://qun.qq.com/universal-share/share?ac=1&authKey=ls4nlfcsF%2Bxp5SPnVsXRgpbeV1axPZb%2FmJCMXms6ZCHjgAwvOyl1LV%2BDNVL1btgL&busi_data=eyJncm91cENvZGUiOiI4NTQxODgyNTIiLCJ0b2tlbiI6IlE1WVVyZTZxUXVjZUtGUUxWSGFmbzkvMEd3UWNRSiszdklTZDhHejU0RDRyT0lWRTFqS3d4UGJSM1ltaXpkS3MiLCJ1aW4iOiIxMTA1NzgzMDMzIn0%3D&data=IbvhTKt9HwCSsCsl_610-rQ8p6H2NgLmxhEKkMcn-BMWPb86jygWBZJfWLQGm7J8LwpVV2yhPafxTMXYGkjRVA&svctype=4&tempid=h5_group_info'
         },
-        { text: '📦 模板贡献仓库', link: 'https://github.com/Seyud/device_faker_config' }
+        { text: '📦 机型模板库', link: 'https://github.com/uamind/devmask-config' }
       ]
     },
     { text: '下载', link: 'https://github.com/uamind/DevMask/releases/latest' }

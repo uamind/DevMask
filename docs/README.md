@@ -12,6 +12,18 @@
 
 > v0.0.1 是 DevMask 的第一个版本，版本号从零重开。历史见 [CHANGELOG](CHANGELOG.md)。
 
+DevMask 是**独立维护的项目**，不是上游仓库的分支镜像。早期版本基于 [Device Faker](https://github.com/Seyud/device_faker)，沿用其配置模型与 Zygisk 注入思路；感谢原作者 Seyud 与社区，原项目的版权与许可声明保留在 [NOTICES](../NOTICES) 与各源文件头。
+
+## 官方源
+
+| 用途 | 地址 |
+| --- | --- |
+| 主仓库 | [uamind/DevMask](https://github.com/uamind/DevMask) |
+| 下载 / 更新 | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../Update.json) |
+| 机型模板库（我们维护） | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
+| 文档站 | [uamind.github.io/devmask](https://uamind.github.io/devmask/) |
+| 问题反馈 | [Issues](https://github.com/uamind/DevMask/issues) |
+
 ## 它解决什么
 
 同一台手机上装十个应用，平台侧能通过机型、Build 指纹、属性、DPI 把你串成一个人；换台设备，出口 IP 又是同一条宽带。DevMask 把这两件事拆开解决：
@@ -43,9 +55,9 @@
 ## 快速开始
 
 1. 安装模块（需要 Zygisk 实现，如 ZygiskNext；不支持 Magisk 自带 Zygisk）
-2. 打开 WebUI，在"模板"里建一个机型模板，或直接编辑某个应用的字段
+2. 打开 WebUI，在"模板"里建一个机型模板、从在线模板库套用（模板来自 [uamind/devmask-config](https://github.com/uamind/devmask-config)），或直接编辑某个应用的字段
 3. 在"应用"里把模板绑到包名，重启该应用生效
-4. 需要出口代理时，在"网络出口"里填代理；带账号密码的代理会自动走设备内中继
+4. 需要出口代理时，在"网络"页里配置；带账号密码的代理会自动走设备内中继
 5. 多设备场景：启动 Manager，添加设备（地址 + 设备 Token），之后用代理池与批量下发统一管理
 
 配置文件在 /data/adb/devmask/config/config.toml，字段说明见 [CONFIG.md](CONFIG.md)；服务与外部访问见 [SERVER.md](SERVER.md)。
@@ -62,10 +74,13 @@
 - [配置说明](CONFIG.md) · [服务与 API](SERVER.md) · [API 契约](API.md)
 - [出口代理计划](plans/proxy-support-plan.md) · [认证中继计划](plans/authenticated-proxy-plan.md) · [中继契约](plans/relay-contract.md)
 - Manager：[API](../manager/docs/API.md) · [架构](../manager/docs/ARCH.md) · [运行](../manager/docs/RUN.md)
+- 项目迁移与品牌说明：[repo-migration.md](plans/repo-migration.md)（仓库/模板源/发布通道）
 
 ## 致谢
 
-本项目的早期版本基于 [Device Faker](https://github.com/Seyud/device_faker)（作者 Seyud）开发，沿用其配置模型与 Zygisk 注入思路。原项目的版权与许可声明保留在 [NOTICES](../NOTICES) 与各源文件头。
+DevMask 早期版本基于 [Device Faker](https://github.com/Seyud/device_faker)（作者 Seyud）开发，配置模型与 Zygisk 注入思路来自该项目。感谢 Seyud 与社区打下的基础；当前仓库由 DevMask 团队独立维护，WebUI、网络出口与多设备管理在此基础上重构。Zygisk 生态参考项目见[文档站致谢页](https://uamind.github.io/devmask/guide/#致谢)。
+
+原项目的版权与许可声明保留在 [NOTICES](../NOTICES) 与各源文件头。
 
 ## 许可与二次分发
 

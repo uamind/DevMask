@@ -41,7 +41,7 @@ See the [WebUI guide](./webui.md), [configuration](./configuration/index.md) and
 
 ## Online template library
 
-The library is backed by the community repository [device_faker_config](https://github.com/Seyud/device_faker_config); entries can be previewed and applied from the WebUI.
+The library is backed by the DevMask-maintained repository [uamind/devmask-config](https://github.com/uamind/devmask-config); entries can be previewed and applied from the WebUI, with the upstream community repo kept as a fallback.
 
 ## Acknowledgments 🙏
 

@@ -23,7 +23,40 @@ const FETCH_ACCEPT_TEXT = 'text/plain'
 const FETCH_ACCEPT_JSON = 'application/json'
 const FETCH_ACCEPT_GITHUB_JSON = 'application/vnd.github+json'
 
+interface TemplateSourceConfig {
+  owner: string
+  repo: string
+  apiBase: string
+  rawBase: string
+  cdnBase: string
+}
+
+/**
+ * 机型模板源：DevMask 自有仓库优先。
+ *
+ * 仓库迁移/改名时只改这里（以及仓库根 README「官方源」表）：
+ * 主源 = uamind/devmask-config，上游社区仓只做兜底，保证自有仓还没铺数据时
+ * 在线模板库不至于空窗。
+ */
 const SOURCE_CONFIGS = {
+  gitee: {
+    owner: 'uamind',
+    repo: 'devmask-config',
+    apiBase: 'https://gitee.com/api/v5',
+    rawBase: 'https://gitee.com/uamind/devmask-config/raw/main',
+    cdnBase: 'https://cdn.jsdelivr.net/gh/uamind/devmask-config@main',
+  },
+  github: {
+    owner: 'uamind',
+    repo: 'devmask-config',
+    apiBase: 'https://api.github.com',
+    rawBase: 'https://raw.githubusercontent.com/uamind/devmask-config/main',
+    cdnBase: 'https://cdn.jsdelivr.net/gh/uamind/devmask-config@main',
+  },
+} as const satisfies Record<OnlineTemplateSource, TemplateSourceConfig>
+
+/** 上游 Device Faker 社区模板仓：自有源不可用（404 / 空仓 / 限流）时兜底。 */
+const UPSTREAM_CONFIGS = {
   gitee: {
     owner: 'Seyud',
     repo: 'device_faker_config_mirror',
@@ -38,16 +71,7 @@ const SOURCE_CONFIGS = {
     rawBase: 'https://raw.githubusercontent.com/Seyud/device_faker_config/main',
     cdnBase: 'https://cdn.jsdelivr.net/gh/Seyud/device_faker_config@main',
   },
-} as const satisfies Record<
-  OnlineTemplateSource,
-  {
-    owner: string
-    repo: string
-    apiBase: string
-    rawBase: string
-    cdnBase: string
-  }
->
+} as const satisfies Record<OnlineTemplateSource, TemplateSourceConfig>
 
 export const TEMPLATE_CATEGORIES = {
   common: '通用设备',
@@ -122,8 +146,7 @@ function buildContentsApiUrl(source: OnlineTemplateSource, path: string): string
   return `${config.apiBase}/repos/${config.owner}/${config.repo}/contents/${path}?ref=main`
 }
 
-function buildTreeUrl(source: OnlineTemplateSource): string {
-  const config = getSourceConfig(source)
+function buildTreeUrl(config: TemplateSourceConfig): string {
   return `${config.apiBase}/repos/${config.owner}/${config.repo}/git/trees/main?recursive=1`
 }
 
@@ -327,6 +350,8 @@ function getDetailUrlCandidates(
     return [
       { url: buildRawUrl('github', path), accept: FETCH_ACCEPT_TEXT },
       { url: buildCdnUrl('github', path), accept: FETCH_ACCEPT_TEXT },
+      { url: `${UPSTREAM_CONFIGS.github.rawBase}/${path}`, accept: FETCH_ACCEPT_TEXT },
+      { url: `${UPSTREAM_CONFIGS.github.cdnBase}/${path}`, accept: FETCH_ACCEPT_TEXT },
     ]
   }
 
@@ -337,6 +362,8 @@ function getDetailUrlCandidates(
     { url: buildCdnUrl('gitee', path), accept: FETCH_ACCEPT_TEXT },
     { url: buildRawUrl('gitee', path), accept: FETCH_ACCEPT_TEXT },
     { url: buildContentsApiUrl('gitee', path), accept: FETCH_ACCEPT_JSON },
+    { url: `${UPSTREAM_CONFIGS.gitee.cdnBase}/${path}`, accept: FETCH_ACCEPT_TEXT },
+    { url: `${UPSTREAM_CONFIGS.gitee.rawBase}/${path}`, accept: FETCH_ACCEPT_TEXT },
   ]
 }
 
@@ -364,12 +391,13 @@ async function fetchTemplateContentViaContentsApi(
   throw new Error('Template content is unavailable.')
 }
 
-async function loadTreeIndex(
+async function loadTreeFrom(
+  config: TemplateSourceConfig,
   source: OnlineTemplateSource,
   signal?: AbortSignal
-): Promise<TemplateIndexLoadResult> {
+): Promise<{ items: OnlineTemplateIndexItem[]; bundleSha?: string }> {
   const accept = source === 'github' ? FETCH_ACCEPT_GITHUB_JSON : FETCH_ACCEPT_JSON
-  const response = await requestJson<TreeResponse>(buildTreeUrl(source), signal, accept)
+  const response = await requestJson<TreeResponse>(buildTreeUrl(config), signal, accept)
 
   if (!Array.isArray(response.tree)) {
     throw new Error(`${source} tree response is invalid.`)
@@ -389,11 +417,50 @@ async function loadTreeIndex(
     (entry) => entry.type === 'blob' && entry.path === TEMPLATE_BUNDLE_PATH
   )
 
-  return {
-    source,
-    items: sortIndexItems(items),
-    bundleSha: bundleEntry?.sha,
+  return { items, bundleSha: bundleEntry?.sha }
+}
+
+/**
+ * 模板索引：自有仓优先，空仓或不可用时回落到上游社区仓。
+ *
+ * 自有仓刚建好、还没铺模板时 tree 是合法的空数组——这种情况不能直接展示
+ * 「0 套模板」，要继续试上游；两边都拿不到才抛错，由上层走缓存/错误态。
+ */
+async function loadTreeIndex(
+  source: OnlineTemplateSource,
+  signal?: AbortSignal
+): Promise<TemplateIndexLoadResult> {
+  const attempts: Array<{ config: TemplateSourceConfig; allowEmpty: boolean }> = [
+    { config: getSourceConfig(source), allowEmpty: false },
+    { config: UPSTREAM_CONFIGS[source], allowEmpty: true },
+  ]
+  let firstError: unknown = null
+
+  for (const attempt of attempts) {
+    try {
+      const result = await loadTreeFrom(attempt.config, source, signal)
+      if (result.items.length === 0 && !attempt.allowEmpty) {
+        continue
+      }
+
+      return {
+        source,
+        items: sortIndexItems(result.items),
+        bundleSha: result.bundleSha,
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
+      firstError ??= error
+    }
   }
+
+  if (firstError) {
+    throw firstError
+  }
+
+  return { source, items: [] }
 }
 
 /**
@@ -419,6 +486,14 @@ function getBundleUrlCandidates(
     return [
       { url: buildRawUrl('github', TEMPLATE_BUNDLE_PATH), accept: FETCH_ACCEPT_TEXT },
       { url: buildCdnUrl('github', TEMPLATE_BUNDLE_PATH), accept: FETCH_ACCEPT_TEXT },
+      {
+        url: `${UPSTREAM_CONFIGS.github.rawBase}/${TEMPLATE_BUNDLE_PATH}`,
+        accept: FETCH_ACCEPT_TEXT,
+      },
+      {
+        url: `${UPSTREAM_CONFIGS.github.cdnBase}/${TEMPLATE_BUNDLE_PATH}`,
+        accept: FETCH_ACCEPT_TEXT,
+      },
     ]
   }
 
@@ -426,6 +501,14 @@ function getBundleUrlCandidates(
     { url: buildCdnUrl('gitee', TEMPLATE_BUNDLE_PATH), accept: FETCH_ACCEPT_TEXT },
     { url: buildContentsApiUrl('gitee', TEMPLATE_BUNDLE_PATH), accept: FETCH_ACCEPT_JSON },
     { url: buildRawUrl('gitee', TEMPLATE_BUNDLE_PATH), accept: FETCH_ACCEPT_TEXT },
+    {
+      url: `${UPSTREAM_CONFIGS.gitee.cdnBase}/${TEMPLATE_BUNDLE_PATH}`,
+      accept: FETCH_ACCEPT_TEXT,
+    },
+    {
+      url: `${UPSTREAM_CONFIGS.gitee.rawBase}/${TEMPLATE_BUNDLE_PATH}`,
+      accept: FETCH_ACCEPT_TEXT,
+    },
   ]
 }
 

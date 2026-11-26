@@ -41,7 +41,7 @@
 
 ## 在线模板库
 
-在线模板库的机型配置来自社区仓库 [device_faker_config](https://github.com/Seyud/device_faker_config)，可直接在 WebUI 里预览并套用到包名。
+在线模板库的机型配置来自 DevMask 维护的 [uamind/devmask-config](https://github.com/uamind/devmask-config)，可直接在 WebUI 里预览并套用到包名；自有源不可用时会回落到上游社区仓。
 
 ## 致谢 🙏
 

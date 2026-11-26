@@ -1,3 +1,3 @@
 [submodule "config"]
 	path = config
-	url = git@github.com:Seyud/devmask_config.git
+	url = https://github.com/uamind/devmask-config.git

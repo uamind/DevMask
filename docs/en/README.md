@@ -8,6 +8,18 @@
 
 > v0.0.1 is the first DevMask release; versioning restarts from zero. History: [CHANGELOG](CHANGELOG.md).
 
+DevMask is an **independently maintained project**, not a mirror or fork of the upstream repository. Early versions were built on [Device Faker](https://github.com/Seyud/device_faker); the configuration model and Zygisk injection approach originate there. Thanks to Seyud and the community — the original copyright and license notices remain in [NOTICES](../../NOTICES) and in every source file header.
+
+## Official sources
+
+| Purpose | URL |
+| --- | --- |
+| Repository | [uamind/DevMask](https://github.com/uamind/DevMask) |
+| Downloads / updates | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../../Update.json) |
+| Device template repo (maintained by us) | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
+| Documentation site | [uamind.github.io/devmask](https://uamind.github.io/devmask/) |
+| Issues | [uamind/DevMask/issues](https://github.com/uamind/DevMask/issues) |
+
 ## What it solves
 
 Ten apps on one phone can be linked through model, Build fingerprint, properties and DPI; switch devices and they still share one home IP. DevMask splits the problem:
@@ -41,7 +53,7 @@ Ten apps on one phone can be linked through model, Build fingerprint, properties
 1. Install the module (requires a Zygisk implementation such as ZygiskNext; the built-in Magisk Zygisk is not supported)
 2. Open the WebUI and create a model template, or edit fields for a single app
 3. Bind the template to a package and restart that app
-4. For egress, fill in a proxy on the "Network egress" card; authenticated proxies go through the on-device relay automatically
+4. For egress, open the "Network" tab and configure a proxy; authenticated proxies go through the on-device relay automatically
 5. For many devices, start the Manager, add devices (base URL + device token), then use the proxy pool and bulk apply
 
 Config lives at /data/adb/devmask/config/config.toml — see [CONFIG.md](CONFIG.md) and [SERVER.md](SERVER.md).
@@ -57,10 +69,13 @@ Config lives at /data/adb/devmask/config/config.toml — see [CONFIG.md](CONFIG.
 
 - [Configuration](CONFIG.md) · [Service & API](SERVER.md) · [API contract](API.md)
 - Manager: [API](../../manager/docs/API.md) · [Architecture](../../manager/docs/ARCH.md) · [Runbook](../../manager/docs/RUN.md)
+- Project migration and branding: [repo-migration.md](plans/repo-migration.md) (repository / template source / release channel)
 
 ## Credits
 
-Early versions were built on [Device Faker](https://github.com/Seyud/device_faker) by Seyud; the configuration model and Zygisk injection approach originate there. Original copyright and license notices are preserved in [NOTICES](../../NOTICES) and in every source file header.
+Early versions of DevMask were built on [Device Faker](https://github.com/Seyud/device_faker) by Seyud; the configuration model and Zygisk injection approach originate there. Thanks to Seyud and the community for that foundation. The repository is now maintained independently by the DevMask team, with the WebUI, egress and fleet management rebuilt on top. Zygisk-ecosystem references are listed on the [documentation site](https://uamind.github.io/devmask/en/guide/#acknowledgments).
+
+Original copyright and license notices are preserved in [NOTICES](../../NOTICES) and in every source file header.
 
 ## License
 
