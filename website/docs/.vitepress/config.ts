@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitepress'
 import locales from './locales/index.ts'
 
-const BASE = '/devmask/'
-const SITE = 'https://uamind.github.io/devmask/'
+const BASE = '/DevMask/'
+const SITE = 'https://uamind.github.io/DevMask/'
 
 // Hero logo 内联为 data URI：图片随 HTML 一起到达，不再单独走一个被 GitHub Pages
 // 限速的请求（线上实测 LCP P75 = 7.8s 就是耗在这张图上）。

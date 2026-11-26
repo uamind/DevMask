@@ -17,7 +17,7 @@ DevMask is an **independently maintained project**, not a mirror or fork of the 
 | Repository | [uamind/DevMask](https://github.com/uamind/DevMask) |
 | Downloads / updates | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../../Update.json) |
 | Device template repo (maintained by us) | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
-| Documentation site | [uamind.github.io/devmask](https://uamind.github.io/devmask/) |
+| Documentation site | [uamind.github.io/DevMask](https://uamind.github.io/DevMask/) |
 | Issues | [uamind/DevMask/issues](https://github.com/uamind/DevMask/issues) |
 
 ## What it solves
@@ -73,7 +73,7 @@ Config lives at /data/adb/devmask/config/config.toml — see [CONFIG.md](CONFIG.
 
 ## Credits
 
-Early versions of DevMask were built on [Device Faker](https://github.com/Seyud/device_faker) by Seyud; the configuration model and Zygisk injection approach originate there. Thanks to Seyud and the community for that foundation. The repository is now maintained independently by the DevMask team, with the WebUI, egress and fleet management rebuilt on top. Zygisk-ecosystem references are listed on the [documentation site](https://uamind.github.io/devmask/en/guide/#acknowledgments).
+Early versions of DevMask were built on [Device Faker](https://github.com/Seyud/device_faker) by Seyud; the configuration model and Zygisk injection approach originate there. Thanks to Seyud and the community for that foundation. The repository is now maintained independently by the DevMask team, with the WebUI, egress and fleet management rebuilt on top. Zygisk-ecosystem references are listed on the [documentation site](https://uamind.github.io/DevMask/en/guide/#acknowledgments).
 
 Original copyright and license notices are preserved in [NOTICES](../../NOTICES) and in every source file header.
 

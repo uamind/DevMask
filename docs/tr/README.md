@@ -17,7 +17,7 @@ DevMask **bağımsız olarak geliştirilen bir projedir**; üst akış deposunun
 | Depo | [uamind/DevMask](https://github.com/uamind/DevMask) |
 | İndirme / güncelleme | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../../Update.json) |
 | Cihaz şablon deposu (bizim) | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
-| Belgeler | [uamind.github.io/devmask](https://uamind.github.io/devmask/) |
+| Belgeler | [uamind.github.io/DevMask](https://uamind.github.io/DevMask/) |
 | Sorunlar | [uamind/DevMask/issues](https://github.com/uamind/DevMask/issues) |
 
 ## Ne çözer

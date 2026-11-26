@@ -21,7 +21,7 @@ DevMask 是**独立维护的项目**，不是上游仓库的分支镜像。早�
 | 主仓库 | [uamind/DevMask](https://github.com/uamind/DevMask) |
 | 下载 / 更新 | [Releases](https://github.com/uamind/DevMask/releases/latest) · [Update.json](../Update.json) |
 | 机型模板库（我们维护） | [uamind/devmask-config](https://github.com/uamind/devmask-config) |
-| 文档站 | [uamind.github.io/devmask](https://uamind.github.io/devmask/) |
+| 文档站 | [uamind.github.io/DevMask](https://uamind.github.io/DevMask/) |
 | 问题反馈 | [Issues](https://github.com/uamind/DevMask/issues) |
 
 ## 它解决什么
@@ -78,7 +78,7 @@ DevMask 是**独立维护的项目**，不是上游仓库的分支镜像。早�
 
 ## 致谢
 
-DevMask 早期版本基于 [Device Faker](https://github.com/Seyud/device_faker)（作者 Seyud）开发，配置模型与 Zygisk 注入思路来自该项目。感谢 Seyud 与社区打下的基础；当前仓库由 DevMask 团队独立维护，WebUI、网络出口与多设备管理在此基础上重构。Zygisk 生态参考项目见[文档站致谢页](https://uamind.github.io/devmask/guide/#致谢)。
+DevMask 早期版本基于 [Device Faker](https://github.com/Seyud/device_faker)（作者 Seyud）开发，配置模型与 Zygisk 注入思路来自该项目。感谢 Seyud 与社区打下的基础；当前仓库由 DevMask 团队独立维护，WebUI、网络出口与多设备管理在此基础上重构。Zygisk 生态参考项目见[文档站致谢页](https://uamind.github.io/DevMask/guide/#致谢)。
 
 原项目的版权与许可声明保留在 [NOTICES](../NOTICES) 与各源文件头。
 

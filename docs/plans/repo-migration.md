@@ -16,7 +16,7 @@
 | README 中英土：独立性声明 + 官方源表 + 致谢改写 | `docs/README.md`、`docs/en/README.md`、`docs/tr/README.md` |
 | 机型模板源改为自有仓优先、上游兜底 | `webui/src/utils/onlineTemplates.ts`（`SOURCE_CONFIGS` / `UPSTREAM_CONFIGS`） |
 | 文档站与 FAQ 模板仓指向 | `website/docs/**` |
-| 站点域名 | `website/docs/.vitepress/config.ts` → `https://uamind.github.io/devmask/` |
+| 站点域名 | `website/docs/.vitepress/config.ts` → `https://uamind.github.io/DevMask/` |
 | 子模块地址 | `.gitmodules` → `https://github.com/uamind/devmask-config.git` |
 | 更新通道 | `module/module.prop` 的 `updateJson` → `uamind/DevMask/raw/main/Update.json` |
 | 本地远端 | `origin` → `https://github.com/uamind/DevMask.git` |
